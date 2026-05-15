@@ -1,0 +1,38 @@
+# Build output
+.next/
+node_modules/
+
+# Env vars (NEVER commit)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# Claude Code local session state
+.claude/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# TypeScript generated
+tsconfig.tsbuildinfo
+
+# Pipeline state (transient)
+scripts/pipeline_state.json
+
+# Large binary/archive artifacts
+*.zip
+*.docx
+SaaS Marketing/
