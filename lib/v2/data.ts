@@ -558,6 +558,183 @@ export async function fetchCommentCounts(brands: V2Brand[]): Promise<V2CommentCo
     .sort((a, b) => b.total - a.total)
 }
 
+// ─── SEO: keyword rankings ────────────────────────────────────────────
+export type V2KeywordRanking = {
+  keyword: string
+  brand: string
+  position: number | null
+  volume: number
+  difficulty: number
+  url: string
+  recordedAt: string
+}
+
+export type V2KeywordTrend = {
+  keyword: string
+  brand: string
+  history: { date: string; position: number | null }[]
+  latestPosition: number | null
+  volume: number
+  difficulty: number
+}
+
+export async function fetchKeywordRankings(brands: V2Brand[]): Promise<V2KeywordTrend[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  const { data } = await supabase
+    .from('keyword_rankings')
+    .select('brand_id,keyword,position,search_volume,difficulty,url,recorded_at')
+    .order('recorded_at', { ascending: false })
+    .limit(2000)
+
+  // Group by brand+keyword, collect chronological history
+  const byKey: Record<string, { keyword: string; brand: string; history: { date: string; position: number | null }[]; volume: number; difficulty: number }> = {}
+  ;(data || []).forEach((r: any) => {
+    const slug = slugByBid[r.brand_id]
+    if (!slug) return
+    const key = `${slug}::${r.keyword}`
+    if (!byKey[key]) byKey[key] = { keyword: r.keyword, brand: slug, history: [], volume: r.search_volume || 0, difficulty: r.difficulty || 0 }
+    byKey[key].history.push({ date: r.recorded_at ? r.recorded_at.slice(0, 10) : '', position: r.position })
+  })
+
+  return Object.values(byKey)
+    .map((k) => {
+      const sorted = k.history.slice().sort((a, b) => a.date.localeCompare(b.date))
+      return { ...k, history: sorted, latestPosition: sorted[sorted.length - 1]?.position ?? null }
+    })
+    .filter((k) => k.latestPosition !== null)
+    .sort((a, b) => (a.latestPosition ?? 999) - (b.latestPosition ?? 999))
+    .slice(0, 40)
+}
+
+// ─── SEO: crawl coverage ──────────────────────────────────────────────
+export type V2CrawlSummary = {
+  brand: string
+  total: number
+  ok: number       // 2xx
+  redirect: number // 3xx
+  clientErr: number // 4xx
+  serverErr: number // 5xx
+  avgOnPageScore: number
+  crawlDate: string
+}
+
+export async function fetchCrawlSummary(brands: V2Brand[]): Promise<V2CrawlSummary[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  const { data } = await supabase
+    .from('crawl_pages')
+    .select('brand_id,http_status,on_page_score,crawl_date')
+    .order('crawl_date', { ascending: false })
+    .limit(5000)
+
+  const byBrand: Record<string, V2CrawlSummary> = {}
+  ;(data || []).forEach((p: any) => {
+    const slug = slugByBid[p.brand_id]
+    if (!slug) return
+    if (!byBrand[slug]) byBrand[slug] = { brand: slug, total: 0, ok: 0, redirect: 0, clientErr: 0, serverErr: 0, avgOnPageScore: 0, crawlDate: p.crawl_date || '' }
+    byBrand[slug].total++
+    const s = p.http_status || 0
+    if (s >= 200 && s < 300) byBrand[slug].ok++
+    else if (s >= 300 && s < 400) byBrand[slug].redirect++
+    else if (s >= 400 && s < 500) byBrand[slug].clientErr++
+    else if (s >= 500) byBrand[slug].serverErr++
+    byBrand[slug].avgOnPageScore += p.on_page_score || 0
+  })
+
+  return Object.values(byBrand).map((r) => ({
+    ...r,
+    avgOnPageScore: r.total > 0 ? Math.round(r.avgOnPageScore / r.total) : 0,
+  })).sort((a, b) => b.total - a.total)
+}
+
+// ─── SEO: on-page score trend (weekly avg per brand) ─────────────────
+export type V2OnPageTrend = { brand: string; dates: string[]; scores: number[] }
+
+export async function fetchOnPageScoreTrend(brands: V2Brand[]): Promise<V2OnPageTrend[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  const { data } = await supabase
+    .from('crawl_pages')
+    .select('brand_id,on_page_score,crawl_date')
+    .order('crawl_date', { ascending: true })
+    .limit(5000)
+
+  const byBrandDate: Record<string, Record<string, { sum: number; n: number }>> = {}
+  ;(data || []).forEach((p: any) => {
+    const slug = slugByBid[p.brand_id]
+    if (!slug || p.on_page_score == null) return
+    const d = p.crawl_date || ''
+    if (!byBrandDate[slug]) byBrandDate[slug] = {}
+    if (!byBrandDate[slug][d]) byBrandDate[slug][d] = { sum: 0, n: 0 }
+    byBrandDate[slug][d].sum += p.on_page_score
+    byBrandDate[slug][d].n++
+  })
+
+  return Object.entries(byBrandDate).map(([slug, dateMap]) => {
+    const sorted = Object.keys(dateMap).sort()
+    return {
+      brand: slug,
+      dates: sorted,
+      scores: sorted.map((d) => Math.round(dateMap[d].sum / dateMap[d].n)),
+    }
+  })
+}
+
+// ─── SEO: content brief pipeline ─────────────────────────────────────
+export type V2BriefStats = {
+  brand: string
+  pending: number
+  drafted: number
+  published: number
+  cancelled: number
+  total: number
+  completionRate: number
+}
+
+export async function fetchContentBriefStats(brands: V2Brand[]): Promise<V2BriefStats[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  const { data } = await supabase
+    .from('content_briefs')
+    .select('brand_id,status')
+    .limit(2000)
+
+  const agg: Record<string, V2BriefStats> = {}
+  ;(data || []).forEach((b: any) => {
+    const slug = slugByBid[b.brand_id]
+    if (!slug) return
+    if (!agg[slug]) agg[slug] = { brand: slug, pending: 0, drafted: 0, published: 0, cancelled: 0, total: 0, completionRate: 0 }
+    agg[slug].total++
+    const st = b.status || 'pending'
+    if (st === 'pending') agg[slug].pending++
+    else if (st === 'drafted') agg[slug].drafted++
+    else if (st === 'published') agg[slug].published++
+    else if (st === 'cancelled') agg[slug].cancelled++
+  })
+
+  return Object.values(agg).map((r) => ({
+    ...r,
+    completionRate: r.total > 0 ? Math.round((r.published / r.total) * 100) : 0,
+  })).sort((a, b) => b.total - a.total)
+}
+
+// ─── SEO bundle ───────────────────────────────────────────────────────
+export type V2SeoData = {
+  brands: V2Brand[]
+  keywordTrends: V2KeywordTrend[]
+  crawlSummary: V2CrawlSummary[]
+  onPageTrend: V2OnPageTrend[]
+  briefStats: V2BriefStats[]
+}
+
+export async function fetchSeoData(): Promise<V2SeoData> {
+  const brands = await fetchBrands()
+  const [keywordTrends, crawlSummary, onPageTrend, briefStats] = await Promise.all([
+    fetchKeywordRankings(brands),
+    fetchCrawlSummary(brands),
+    fetchOnPageScoreTrend(brands),
+    fetchContentBriefStats(brands),
+  ])
+  return { brands, keywordTrends, crawlSummary, onPageTrend, briefStats }
+}
+
 export async function fetchOverview(): Promise<V2Overview> {
   const brands = await fetchBrands()
   const [ig, ads, promos, products, yt, reddit, influencers, adSample, topIGPosts, topYTVideos, topComments] = await Promise.all([
