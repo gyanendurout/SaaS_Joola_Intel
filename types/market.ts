@@ -78,6 +78,38 @@ export interface GeneratedContent {
   published_at?: string
 }
 
+export type ContentBriefIntent = 'informational' | 'commercial' | 'transactional' | 'navigational'
+
+export interface ContentBriefSection {
+  heading: string
+  level: 2 | 3
+  keyPoints: string[]
+  estimatedWords: number
+}
+
+export interface InternalLinkSuggestion {
+  anchorText: string
+  targetSlug: string
+  context: string
+}
+
+export interface ContentBrief {
+  id: string
+  keyword: string
+  keywordCluster: string[]
+  generatedAt: string
+  model: string
+  recommendedTitle: string
+  metaDescription: string
+  targetWordCount: number
+  primaryIntent: ContentBriefIntent
+  sections: ContentBriefSection[]
+  keyTopics: string[]
+  serpInsights: string[]
+  internalLinks: InternalLinkSuggestion[]
+  competitorGaps: string[]
+}
+
 export interface InfluencerSnapshot {
   id: string
   influencer_id: string

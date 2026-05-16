@@ -17,6 +17,7 @@ const I = {
   inf: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="9" cy="8" r="3" /><circle cx="17" cy="10" r="2" /><path d="M3 20c0-3 3-5 6-5s6 2 6 5" /><path d="M15 19c0-2 2-3 4-3" /></svg>,
   mkt: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 17l5-5 4 4 8-9" /><path d="M14 7h6v6" /></svg>,
   comments: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a8 8 0 11-3.5-6.6L21 4l-1.4 3.4A8 8 0 0121 12z" /></svg>,
+  brief: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></svg>,
 }
 
 const ChevronLeft = () => (
@@ -42,7 +43,8 @@ const nav: NavItem[] = [
   { href: '/v2/ads',         label: 'Ads Library',        ic: I.ads },
   { href: '/v2/promotions',  label: 'Promotions',         ic: I.promo },
   { href: '/v2/products',    label: 'Product Catalog',    ic: I.product },
-  { href: '/v2/market',      label: 'Market Intel',       ic: I.mkt },
+  { href: '/v2/market',          label: 'Market Intel',          ic: I.mkt },
+  { href: '/v2/content-brief',  label: 'Content Brief',         ic: I.brief, badge: 'NEW' },
 ]
 
 function BrandFilter() {
