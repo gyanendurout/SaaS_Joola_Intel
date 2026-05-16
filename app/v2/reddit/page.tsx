@@ -6,7 +6,8 @@ import {
   type V2Brand, type V2RedditRow, type V2Subreddit,
 } from '@/lib/v2/data'
 import { fmt, LineChart, SentimentBar } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
 
 export default function RedditPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -15,6 +16,7 @@ export default function RedditPage() {
   const [subreddits, setSubreddits] = useState<V2Subreddit[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
     document.title = 'JOOLA INTEL — Reddit Community'
@@ -24,7 +26,7 @@ export default function RedditPage() {
     fetchBrands().then(async (b) => {
       try {
         const [r, t, s] = await Promise.all([fetchReddit(b), fetchRedditTrend(b), fetchRedditSubreddits(b)])
-        setBrands(b); setReddit(r); setTrend(t); setSubreddits(s); setLoading(false)
+        setBrands(b); setAllBrands(b); setReddit(r); setTrend(t); setSubreddits(s); setLoading(false)
       } catch (err) {
         console.error('Data fetch failed', err)
         setError('Unable to load data. Please refresh.')
@@ -35,7 +37,7 @@ export default function RedditPage() {
       setError('Unable to load data. Please refresh.')
       setLoading(false)
     })
-  }, [])
+  }, [setAllBrands])
 
   if (loading) return <LoadingPage />
 
@@ -46,20 +48,23 @@ export default function RedditPage() {
     </div>
   )
 
+  const displayReddit = applyBrandFilter(reddit, filteredBrands, isFiltered)
+  const displayTrend = applyBrandFilterRecord(trend, filteredBrands, isFiltered)
+
   const name = (s: string) => pgName(s, brands)
-  const joolaR = reddit.find((d) => d.brand === 'joola')
-  const totalMentions = reddit.reduce((s, d) => s + d.mentions, 0)
+  const joolaR = displayReddit.find((d) => d.brand === 'joola')
+  const totalMentions = displayReddit.reduce((s, d) => s + d.mentions, 0)
   const joolaPositivePct = joolaR ? Math.round((joolaR.positive / Math.max(1, joolaR.mentions)) * 100) : 0
   const joolaNegativePct = joolaR ? Math.round((joolaR.negative / Math.max(1, joolaR.mentions)) * 100) : 0
   const netScore = joolaR ? ((joolaR.positive - joolaR.negative) / Math.max(1, joolaR.mentions)).toFixed(2) : '0'
   const allNeutral = joolaR ? (joolaR.positive === 0 && joolaR.negative === 0) : true
 
-  const lineSeries = Object.entries(trend)
+  const lineSeries = Object.entries(displayTrend)
     .filter(([, data]) => data.some((v) => v > 0))
     .slice(0, 8)
     .map(([id, data]) => ({ id, label: name(id), color: pgColor(id), data }))
 
-  const sentimentData = reddit.map((d) => ({
+  const sentimentData = displayReddit.map((d) => ({
     brand: d.brand,
     name: name(d.brand),
     color: pgColor(d.brand),
@@ -85,6 +90,7 @@ export default function RedditPage() {
           <a href="https://www.reddit.com/r/pickleball" target="_blank" rel="noopener noreferrer" className="btn btn-ghost">r/pickleball ↗</a>
         </>}
       />
+      <FilterBanner />
 
       <section>
         <div className="kpi-grid">
@@ -93,7 +99,7 @@ export default function RedditPage() {
             value={joolaR ? fmt(joolaR.mentions) : '0'}
             color="#22c55e"
             spark={trend['joola'] || []}
-            customVs={`#${reddit.findIndex((d) => d.brand === 'joola') + 1} of ${reddit.length} brands`}
+            customVs={`#${displayReddit.findIndex((d) => d.brand === 'joola') + 1} of ${displayReddit.length} brands`}
           />
           <MiniKpi
             label="JOOLA sentiment" src="net score" flavor="joola"

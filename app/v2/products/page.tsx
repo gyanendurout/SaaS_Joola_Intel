@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { fetchBrands, fetchProductStats, fetchProductsList, type V2Brand, type V2ProductRow, type V2ProductItem } from '@/lib/v2/data'
 import { fmt, BoxPlot, ScatterChart } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 export default function ProductsPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -13,13 +14,14 @@ export default function ProductsPage() {
   const [filterBrand, setFilterBrand] = useState('')
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
       const [s, p] = await Promise.all([fetchProductStats(b), fetchProductsList(b)])
-      setBrands(b); setStats(s); setProducts(p); setLoading(false)
+      setBrands(b); setAllBrands(b); setStats(s); setProducts(p); setLoading(false)
     })
-  }, [])
+  }, [setAllBrands])
 
   if (loading) return <LoadingPage />
 
@@ -28,21 +30,24 @@ export default function ProductsPage() {
     else { setSortKey(key); setSortDir('desc') }
   }
 
-  const name = (s: string) => pgName(s, brands)
-  const totalProducts = stats.reduce((s, p) => s + p.count, 0)
-  const joolaStat = stats.find((p) => p.brand === 'joola')
-  const premiumLeader = [...stats].sort((a, b) => b.avg - a.avg)[0]
-  const valueLeader = [...stats].filter((p) => p.avg > 0).sort((a, b) => a.avg - b.avg)[0]
-  const maxCount = stats[0]?.count || 1
+  const displayStats = applyBrandFilter(stats, filteredBrands, isFiltered)
+  const displayProductsAll = applyBrandFilter(products, filteredBrands, isFiltered)
 
-  const boxData = stats.map((p) => ({
+  const name = (s: string) => pgName(s, brands)
+  const totalProducts = displayStats.reduce((s, p) => s + p.count, 0)
+  const joolaStat = displayStats.find((p) => p.brand === 'joola')
+  const premiumLeader = [...displayStats].sort((a, b) => b.avg - a.avg)[0]
+  const valueLeader = [...displayStats].filter((p) => p.avg > 0).sort((a, b) => a.avg - b.avg)[0]
+  const maxCount = displayStats[0]?.count || 1
+
+  const boxData = displayStats.map((p) => ({
     brand: p.brand, name: name(p.brand), color: pgColor(p.brand),
     min: p.min, med: p.med, max: p.max, avg: p.avg, count: p.count,
   }))
 
   const displayProducts = filterBrand
-    ? products.filter((p) => p.brand === filterBrand)
-    : products
+    ? displayProductsAll.filter((p) => p.brand === filterBrand)
+    : displayProductsAll
 
   const sortedProducts = sortKey ? [...displayProducts].sort((a, b) => {
     const av = (a as Record<string, unknown>)[sortKey]
@@ -83,6 +88,7 @@ export default function ProductsPage() {
           <select className="select"><option>All categories</option></select>
         </>}
       />
+      <FilterBanner />
 
       <section>
         <div className="kpi-grid">
@@ -90,7 +96,7 @@ export default function ProductsPage() {
             label="JOOLA catalog" src="products" flavor="joola"
             value={joolaStat?.count || 0}
             color="#22c55e"
-            customVs={joolaStat && joolaStat.count === stats[0]?.count ? 'largest in market' : `#${stats.findIndex(p => p.brand === 'joola') + 1} by catalog size`}
+            customVs={joolaStat && joolaStat.count === displayStats[0]?.count ? 'largest in market' : `#${displayStats.findIndex(p => p.brand === 'joola') + 1} by catalog size`}
           />
           <MiniKpi
             label="JOOLA avg price" src="products"
@@ -147,7 +153,7 @@ export default function ProductsPage() {
               <div className="sub">{totalProducts} paddles total across all brands.</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {stats.map((p) => (
+              {displayStats.map((p) => (
                 <div key={p.brand} className={'bar-row ' + (p.brand === 'joola' ? 'joola' : '')}>
                   <div className="lbl">
                     {name(p.brand)}
@@ -188,11 +194,11 @@ export default function ProductsPage() {
               <div className="sub">Products bucketed by price point.</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {stats.map((p) => {
+              {displayStats.map((p) => {
                 const tiers = [
-                  { label: 'Value <$100', count: products.filter((x) => x.brand === p.brand && (x.price || 0) < 100).length, color: '#22c55e' },
-                  { label: 'Mid $100–199', count: products.filter((x) => x.brand === p.brand && (x.price || 0) >= 100 && (x.price || 0) < 200).length, color: '#F5E625' },
-                  { label: 'Premium $200+', count: products.filter((x) => x.brand === p.brand && (x.price || 0) >= 200).length, color: '#ef4444' },
+                  { label: 'Value <$100', count: displayProductsAll.filter((x) => x.brand === p.brand && (x.price || 0) < 100).length, color: '#22c55e' },
+                  { label: 'Mid $100–199', count: displayProductsAll.filter((x) => x.brand === p.brand && (x.price || 0) >= 100 && (x.price || 0) < 200).length, color: '#F5E625' },
+                  { label: 'Premium $200+', count: displayProductsAll.filter((x) => x.brand === p.brand && (x.price || 0) >= 200).length, color: '#ef4444' },
                 ]
                 const total = tiers.reduce((s, t) => s + t.count, 0) || 1
                 return (

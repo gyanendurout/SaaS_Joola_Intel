@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { useBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 const I = {
   overview: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>,
@@ -43,6 +44,76 @@ const nav: NavItem[] = [
   { href: '/v2/products',    label: 'Product Catalog',    ic: I.product },
   { href: '/v2/market',      label: 'Market Intel',       ic: I.mkt },
 ]
+
+function BrandFilter() {
+  const { allBrands, selectedSlugs, setSelectedSlugs } = useBrandFilter()
+  const [open, setOpen] = useState(false)
+
+  if (allBrands.length === 0) return null
+
+  const isFiltered = selectedSlugs.length > 0
+  const activeCount = isFiltered ? selectedSlugs.length : allBrands.length
+
+  function toggle(slug: string) {
+    if (selectedSlugs.includes(slug)) {
+      setSelectedSlugs(selectedSlugs.filter(s => s !== slug))
+    } else {
+      setSelectedSlugs([...selectedSlugs, slug])
+    }
+  }
+
+  function selectAll() { setSelectedSlugs([]) }
+
+  function selectOnly(slug: string) { setSelectedSlugs([slug]) }
+
+  return (
+    <div className="bf-wrap">
+      <button className={'bf-header' + (open ? ' bf-open' : '')} onClick={() => setOpen(o => !o)}>
+        <span className="bf-label">BRANDS</span>
+        <span className={'bf-count' + (isFiltered ? ' bf-count-active' : '')}>
+          {activeCount}/{allBrands.length}
+        </span>
+        {isFiltered && (
+          <button
+            className="bf-clear-x"
+            onClick={(e) => { e.stopPropagation(); selectAll() }}
+            title="Clear filter"
+            aria-label="Clear brand filter"
+          >×</button>
+        )}
+        <span className="bf-chevron">{open ? '▾' : '▸'}</span>
+      </button>
+
+      {open && (
+        <div className="bf-list">
+          {allBrands.map(b => {
+            const checked = !isFiltered || selectedSlugs.includes(b.id)
+            return (
+              <label key={b.id} className={'bf-item' + (checked ? ' bf-item-on' : '')} title={`Filter to ${b.name} only`}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(b.id)}
+                  className="bf-checkbox"
+                />
+                <span className="brand-dot" style={{ background: b.color, flexShrink: 0 }} />
+                <span className="bf-name">{b.name}</span>
+                <button
+                  className="bf-only"
+                  onClick={(e) => { e.preventDefault(); selectOnly(b.id) }}
+                  title={`Show only ${b.name}`}
+                >only</button>
+              </label>
+            )
+          })}
+          {isFiltered && (
+            <button className="bf-all-btn" onClick={selectAll}>Show all brands</button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function V2Sidebar() {
   const path = usePathname() || '/v2'
@@ -103,6 +174,9 @@ export function V2Sidebar() {
             )
           })}
         </div>
+
+        {/* Brand filter — desktop expanded only */}
+        {!collapsed && <BrandFilter />}
 
         {/* Collapse toggle — desktop only */}
         <button

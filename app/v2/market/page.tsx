@@ -6,7 +6,8 @@ import {
   type V2Brand, type V2RedditRow, type V2Subreddit, type V2AdRow, type V2PromoRow, type V2IGRow,
 } from '@/lib/v2/data'
 import { fmt, LineChart, Donut } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 type Signal = { type: 'ad' | 'promo' | 'social' | 'reddit' | 'product'; brand: string; desc: string; when: string }
 
@@ -18,55 +19,61 @@ export default function MarketIntelPage() {
   const [promos, setPromos] = useState<V2PromoRow[]>([])
   const [ig, setIg] = useState<V2IGRow[]>([])
   const [loading, setLoading] = useState(true)
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
       const [r, s, a, p, i] = await Promise.all([
         fetchReddit(b), fetchRedditSubreddits(b), fetchAds(b), fetchPromos(b), fetchIG(b),
       ])
-      setBrands(b); setReddit(r); setSubreddits(s); setAds(a); setPromos(p); setIg(i); setLoading(false)
+      setBrands(b); setAllBrands(b); setReddit(r); setSubreddits(s); setAds(a); setPromos(p); setIg(i); setLoading(false)
     })
-  }, [])
+  }, [setAllBrands])
+
+  const displayReddit = applyBrandFilter(reddit, filteredBrands, isFiltered)
+  const displayAds = applyBrandFilter(ads, filteredBrands, isFiltered)
+  const displayPromos = applyBrandFilter(promos, filteredBrands, isFiltered)
+  const displayIG = applyBrandFilter(ig, filteredBrands, isFiltered)
 
   // All derived values and hooks must be before any early return
   const name = (s: string) => pgName(s, brands)
-  const joolaReddit = reddit.find((r) => r.brand === 'joola')
-  const joolaIG = ig.find((r) => r.brand === 'joola')
-  const joolaPromos = promos.find((p) => p.brand === 'joola')
-  const totalMentions = reddit.reduce((s, r) => s + r.mentions, 0)
+  const joolaReddit = displayReddit.find((r) => r.brand === 'joola')
+  const joolaIG = displayIG.find((r) => r.brand === 'joola')
+  const joolaPromos = displayPromos.find((p) => p.brand === 'joola')
+  const totalMentions = displayReddit.reduce((s, r) => s + r.mentions, 0)
 
   const signals = useMemo((): Signal[] => {
     const out: Signal[] = []
-    const topAd = ads[0]
+    const topAd = displayAds[0]
     if (topAd && topAd.brand !== 'joola') {
       out.push({ type: 'ad', brand: topAd.brand, desc: `${pgName(topAd.brand, brands)} running ${topAd.total} ads (${topAd.meta}M/${topAd.google}G) — ${topAd.share.toFixed(1)}% share of voice`, when: 'this week' })
     }
-    if (promos[0] && promos[0].count > 0) {
-      out.push({ type: 'promo', brand: promos[0].brand, desc: `${pgName(promos[0].brand, brands)} has ${promos[0].count} active promotions — ${promos[0].pct.toFixed(0)}% of tracked discounts`, when: 'this week' })
+    if (displayPromos[0] && displayPromos[0].count > 0) {
+      out.push({ type: 'promo', brand: displayPromos[0].brand, desc: `${pgName(displayPromos[0].brand, brands)} has ${displayPromos[0].count} active promotions — ${displayPromos[0].pct.toFixed(0)}% of tracked discounts`, when: 'this week' })
     }
-    if ((joolaPromos?.count || 0) === 0 && promos.filter((p) => p.count > 0).length > 0) {
+    if ((joolaPromos?.count || 0) === 0 && displayPromos.filter((p) => p.count > 0).length > 0) {
       out.push({ type: 'promo', brand: 'joola', desc: 'JOOLA has zero active promotions while competitors discount aggressively', when: 'ongoing' })
     }
     const topIG = [...ig].sort((a, b) => b.engRate - a.engRate)[0]
     if (topIG) {
       out.push({ type: 'social', brand: topIG.brand, desc: `${pgName(topIG.brand, brands)} leads IG engagement at ${topIG.engRate.toFixed(2)}% — ${fmt(topIG.followers)} followers`, when: 'latest snapshot' })
     }
-    const jIG = ig.find((r) => r.brand === 'joola')
+    const jIG = displayIG.find((r) => r.brand === 'joola')
     if (jIG) {
       out.push({ type: 'social', brand: 'joola', desc: `JOOLA IG: ${fmt(jIG.followers)} followers, ${jIG.engRate.toFixed(2)}% engagement rate`, when: 'latest snapshot' })
     }
     if (reddit[0]) {
       out.push({ type: 'reddit', brand: reddit[0].brand, desc: `${pgName(reddit[0].brand, brands)} leads Reddit with ${reddit[0].mentions} mentions`, when: 'last 90 days' })
     }
-    const jR = reddit.find((r) => r.brand === 'joola')
+    const jR = displayReddit.find((r) => r.brand === 'joola')
     if (jR) {
       const posPct = Math.round(jR.positive / Math.max(1, jR.mentions) * 100)
       out.push({ type: 'reddit', brand: 'joola', desc: `JOOLA Reddit: ${jR.mentions} mentions, ${posPct}% positive sentiment`, when: 'last 90 days' })
     }
     return out.slice(0, 8)
-  }, [ads, promos, ig, reddit, brands])
+  }, [displayAds, displayPromos, displayIG, displayReddit, brands])
 
-  const trends = reddit.slice(0, 6).map((r, i) => ({
+  const trends = displayReddit.slice(0, 6).map((r, i) => ({
     rank: i + 1,
     kw: name(r.brand) + ' paddle',
     mentions: r.mentions,
@@ -88,7 +95,7 @@ export default function MarketIntelPage() {
 
   const lineSeries = [
     { id: 'joola', label: 'JOOLA mentions', color: '#22c55e', data: joolaMentionSpark },
-    ...(reddit.slice(1, 3).map((r) => ({
+    ...(displayReddit.slice(1, 3).map((r) => ({
       id: r.brand,
       label: name(r.brand),
       color: pgColor(r.brand),
@@ -110,6 +117,7 @@ export default function MarketIntelPage() {
           <select className="select"><option>Last 30 days</option></select>
         </>}
       />
+      <FilterBanner />
 
       <section>
         <div className="kpi-grid">
@@ -136,7 +144,7 @@ export default function MarketIntelPage() {
             label="Total Reddit mentions" src="reddit_mentions"
             value={fmt(totalMentions)}
             color="#818cf8"
-            customVs={`across ${reddit.length} brands`}
+            customVs={`across ${displayReddit.length} brands`}
           />
         </div>
       </section>

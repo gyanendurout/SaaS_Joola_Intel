@@ -3,7 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import { fetchBrands, fetchPromos, fetchPromoDetails, type V2Brand, type V2PromoRow, type V2PromoDetail } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 export default function PromotionsPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -13,12 +14,13 @@ export default function PromotionsPage() {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [error, setError] = useState<string | null>(null)
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
         const [p, d] = await Promise.all([fetchPromos(b), fetchPromoDetails(b)])
-        setBrands(b); setPromos(p); setDetails(d); setLoading(false)
+        setBrands(b); setAllBrands(b); setPromos(p); setDetails(d); setLoading(false)
       } catch (err) {
         console.error('Promotions data fetch failed', err)
         setError('Unable to load promotions data. Please refresh.')
@@ -29,7 +31,7 @@ export default function PromotionsPage() {
       setError('Unable to load data. Please refresh.')
       setLoading(false)
     })
-  }, [])
+  }, [setAllBrands])
 
   useEffect(() => { document.title = 'JOOLA INTEL — Promotions' }, [])
 
@@ -46,7 +48,10 @@ export default function PromotionsPage() {
     else { setSortKey(key); setSortDir('desc') }
   }
 
-  const sortedDetails = sortKey ? [...details].sort((a, b) => {
+  const displayPromos = applyBrandFilter(promos, filteredBrands, isFiltered)
+  const displayDetails = applyBrandFilter(details, filteredBrands, isFiltered)
+
+  const sortedDetails = sortKey ? [...displayDetails].sort((a, b) => {
     const av = (a as Record<string, unknown>)[sortKey]
     const bv = (b as Record<string, unknown>)[sortKey]
     if (typeof av === 'number' && typeof bv === 'number')
@@ -54,25 +59,25 @@ export default function PromotionsPage() {
     return sortDir === 'asc'
       ? String(av ?? '').localeCompare(String(bv ?? ''))
       : String(bv ?? '').localeCompare(String(av ?? ''))
-  }) : details
+  }) : displayDetails
 
   const name = (s: string) => pgName(s, brands)
-  const totalPromos = promos.reduce((s, p) => s + p.count, 0)
-  const joolaPromos = promos.find((p) => p.brand === 'joola')?.count || 0
-  const promoLeader = promos[0]
-  const brandsWithPromos = promos.filter((p) => p.count > 0).length
+  const totalPromos = displayPromos.reduce((s, p) => s + p.count, 0)
+  const joolaPromos = displayPromos.find((p) => p.brand === 'joola')?.count || 0
+  const promoLeader = displayPromos[0]
+  const brandsWithPromos = displayPromos.filter((p) => p.count > 0).length
   const maxCount = promoLeader?.count || 1
 
   const avgDiscount = (() => {
-    const withDiscount = details.filter((d) => d.discount != null && d.discount > 0)
+    const withDiscount = displayDetails.filter((d) => d.discount != null && d.discount > 0)
     if (!withDiscount.length) return null
     return Math.round(withDiscount.reduce((s, d) => s + (d.discount || 0), 0) / withDiscount.length)
   })()
 
-  const calBrands = promos.slice(0, 6).map((p) => p.brand)
+  const calBrands = displayPromos.slice(0, 6).map((p) => p.brand)
   const calData: Record<string, number[]> = {}
   calBrands.forEach((b) => {
-    const count = promos.find((p) => p.brand === b)?.count || 0
+    const count = displayPromos.find((p) => p.brand === b)?.count || 0
     calData[b] = Array.from({ length: 13 }, () => {
       if (count === 0) return 0
       return Math.random() < Math.min(0.9, count / 4) ? 1 : 0
@@ -91,6 +96,7 @@ export default function PromotionsPage() {
           <select className="select"><option>This quarter</option></select>
         </>}
       />
+      <FilterBanner />
 
       {joolaPromos === 0 && promoLeader && promoLeader.count > 0 && (
         <section>
@@ -161,7 +167,7 @@ export default function PromotionsPage() {
               <div className="sub">{brandsWithPromos} of {promos.length} brands discounting right now.</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {promos.filter((p) => p.count > 0).map((d) => (
+              {displayPromos.filter((p) => p.count > 0).map((d) => (
                 <div key={d.brand} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}>
                   <div className="lbl">{name(d.brand)}</div>
                   <div className="track">

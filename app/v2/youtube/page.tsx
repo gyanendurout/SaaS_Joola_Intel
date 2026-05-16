@@ -6,7 +6,8 @@ import {
   type V2Brand, type V2YTRow, type V2TopYTVideo,
 } from '@/lib/v2/data'
 import { fmt, LineChart } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
 
 const YT_HANDLES: Record<string, string> = {
   joola: 'JOOLAUSA',
@@ -31,6 +32,7 @@ export default function YouTubePage() {
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
     document.title = 'JOOLA INTEL — YouTube Performance'
@@ -40,7 +42,7 @@ export default function YouTubePage() {
     fetchBrands().then(async (b) => {
       try {
         const [y, t, v] = await Promise.all([fetchYT(b), fetchYTTrend(b), fetchTopYTVideos(b, 15)])
-        setBrands(b); setYt(y); setTrend(t); setVideos(v); setLoading(false)
+        setBrands(b); setAllBrands(b); setYt(y); setTrend(t); setVideos(v); setLoading(false)
       } catch (err) {
         console.error('Data fetch failed', err)
         setError('Unable to load data. Please refresh.')
@@ -80,27 +82,31 @@ export default function YouTubePage() {
     })
   }
 
-  const name = (s: string) => pgName(s, brands)
-  const joolaYT = yt.find((d) => d.brand === 'joola')
-  const topByViews = [...yt].sort((a, b) => b.views - a.views)
-  const maxSubs = topByViews[0]?.subs || 1
-  const totalViews = yt.reduce((s, d) => s + d.views, 0)
-  const totalVideos = yt.reduce((s, d) => s + d.videos, 0)
+  const displayYt = applyBrandFilter(yt, filteredBrands, isFiltered)
+  const displayVideos = applyBrandFilter(videos, filteredBrands, isFiltered)
+  const displayTrend = applyBrandFilterRecord(trend, filteredBrands, isFiltered)
 
-  const lineSeries = Object.entries(trend)
+  const name = (s: string) => pgName(s, brands)
+  const joolaYT = displayYt.find((d) => d.brand === 'joola')
+  const topByViews = [...displayYt].sort((a, b) => b.views - a.views)
+  const maxSubs = topByViews[0]?.subs || 1
+  const totalViews = displayYt.reduce((s, d) => s + d.views, 0)
+  const totalVideos = displayYt.reduce((s, d) => s + d.videos, 0)
+
+  const lineSeries = Object.entries(displayTrend)
     .filter(([, data]) => data.length > 0)
     .map(([id, data]) => ({ id, label: name(id), color: pgColor(id), data }))
 
-  const vpvSorted = [...yt].filter((d) => d.videos > 0)
+  const vpvSorted = [...displayYt].filter((d) => d.videos > 0)
     .sort((a, b) => (b.views / b.videos) - (a.views / a.videos))
   const maxVpv = vpvSorted[0] ? vpvSorted[0].views / vpvSorted[0].videos : 1
 
-  const sortedVideos = applySortVideos(videos)
+  const sortedVideos = applySortVideos(displayVideos)
 
   return (
     <>
       <PageHead
-        eyebrow={`YOUTUBE · ${totalVideos} VIDEOS · ${yt.length} CHANNELS`}
+        eyebrow={`YOUTUBE · ${totalVideos} VIDEOS · ${displayYt.length} CHANNELS`}
         title="Youtube"
         accent="domination map"
         sub="Selkirk owns long-form pickleball video. JOOLA is a strong #2 but underweight given Ben Johns' reach. The gap to close: short-form tutorial content."
@@ -109,6 +115,7 @@ export default function YouTubePage() {
           <select className="select"><option>Last 90 days</option></select>
         </>}
       />
+      <FilterBanner />
 
       <section>
         <div className="kpi-grid">
@@ -116,7 +123,7 @@ export default function YouTubePage() {
             label="JOOLA subscribers" src="YouTube channels" flavor="joola"
             value={joolaYT && joolaYT.subs > 0 ? fmt(joolaYT.subs) : 'Pending'}
             color="#22c55e"
-            spark={trend['joola'] || []}
+            spark={displayTrend['joola'] || []}
             customVs={joolaYT && joolaYT.subs > 0
               ? `vs. ${name(topByViews.find(d => d.brand !== 'joola')?.brand || 'selkirk')}: ${fmt(topByViews.find(d => d.brand !== 'joola')?.subs || 0)}`
               : 'Weekly snapshots still being collected'}
@@ -137,7 +144,7 @@ export default function YouTubePage() {
             label="JOOLA total views" src="YouTube videos"
             value={joolaYT ? fmt(joolaYT.views) : '—'}
             color="#22c55e" flavor="joola"
-            customVs={`#${[...yt].sort((a, b) => b.views - a.views).findIndex(d => d.brand === 'joola') + 1} by views`}
+            customVs={`#${[...displayYt].sort((a, b) => b.views - a.views).findIndex(d => d.brand === 'joola') + 1} by views`}
           />
         </div>
       </section>
@@ -175,10 +182,10 @@ export default function YouTubePage() {
                   source="YouTube channels · latest weekly snapshot"
                 />
               </h2>
-              <div className="sub">{yt.length} brands · current snapshot</div>
+              <div className="sub">{displayYt.length} brands · current snapshot</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {[...yt].sort((a, b) => b.subs - a.subs).map((d) => (
+              {[...displayYt].sort((a, b) => b.subs - a.subs).map((d) => (
                 <div key={d.brand} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}>
                   <div className="lbl" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span>{name(d.brand)}</span>

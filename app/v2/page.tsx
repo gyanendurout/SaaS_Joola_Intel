@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { fetchOverview, type V2Overview } from '@/lib/v2/data'
 import { fmt, fmtPct, Sparkline, Delta, ScatterChart, Donut, BoxPlot, SentimentBar } from '@/components/v2/charts'
-import { SectionInfo } from '@/components/v2/PageShell'
+import { SectionInfo, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 // ─── Page header ─────────────────────────────────────────────────────
 function PageHeader() {
@@ -666,13 +667,17 @@ function brandColor(d: V2Overview, brandId: string): string { return d.brands.fi
 export default function V2OverviewPage() {
   const [data, setData] = useState<V2Overview | null>(null)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
-    fetchOverview().then(setData).catch((err) => {
+    fetchOverview().then((d) => {
+      setData(d)
+      setAllBrands(d.brands)
+    }).catch((err) => {
       console.error('Overview fetch failed', err)
       setFetchError('Unable to load data. Please refresh the page.')
     })
-  }, [])
+  }, [setAllBrands])
 
   useEffect(() => { document.title = 'JOOLA INTEL — Executive Briefing' }, [])
 
@@ -694,11 +699,27 @@ export default function V2OverviewPage() {
     )
   }
 
-  const d = data!
+  const raw = data!
+  const d: V2Overview = isFiltered ? {
+    ...raw,
+    ig: applyBrandFilter(raw.ig, filteredBrands, isFiltered),
+    ads: applyBrandFilter(raw.ads, filteredBrands, isFiltered),
+    promos: applyBrandFilter(raw.promos, filteredBrands, isFiltered),
+    products: applyBrandFilter(raw.products, filteredBrands, isFiltered),
+    yt: applyBrandFilter(raw.yt, filteredBrands, isFiltered),
+    reddit: applyBrandFilter(raw.reddit, filteredBrands, isFiltered),
+    influencers: applyBrandFilter(raw.influencers, filteredBrands, isFiltered),
+    adSample: applyBrandFilter(raw.adSample, filteredBrands, isFiltered),
+    topIGPosts: applyBrandFilter(raw.topIGPosts, filteredBrands, isFiltered),
+    topYTVideos: applyBrandFilter(raw.topYTVideos, filteredBrands, isFiltered),
+    topComments: applyBrandFilter(raw.topComments, filteredBrands, isFiltered),
+  } : raw
+
   return (
     <>
       <PageHeader />
       <SectionNav />
+      <FilterBanner />
       <Briefing d={d} />
       <KpiStrip d={d} />
       <MoversAndSignals d={d} />

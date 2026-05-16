@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef, type CSSProperties } from 'react'
 import { BRAND_COLORS, type V2Brand } from '@/lib/v2/data'
 import { Sparkline } from '@/components/v2/charts'
+import { useBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 export function pgColor(slug: string): string {
   return BRAND_COLORS[slug] || '#888'
@@ -217,6 +218,28 @@ export function exportCSV(filename: string, rows: Record<string, unknown>[]) {
   const a = document.createElement('a')
   a.href = url; a.download = filename; a.click()
   URL.revokeObjectURL(url)
+}
+
+// ─── Active filter banner (shown at top of each page) ────────────────
+export function FilterBanner() {
+  const { filteredBrands, isFiltered, setSelectedSlugs } = useBrandFilter()
+  if (!isFiltered) return null
+  return (
+    <div className="filter-banner">
+      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+        Showing
+      </span>
+      <span className="fb-brands">
+        {filteredBrands.map(b => (
+          <span key={b.id} className="fb-pill">
+            <span style={{ width: 6, height: 6, borderRadius: 99, background: b.color, display: 'inline-block' }} />
+            {b.name}
+          </span>
+        ))}
+      </span>
+      <button className="fb-clear" onClick={() => setSelectedSlugs([])}>× Clear filter</button>
+    </div>
+  )
 }
 
 // ─── Toast helper ─────────────────────────────────────────────────────

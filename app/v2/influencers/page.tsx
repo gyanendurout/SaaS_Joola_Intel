@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { fetchBrands, fetchInfluencers, type V2Brand, type V2InfluencerRow } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 function getTier(followers: number): string {
   if (followers >= 500_000) return 'Mega'
@@ -26,12 +27,13 @@ export default function InfluencersPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [error, setError] = useState<string | null>(null)
   const [hovBubble, setHovBubble] = useState<{ a: V2InfluencerRow; bx: number; by: number } | null>(null)
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
         const inf = await fetchInfluencers(b)
-        setBrands(b); setInfluencers(inf); setLoading(false)
+        setBrands(b); setAllBrands(b); setInfluencers(inf); setLoading(false)
       } catch (err) {
         console.error('Influencer data fetch failed', err)
         setError('Unable to load influencer data. Please refresh.')
@@ -59,8 +61,10 @@ export default function InfluencersPage() {
     else { setSortKey(key); setSortDir('desc') }
   }
 
+  const displayInfluencers = applyBrandFilter(influencers, filteredBrands, isFiltered)
+
   const name = (s: string) => pgName(s, brands)
-  const baseSort = [...influencers].sort((a, b) => b.engRate - a.engRate)
+  const baseSort = [...displayInfluencers].sort((a, b) => b.engRate - a.engRate)
 
   const sorted = sortKey ? [...baseSort].sort((a, b) => {
     const av = (a as Record<string, unknown>)[sortKey]
@@ -72,29 +76,29 @@ export default function InfluencersPage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : baseSort
 
-  const totalReach = influencers.reduce((s, i) => s + i.followers, 0)
-  const joolaReach = influencers.filter((i) => i.brand === 'joola').reduce((s, i) => s + i.followers, 0)
+  const totalReach = displayInfluencers.reduce((s, i) => s + i.followers, 0)
+  const joolaReach = displayInfluencers.filter((i) => i.brand === 'joola').reduce((s, i) => s + i.followers, 0)
   const joolaAvgER = (() => {
-    const j = influencers.filter((i) => i.brand === 'joola')
+    const j = displayInfluencers.filter((i) => i.brand === 'joola')
     return j.length ? (j.reduce((s, i) => s + i.engRate, 0) / j.length).toFixed(2) : '0'
   })()
   const topER = baseSort[0]
-  const joolaAthletes = influencers.filter((i) => i.brand === 'joola').length
+  const joolaAthletes = displayInfluencers.filter((i) => i.brand === 'joola').length
 
   // Bubble chart dimensions
   const bubW = 760, bubH = 360
   const padL = 56, padR = 30, padT = 30, padB = 44
   const innerW = bubW - padL - padR
   const innerH = bubH - padT - padB
-  const xMax = Math.max(500000, ...influencers.map((a) => a.followers))
-  const yMax = Math.max(12, ...influencers.map((a) => a.engRate))
+  const xMax = Math.max(500000, ...displayInfluencers.map((a) => a.followers))
+  const yMax = Math.max(12, ...displayInfluencers.map((a) => a.engRate))
   // sqrt scale: low-follower athletes spread across 50% of chart instead of clustering left
   const xb = (v: number) => padL + Math.sqrt(v / xMax) * innerW
   const yb = (v: number) => padT + innerH - (v / yMax) * innerH
 
   // VIZ-05: collision-resolved positions for bubbles
   type Placed = { a: V2InfluencerRow; cx: number; cy: number; r: number }
-  const placed: Placed[] = influencers.map((a) => ({
+  const placed: Placed[] = displayInfluencers.map((a) => ({
     a, cx: xb(a.followers), cy: yb(a.engRate), r: 6 + a.posts / 4,
   }))
   // simple iterative repulsion
@@ -141,7 +145,7 @@ export default function InfluencersPage() {
   return (
     <>
       <PageHead
-        eyebrow={`INFLUENCER NETWORK · ${influencers.length} ATHLETES · ${influencers.reduce((s, i) => s + i.posts, 0)} POSTS`}
+        eyebrow={`INFLUENCER NETWORK · ${displayInfluencers.length} ATHLETES · ${displayInfluencers.reduce((s, i) => s + i.posts, 0)} POSTS`}
         title="Influencer"
         accent="ROI"
         sub={`JOOLA's ${joolaAthletes} tracked athletes deliver ${fmt(joolaReach)} reach — ${Math.round(joolaReach / Math.max(1, totalReach) * 100)}% of the entire tracked influencer audience.`}
@@ -150,6 +154,7 @@ export default function InfluencersPage() {
           <select className="select"><option>By engagement rate</option></select>
         </>}
       />
+      <FilterBanner />
 
       <section>
         <div className="kpi-grid">

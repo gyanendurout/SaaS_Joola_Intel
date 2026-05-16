@@ -1430,3 +1430,219 @@ html { scroll-behavior: smooth; }
 }
 .v2-root .foot { color: var(--fg-3) !important; }
 .v2-root .foot strong { color: var(--fg-2) !important; }
+
+/* ----------------------------------------------------------
+   9. Global brand filter (sidebar)
+   ---------------------------------------------------------- */
+.v2-root .bf-wrap {
+  border-top: 1px solid var(--line);
+  padding: 10px 0 4px;
+  margin: 0 10px;
+}
+
+.v2-root .bf-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--fg-4);
+  transition: background 140ms, color 140ms;
+  text-align: left;
+}
+.v2-root .bf-header:hover,
+.v2-root .bf-header.bf-open { background: rgba(255,255,255,0.04); color: var(--fg-2); }
+
+.v2-root .bf-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  flex: 1;
+}
+
+.v2-root .bf-count {
+  font-size: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  color: var(--fg-4);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.03);
+  transition: all 160ms;
+}
+.v2-root .bf-count.bf-count-active {
+  color: var(--yellow);
+  border-color: var(--yellow-edge);
+  background: var(--yellow-dim);
+}
+
+.v2-root .bf-clear-x {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--fg-4);
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 3px;
+  transition: color 140ms, background 140ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+.v2-root .bf-clear-x:hover { color: var(--fg); background: rgba(255,255,255,0.08); }
+
+.v2-root .bf-chevron {
+  font-size: 9px;
+  color: var(--fg-4);
+  transition: color 140ms;
+}
+
+.v2-root .bf-list {
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-bottom: 4px;
+}
+
+.v2-root .bf-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 120ms, color 120ms;
+  position: relative;
+}
+.v2-root .bf-item:hover { background: rgba(255,255,255,0.04); color: var(--fg); }
+.v2-root .bf-item.bf-item-on { color: var(--fg-2); }
+
+.v2-root .bf-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 3px;
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color 140ms, background 140ms;
+}
+.v2-root .bf-checkbox:checked {
+  background: var(--yellow);
+  border-color: var(--yellow);
+}
+.v2-root .bf-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%23000' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/10px no-repeat;
+}
+
+.v2-root .bf-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v2-root .bf-only {
+  opacity: 0;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--fg-4);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: opacity 120ms, color 120ms, border-color 120ms;
+  flex-shrink: 0;
+}
+.v2-root .bf-item:hover .bf-only { opacity: 1; }
+.v2-root .bf-only:hover { color: var(--yellow); border-color: var(--yellow-edge); }
+
+.v2-root .bf-all-btn {
+  margin-top: 6px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--fg-4);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+  transition: color 140ms, border-color 140ms, background 140ms;
+}
+.v2-root .bf-all-btn:hover {
+  color: var(--yellow);
+  border-color: var(--yellow-edge);
+  background: var(--yellow-dim);
+}
+
+/* Active filter banner in main area */
+.v2-root .filter-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--yellow-dim);
+  border: 1px solid var(--yellow-edge);
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--yellow);
+}
+.v2-root .filter-banner .fb-brands {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.v2-root .filter-banner .fb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 3px;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--fg-2);
+}
+.v2-root .filter-banner .fb-clear {
+  background: none;
+  border: 1px solid var(--yellow-edge);
+  border-radius: 4px;
+  color: var(--yellow);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 140ms;
+  white-space: nowrap;
+}
+.v2-root .filter-banner .fb-clear:hover { background: rgba(245,230,37,0.15); }

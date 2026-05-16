@@ -6,7 +6,8 @@ import {
   type V2Brand, type V2TopComment, type V2CommentCount,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 export default function CommentsPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -15,6 +16,7 @@ export default function CommentsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'ig' | 'yt' | 'joola'>('all')
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
     document.title = 'JOOLA INTEL — Comments Intel'
@@ -24,7 +26,7 @@ export default function CommentsPage() {
     fetchBrands().then(async (b) => {
       try {
         const [c, cn] = await Promise.all([fetchTopComments(b, 30), fetchCommentCounts(b)])
-        setBrands(b); setComments(c); setCounts(cn); setLoading(false)
+        setBrands(b); setAllBrands(b); setComments(c); setCounts(cn); setLoading(false)
       } catch (err) {
         console.error('Data fetch failed', err)
         setError('Unable to load data. Please refresh.')
@@ -35,7 +37,7 @@ export default function CommentsPage() {
       setError('Unable to load data. Please refresh.')
       setLoading(false)
     })
-  }, [])
+  }, [setAllBrands])
 
   if (loading) return <LoadingPage />
 
@@ -46,13 +48,16 @@ export default function CommentsPage() {
     </div>
   )
 
-  const name = (s: string) => pgName(s, brands)
-  const joolaCount = counts.find((c) => c.brand === 'joola')
-  const totalIG = counts.reduce((s, c) => s + c.ig, 0)
-  const totalYT = counts.reduce((s, c) => s + c.yt, 0)
-  const maxTotal = counts[0]?.total || 1
+  const displayComments = applyBrandFilter(comments, filteredBrands, isFiltered)
+  const displayCounts = applyBrandFilter(counts, filteredBrands, isFiltered)
 
-  const filtered = comments.filter((c) => {
+  const name = (s: string) => pgName(s, brands)
+  const joolaCount = displayCounts.find((c) => c.brand === 'joola')
+  const totalIG = displayCounts.reduce((s, c) => s + c.ig, 0)
+  const totalYT = displayCounts.reduce((s, c) => s + c.yt, 0)
+  const maxTotal = displayCounts[0]?.total || 1
+
+  const filtered = displayComments.filter((c) => {
     if (filter === 'ig') return c.platform === 'ig'
     if (filter === 'yt') return c.platform === 'yt'
     if (filter === 'joola') return c.brand === 'joola'
@@ -71,6 +76,7 @@ export default function CommentsPage() {
           <select className="select"><option>All brands</option></select>
         </>}
       />
+      <FilterBanner />
 
       <section>
         <div className="kpi-grid">
@@ -82,9 +88,9 @@ export default function CommentsPage() {
           />
           <MiniKpi
             label="Most commented brand" src="Instagram comments"
-            value={counts[0] ? name(counts[0].brand) : '—'}
+            value={displayCounts[0] ? name(displayCounts[0].brand) : '—'}
             color="#F5E625"
-            customVs={`${counts[0]?.ig || 0} IG comments`}
+            customVs={`${displayCounts[0]?.ig || 0} IG comments`}
             flavor="warn"
           />
           <MiniKpi
@@ -117,7 +123,7 @@ export default function CommentsPage() {
           </div>
         </div>
         <div className="card"><div className="card-pad">
-          {counts.map((d) => (
+          {displayCounts.map((d) => (
             <div key={d.brand} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')} style={{ gridTemplateColumns: '110px 1fr 80px' }}>
               <div className="lbl">{name(d.brand)}</div>
               <div className="track" style={{ display: 'flex' }}>

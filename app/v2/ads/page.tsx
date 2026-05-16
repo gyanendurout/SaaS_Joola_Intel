@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { fetchBrands, fetchAds, fetchAdSample, type V2Brand, type V2AdRow, type V2AdSample } from '@/lib/v2/data'
 import { fmt, StackedArea, Donut } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 export default function AdsPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -16,6 +17,7 @@ export default function AdsPage() {
   const [filterBrand, setFilterBrand] = useState<string>('all')
   const [filterPlatform, setFilterPlatform] = useState<string>('all')
   const [searchCopy, setSearchCopy] = useState<string>('')
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
     document.title = 'JOOLA INTEL — Ads Library'
@@ -25,7 +27,7 @@ export default function AdsPage() {
     fetchBrands().then(async (b) => {
       try {
         const [a, s] = await Promise.all([fetchAds(b), fetchAdSample(b, 20)])
-        setBrands(b); setAds(a); setSample(s); setLoading(false)
+        setBrands(b); setAllBrands(b); setAds(a); setSample(s); setLoading(false)
       } catch (err) {
         console.error('Data fetch failed', err)
         setError('Unable to load data. Please refresh.')
@@ -36,7 +38,7 @@ export default function AdsPage() {
       setError('Unable to load data. Please refresh.')
       setLoading(false)
     })
-  }, [])
+  }, [setAllBrands])
 
   if (loading) return <LoadingPage />
 
@@ -65,7 +67,10 @@ export default function AdsPage() {
     else { setSortKey(key); setSortDir('desc') }
   }
 
-  const sortedSample = sortKey ? [...sample].sort((a, b) => {
+  const displayAds = applyBrandFilter(ads, filteredBrands, isFiltered)
+  const displaySample = applyBrandFilter(sample, filteredBrands, isFiltered)
+
+  const sortedSample = sortKey ? [...displaySample].sort((a, b) => {
     const av = (a as Record<string, unknown>)[sortKey]
     const bv = (b as Record<string, unknown>)[sortKey]
     if (typeof av === 'number' && typeof bv === 'number')
@@ -73,9 +78,9 @@ export default function AdsPage() {
     return sortDir === 'asc'
       ? String(av ?? '').localeCompare(String(bv ?? ''))
       : String(bv ?? '').localeCompare(String(av ?? ''))
-  }) : sample
+  }) : displaySample
 
-  const uniqueBrands = Array.from(new Set(sample.map(a => a.brand))).sort()
+  const uniqueBrands = Array.from(new Set(displaySample.map(a => a.brand))).sort()
 
   const filteredAndSorted = sortedSample.filter(a =>
     (filterBrand === 'all' || a.brand === filterBrand) &&
@@ -84,16 +89,16 @@ export default function AdsPage() {
   )
 
   const name = (s: string) => pgName(s, brands)
-  const totalAds = ads.reduce((s, a) => s + a.total, 0)
-  const totalMeta = ads.reduce((s, a) => s + a.meta, 0)
-  const totalGoogle = ads.reduce((s, a) => s + a.google, 0)
-  const totalActive = ads.reduce((s, a) => s + a.active, 0)
-  const joolaAd = ads.find((a) => a.brand === 'joola')
-  const topBrand = ads[0]
-  const maxAds = ads[0]?.total || 1
+  const totalAds = displayAds.reduce((s, a) => s + a.total, 0)
+  const totalMeta = displayAds.reduce((s, a) => s + a.meta, 0)
+  const totalGoogle = displayAds.reduce((s, a) => s + a.google, 0)
+  const totalActive = displayAds.reduce((s, a) => s + a.active, 0)
+  const joolaAd = displayAds.find((a) => a.brand === 'joola')
+  const topBrand = displayAds[0]
+  const maxAds = displayAds[0]?.total || 1
 
   // VIZ-24: include all brands so legend matches stack
-  const stackSeries = ads.map((a) => ({
+  const stackSeries = displayAds.map((a) => ({
     id: a.brand,
     label: name(a.brand),
     color: pgColor(a.brand),
@@ -126,6 +131,7 @@ export default function AdsPage() {
           </select>
         </>}
       />
+      <FilterBanner />
 
       <section>
         <div className="kpi-grid">

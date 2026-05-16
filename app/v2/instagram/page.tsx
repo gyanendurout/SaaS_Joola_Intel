@@ -6,7 +6,8 @@ import {
   type V2Brand, type V2IGRow, type V2TopIGPost,
 } from '@/lib/v2/data'
 import { fmt, Sparkline, LineChart, ScatterChart } from '@/components/v2/charts'
-import { PageHead, MiniKpi, BrandPill, pgColor, pgName, LoadingPage, SectionInfo, SortTh } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, BrandPill, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
 
 export default function InstagramPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -17,12 +18,13 @@ export default function InstagramPage() {
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
         const [i, p, f] = await Promise.all([fetchIG(b), fetchTopIGPosts(b, 20), fetchPostFrequency(b)])
-        setBrands(b); setIg(i); setPosts(p); setFreq(f); setLoading(false)
+        setBrands(b); setAllBrands(b); setIg(i); setPosts(p); setFreq(f); setLoading(false)
       } catch (err) {
         console.error('Instagram data fetch failed', err)
         setError('Unable to load Instagram data. Please refresh.')
@@ -33,7 +35,7 @@ export default function InstagramPage() {
       setError('Unable to load data. Please refresh.')
       setLoading(false)
     })
-  }, [])
+  }, [setAllBrands])
 
   useEffect(() => { document.title = 'JOOLA INTEL — Instagram Performance' }, [])
 
@@ -50,23 +52,27 @@ export default function InstagramPage() {
     else { setSortKey(key); setSortDir('desc') }
   }
 
-  const name = (s: string) => pgName(s, brands)
-  const joolaIG = ig.find((d) => d.brand === 'joola')
-  const totalPosts = posts.length
-  const totalFollowers = ig.reduce((s, d) => s + d.followers, 0)
+  const displayIg = applyBrandFilter(ig, filteredBrands, isFiltered)
+  const displayPosts = applyBrandFilter(posts, filteredBrands, isFiltered)
+  const displayFreq = applyBrandFilterRecord(freq, filteredBrands, isFiltered)
 
-  const lineSeries = ig.slice(0, 7).map((d) => ({
+  const name = (s: string) => pgName(s, brands)
+  const joolaIG = displayIg.find((d) => d.brand === 'joola')
+  const totalPosts = displayPosts.length
+  const totalFollowers = displayIg.reduce((s, d) => s + d.followers, 0)
+
+  const lineSeries = displayIg.slice(0, 7).map((d) => ({
     id: d.brand, label: name(d.brand), color: pgColor(d.brand), data: d.trend,
   }))
 
-  const scatterData = ig.map((d) => ({
+  const scatterData = displayIg.map((d) => ({
     brand: d.brand, name: name(d.brand), color: pgColor(d.brand),
     followers: d.followers, engRate: d.engRate, posts: 30,
   }))
 
-  const topByER = [...posts]
+  const topByER = [...displayPosts]
     .map((p) => {
-      const igRow = ig.find((r) => r.brand === p.brand)
+      const igRow = displayIg.find((r) => r.brand === p.brand)
       const engRate = igRow && igRow.followers > 0
         ? ((p.likes + p.comments) / igRow.followers) * 100
         : 0
@@ -84,23 +90,26 @@ export default function InstagramPage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : topByER
 
-  const erSorted = [...ig].sort((a, b) => b.engRate - a.engRate)
+  const erSorted = [...displayIg].sort((a, b) => b.engRate - a.engRate)
   const maxER = erSorted[0]?.engRate || 1
 
-  const freqBrands = ['joola', 'selkirk', 'crbn', 'engage', 'paddletek']
+  const freqBrands = Object.keys(displayFreq).length > 0
+    ? Object.keys(displayFreq)
+    : ['joola', 'selkirk', 'crbn', 'engage', 'paddletek']
 
   return (
     <>
       <PageHead
-        eyebrow={`INSTAGRAM · ${totalPosts} POSTS · ${ig.length} PROFILES`}
+        eyebrow={`INSTAGRAM · ${totalPosts} POSTS · ${displayIg.length} PROFILES`}
         title="Instagram"
         accent="performance"
         sub="Who is growing, whose content actually resonates, and what JOOLA can learn from the brands punching above their weight."
         actions={<>
-          <select className="select"><option>All {ig.length} brands</option></select>
+          <select className="select"><option>All {displayIg.length} brands</option></select>
           <select className="select"><option>Last 8 weeks</option></select>
         </>}
       />
+      <FilterBanner />
 
       <section>
         <div className="kpi-grid">
@@ -114,13 +123,13 @@ export default function InstagramPage() {
             label="JOOLA eng. rate" src="Instagram posts"
             value={joolaIG ? joolaIG.engRate.toFixed(2) + '%' : '—'}
             color="#818cf8" spark={joolaIG?.trend.map(() => joolaIG.engRate)}
-            customVs={`#${erSorted.findIndex((r) => r.brand === 'joola') + 1} of ${ig.length} brands`}
+            customVs={`#${erSorted.findIndex((r) => r.brand === 'joola') + 1} of ${displayIg.length} brands`}
           />
           <MiniKpi
             label="Total tracked posts" src="Instagram posts"
             value={fmt(totalPosts)}
             color="#F5E625"
-            customVs={`across ${ig.length} brands`}
+            customVs={`across ${displayIg.length} brands`}
           />
           <MiniKpi
             label="Total reach" src="Instagram weekly"
@@ -291,7 +300,7 @@ export default function InstagramPage() {
             <div className="card"><div className="card-pad">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                 {freqBrands.map((b) => {
-                  const grid = freq[b] || Array.from({ length: 4 }, () => Array(7).fill(0))
+                  const grid = displayFreq[b] || Array.from({ length: 4 }, () => Array(7).fill(0))
                   const total = grid.flat().reduce((s, v) => s + v, 0)
                   return (
                     <div key={b}>
