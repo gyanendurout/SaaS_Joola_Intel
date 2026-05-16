@@ -53,7 +53,7 @@ export default function YouTubePage() {
       setError('Unable to load data. Please refresh.')
       setLoading(false)
     })
-  }, [])
+  }, [setAllBrands])
 
   if (loading) return <LoadingPage />
 

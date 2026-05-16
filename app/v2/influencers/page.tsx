@@ -44,7 +44,7 @@ export default function InfluencersPage() {
       setError('Unable to load data. Please refresh.')
       setLoading(false)
     })
-  }, [])
+  }, [setAllBrands])
 
   useEffect(() => { document.title = 'JOOLA INTEL — Influencer Network' }, [])
 

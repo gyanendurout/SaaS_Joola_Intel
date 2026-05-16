@@ -98,7 +98,7 @@ export default function RedditPage() {
             label="JOOLA mentions" src="Reddit data" flavor="joola"
             value={joolaR ? fmt(joolaR.mentions) : '0'}
             color="#22c55e"
-            spark={trend['joola'] || []}
+            spark={displayTrend['joola'] || []}
             customVs={`#${displayReddit.findIndex((d) => d.brand === 'joola') + 1} of ${displayReddit.length} brands`}
           />
           <MiniKpi
@@ -111,13 +111,13 @@ export default function RedditPage() {
             label="Total mentions" src="Reddit data"
             value={fmt(totalMentions)}
             color="#F5E625"
-            customVs={`across ${reddit.length} brands`}
+            customVs={`across ${displayReddit.length} brands`}
           />
           <MiniKpi
             label="Most mentioned" src="market leader"
-            value={name(reddit[0]?.brand || 'joola')}
+            value={name(displayReddit[0]?.brand || 'joola')}
             color="#818cf8"
-            customVs={`${reddit[0]?.mentions || 0} mentions`}
+            customVs={`${displayReddit[0]?.mentions || 0} mentions`}
           />
         </div>
       </section>
@@ -223,8 +223,8 @@ export default function RedditPage() {
               <div className="sub">Ranked by total community discussion volume.</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {reddit.slice(0, 10).map((d, i) => {
-                const sharePct = Math.round((d.mentions / Math.max(1, reddit[0].mentions)) * 100)
+              {displayReddit.slice(0, 10).map((d, i) => {
+                const sharePct = Math.round((d.mentions / Math.max(1, displayReddit[0]?.mentions || 1)) * 100)
                 const posPct = Math.round((d.positive / Math.max(1, d.mentions)) * 100)
                 const negPct = Math.round((d.negative / Math.max(1, d.mentions)) * 100)
                 return (

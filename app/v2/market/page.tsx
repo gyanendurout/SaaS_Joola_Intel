@@ -54,7 +54,7 @@ export default function MarketIntelPage() {
     if ((joolaPromos?.count || 0) === 0 && displayPromos.filter((p) => p.count > 0).length > 0) {
       out.push({ type: 'promo', brand: 'joola', desc: 'JOOLA has zero active promotions while competitors discount aggressively', when: 'ongoing' })
     }
-    const topIG = [...ig].sort((a, b) => b.engRate - a.engRate)[0]
+    const topIG = [...displayIG].sort((a, b) => b.engRate - a.engRate)[0]
     if (topIG) {
       out.push({ type: 'social', brand: topIG.brand, desc: `${pgName(topIG.brand, brands)} leads IG engagement at ${topIG.engRate.toFixed(2)}% — ${fmt(topIG.followers)} followers`, when: 'latest snapshot' })
     }
@@ -62,8 +62,8 @@ export default function MarketIntelPage() {
     if (jIG) {
       out.push({ type: 'social', brand: 'joola', desc: `JOOLA IG: ${fmt(jIG.followers)} followers, ${jIG.engRate.toFixed(2)}% engagement rate`, when: 'latest snapshot' })
     }
-    if (reddit[0]) {
-      out.push({ type: 'reddit', brand: reddit[0].brand, desc: `${pgName(reddit[0].brand, brands)} leads Reddit with ${reddit[0].mentions} mentions`, when: 'last 90 days' })
+    if (displayReddit[0]) {
+      out.push({ type: 'reddit', brand: displayReddit[0].brand, desc: `${pgName(displayReddit[0].brand, brands)} leads Reddit with ${displayReddit[0].mentions} mentions`, when: 'last 90 days' })
     }
     const jR = displayReddit.find((r) => r.brand === 'joola')
     if (jR) {
