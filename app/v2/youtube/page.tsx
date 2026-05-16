@@ -138,7 +138,7 @@ export default function YouTubePage() {
             label="Total views tracked" src="YouTube videos"
             value={fmt(totalViews)}
             color="#F5E625"
-            customVs="across all brands"
+            customVs={`across ${displayYt.length} brands`}
           />
           <MiniKpi
             label="JOOLA total views" src="YouTube videos"

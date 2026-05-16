@@ -1,7 +1,7 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
-import type { V2Brand } from './data'
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
+import { fetchBrands, type V2Brand } from './data'
 
 type BrandFilterCtx = {
   allBrands: V2Brand[]
@@ -33,6 +33,12 @@ export function BrandFilterProvider({ children }: { children: ReactNode }) {
   const [allBrands, setAllBrandsRaw] = useState<V2Brand[]>([])
   const [selectedSlugs, setSelectedSlugsRaw] = useState<string[]>(readStored)
 
+  // Fetch brands at layout level so the sidebar filter is populated immediately,
+  // independent of which page first renders.
+  useEffect(() => {
+    fetchBrands().then(b => setAllBrandsRaw(b)).catch(() => {})
+  }, [])
+
   const setAllBrands = useCallback((brands: V2Brand[]) => {
     setAllBrandsRaw(brands)
   }, [])
@@ -53,7 +59,7 @@ export function BrandFilterProvider({ children }: { children: ReactNode }) {
       selectedSlugs,
       setSelectedSlugs,
       filteredBrands,
-      isFiltered: selectedSlugs.length > 0,
+      isFiltered: selectedSlugs.length > 0 && selectedSlugs.length < allBrands.length,
     }}>
       {children}
     </BrandFilterContext.Provider>

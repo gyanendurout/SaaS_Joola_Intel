@@ -85,7 +85,7 @@ export default function RedditPage() {
         accent="sentiment"
         sub="JOOLA's share of voice, sentiment breakdown, and trending discussion across r/pickleball and related communities."
         actions={<>
-          <select className="select"><option>All brands</option></select>
+          <select className="select"><option>All {displayReddit.length} brands</option></select>
           <select className="select"><option>Last 90 days</option></select>
           <a href="https://www.reddit.com/r/pickleball" target="_blank" rel="noopener noreferrer" className="btn btn-ghost">r/pickleball ↗</a>
         </>}

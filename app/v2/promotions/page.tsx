@@ -87,7 +87,7 @@ export default function PromotionsPage() {
   return (
     <>
       <PageHead
-        eyebrow={`PROMOTIONS · ${totalPromos} ACTIVE DISCOUNTS · ${brandsWithPromos} BRANDS`}
+        eyebrow={`PROMOTIONS · ${totalPromos} ACTIVE DISCOUNTS · ${displayPromos.length} BRANDS`}
         title="Pricing"
         accent="War Room"
         sub={`${promoLeader ? name(promoLeader.brand) : '—'} leads with ${promoLeader?.count || 0} active promotions. ${joolaPromos === 0 ? 'JOOLA has zero active promos.' : `JOOLA has ${joolaPromos} active promo${joolaPromos !== 1 ? 's' : ''}.`}`}
@@ -147,7 +147,7 @@ export default function PromotionsPage() {
             label="Avg discount" src="Promotions"
             value={avgDiscount != null ? avgDiscount + '%' : '—'}
             color="#818cf8"
-            customVs="across all brands"
+            customVs={`across ${displayPromos.length} brands`}
           />
         </div>
       </section>
@@ -164,7 +164,7 @@ export default function PromotionsPage() {
                   source="promotions · scraped from brand websites via apify/playwright-scraper. Updated every Monday."
                 />
               </h2>
-              <div className="sub">{brandsWithPromos} of {promos.length} brands discounting right now.</div>
+              <div className="sub">{brandsWithPromos} of {displayPromos.length} brands discounting right now.</div>
             </div></div>
             <div className="card"><div className="card-pad">
               {displayPromos.filter((p) => p.count > 0).map((d) => (

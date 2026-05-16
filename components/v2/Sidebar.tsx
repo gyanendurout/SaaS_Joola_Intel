@@ -47,7 +47,7 @@ const nav: NavItem[] = [
 
 function BrandFilter() {
   const { allBrands, selectedSlugs, setSelectedSlugs } = useBrandFilter()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
 
   if (allBrands.length === 0) return null
 
@@ -89,7 +89,7 @@ function BrandFilter() {
           {allBrands.map(b => {
             const checked = !isFiltered || selectedSlugs.includes(b.id)
             return (
-              <label key={b.id} className={'bf-item' + (checked ? ' bf-item-on' : '')} title={`Filter to ${b.name} only`}>
+              <label key={b.id} className={'bf-item' + (checked ? ' bf-item-on' : '')} title={checked && selectedSlugs.length === 1 ? `Removing last selection resets to all brands` : b.name}>
                 <input
                   type="checkbox"
                   checked={checked}
@@ -155,6 +155,9 @@ export function V2Sidebar() {
           </button>
         </div>
 
+        {/* Brand filter — desktop expanded only, placed above nav for visibility */}
+        {!collapsed && <BrandFilter />}
+
         <div className="nav-section" style={{ flex: 1, overflowY: 'auto' }}>
           {!collapsed && <h6>Channels</h6>}
           {nav.map(item => {
@@ -174,9 +177,6 @@ export function V2Sidebar() {
             )
           })}
         </div>
-
-        {/* Brand filter — desktop expanded only */}
-        {!collapsed && <BrandFilter />}
 
         {/* Collapse toggle — desktop only */}
         <button

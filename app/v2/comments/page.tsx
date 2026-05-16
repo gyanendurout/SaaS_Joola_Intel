@@ -73,7 +73,7 @@ export default function CommentsPage() {
         sub="Real fan voice across Instagram and YouTube. Surface ambassadors, catch product issues, learn what's resonating."
         actions={<>
           <select className="select"><option>IG + YT</option></select>
-          <select className="select"><option>All brands</option></select>
+          <select className="select"><option>All {displayCounts.length} brands</option></select>
         </>}
       />
       <FilterBanner />
@@ -103,7 +103,7 @@ export default function CommentsPage() {
             label="Total comments" src="ig + yt"
             value={fmt(totalIG + totalYT)}
             color="#818cf8"
-            customVs="across all brands"
+            customVs={`across ${displayCounts.length} brands`}
           />
         </div>
       </section>

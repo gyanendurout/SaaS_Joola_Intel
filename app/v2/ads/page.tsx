@@ -121,7 +121,7 @@ export default function AdsPage() {
           <input className="select" style={{ width: 220 }} placeholder="Search ad copy, CTA…"
             value={searchCopy} onChange={e => setSearchCopy(e.target.value)} />
           <select className="select" value={filterBrand} onChange={e => setFilterBrand(e.target.value)}>
-            <option value="all">All brands</option>
+            <option value="all">All {displayAds.length} brands</option>
             {uniqueBrands.map(b => <option key={b} value={b}>{name(b)}</option>)}
           </select>
           <select className="select" value={filterPlatform} onChange={e => setFilterPlatform(e.target.value)}>
@@ -143,9 +143,9 @@ export default function AdsPage() {
           />
           <MiniKpi
             label="JOOLA share of voice" src="Meta & Google Ads" flavor="joola"
-            value={joolaAd ? joolaAd.share.toFixed(1) + '%' : '—'}
+            value={joolaAd && totalAds > 0 ? (joolaAd.total / totalAds * 100).toFixed(1) + '%' : '—'}
             color="#22c55e"
-            customVs={joolaAd ? `${joolaAd.total} ads · #${ads.findIndex((a) => a.brand === 'joola') + 1} rank` : '—'}
+            customVs={joolaAd ? `${joolaAd.total} ads · #${displayAds.findIndex((a) => a.brand === 'joola') + 1} rank` : '—'}
           />
           <MiniKpi
             label="Most active brand" flavor="warn"
@@ -204,7 +204,7 @@ export default function AdsPage() {
               <div className="sub">With platform mix breakdown.</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {ads.map((d) => (
+              {displayAds.map((d) => (
                 <div key={d.brand} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}>
                   <div className="lbl">{name(d.brand)}</div>
                   <div className="track">
@@ -213,7 +213,7 @@ export default function AdsPage() {
                       background: `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
                     }}>{d.total} · {d.meta}M / {d.google}G</div>
                   </div>
-                  <div className="spark-mini">{d.share.toFixed(1)}%</div>
+                  <div className="spark-mini">{totalAds > 0 ? (d.total / totalAds * 100).toFixed(1) : '0.0'}%</div>
                 </div>
               ))}
             </div></div>

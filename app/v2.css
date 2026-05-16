@@ -1435,8 +1435,8 @@ html { scroll-behavior: smooth; }
    9. Global brand filter (sidebar)
    ---------------------------------------------------------- */
 .v2-root .bf-wrap {
-  border-top: 1px solid var(--line);
-  padding: 10px 0 4px;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 0 8px;
   margin: 0 10px;
 }
 
@@ -1508,7 +1508,7 @@ html { scroll-behavior: smooth; }
 
 .v2-root .bf-list {
   margin-top: 4px;
-  max-height: 220px;
+  max-height: 180px;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.1) transparent;

@@ -1,5 +1,59 @@
 # JOOLA Intel — Claude Session Memory
 
+## 🚀 LIVE DEPLOYMENT
+
+| What | Where |
+|---|---|
+| **Production URL** | https://saas-joola-intel.vercel.app |
+| **Example page** | https://saas-joola-intel.vercel.app/v2/reddit |
+| **GitHub repo** | https://github.com/gyanendurout/SaaS_Joola_Intel |
+| **Default branch** | `main` |
+| **Hosting** | Vercel (auto-deploys on push to `main`) |
+| **Database** | Supabase project `loecyghnkkxyymelgexz` |
+| **Local repo path** | `c:\Workspace\joola-intel-nextjs` |
+| **Initial commit** | POC initial commit on 2026-05-15 |
+
+### How updates flow
+```
+Local edit  →  git push origin main  →  Vercel auto-rebuilds  →  Live in ~90s
+                                            ↑ reads env vars set in Vercel dashboard
+                                            ↑ reads data from Supabase
+```
+
+### How data flows
+```
+Local laptop                          Supabase                    Vercel app
+┌──────────────────┐                 ┌──────────┐               ┌──────────────┐
+│ python scripts/  │   writes        │ Postgres │   reads       │ Next.js read │
+│ run_resumable.py │ ──────────────► │  tables  │ ────────────► │ via anon key │
+│ (uses .env)      │ (service_role)  │          │ (anon key)    │              │
+└──────────────────┘                 └──────────┘               └──────────────┘
+```
+- Run scrapers locally → Supabase grows → refresh Vercel URL → new data shows up. **No redeploy needed for data changes.**
+- Redeploy only when code changes (auto-triggered by `git push`).
+
+### Env vars set in Vercel project settings (Production + Preview)
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_OPENAI_KEY`  *(should be renamed to `OPENAI_API_KEY` without `NEXT_PUBLIC_` prefix before prod — currently leaks to browser bundle, POC-acceptable)*
+
+### Env vars in local `scripts/.env` (NOT in Vercel, NEVER commit)
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `APIFY_TOKEN`
+
+### 🔴 Pending POC → prod hardening
+- [ ] **Rotate Supabase service-role key** — was exposed when GitHub blocked initial push
+- [ ] **Rotate Apify token** — same exposure
+- [ ] **Rotate OpenAI key** — was shared in chat transcript on 2026-05-15
+- [ ] Rename `NEXT_PUBLIC_OPENAI_KEY` → `OPENAI_API_KEY` server-only in `app/api/generate-content/route.ts`
+- [ ] Enable Supabase Row-Level Security policies on all tables (anon role = SELECT only)
+- [ ] Add `scripts/requirements.txt` (pip freeze) for Python reproducibility
+- [ ] Set up GitHub Actions cron for the Python pipeline (currently runs manually on laptop)
+
+---
+
+
 ## Project Overview
 Next.js 14 dashboard (`/app/v2/`) — Pickleball competitive intelligence platform.
 Dark-themed, data-rich, chart-heavy. Uses custom CSS (`app/v2.css`), not Tailwind.
@@ -288,3 +342,55 @@ Fixed 28-item visual defect report (`VIZ-01` through `VIZ-28`):
 
 ### Pattern to follow
 **Rule of thumb**: if a card contains a list/table/heatmap, the card itself should NOT transform on hover. Add a class to each inner row and apply the pop there. Reserve whole-card lift for self-contained units (KPI cards, brief cards, opportunity cards).
+
+## Session Log — POC Deployment to Vercel (2026-05-15)
+
+### Repo & deploy setup completed
+1. **`.gitignore` extended** — added `.env*`, `.claude/`, `__pycache__/`, `*.pyc`, `.venv/` (was missing `.env*` — would have leaked `.env.local`)
+2. **Git init + first push** — initial commit `5fad664` (then amended to `6135ca9` after secret removal)
+3. **Secret scrubbing** — GitHub blocked the first push (secret scanner caught hardcoded Supabase service-role key + Apify token in 4 Python files + 1 markdown doc):
+   - `scripts/count_rows.py:5`
+   - `scripts/fix_missing_data.py:18,21`
+   - `scripts/scrape_may15.py:20,23`
+   - `scripts/apify_to_supabase.py:45,49`
+   - `docs/WHERE_WE_LEFT_OFF.md:62,64`
+4. **Patched all 4 Python scripts** to read from `os.environ` with optional `python-dotenv` loader:
+   ```python
+   import os
+   try:
+       from dotenv import load_dotenv
+       load_dotenv(); load_dotenv("scripts/.env")
+   except ImportError:
+       pass
+   SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+   APIFY_TOKEN  = os.environ["APIFY_TOKEN"]
+   ```
+5. **Created `scripts/.env`** (gitignored) with the original values so scripts keep running locally
+6. **Created `scripts/.env.example`** as template (committed) with placeholder values
+7. **Vercel import** — connected GitHub repo, pasted 3 env vars via "paste .env contents" option, deployed
+8. **Verified live** at https://saas-joola-intel.vercel.app/v2/reddit
+
+### Commit author identity
+Used inline env vars (not `git config`) since Git safety protocol forbids modifying git config:
+```bash
+GIT_AUTHOR_NAME="Gyanendu Rout" GIT_AUTHOR_EMAIL="gyanendu1197@gmail.com" \
+GIT_COMMITTER_NAME="Gyanendu Rout" GIT_COMMITTER_EMAIL="gyanendu1197@gmail.com" \
+git commit -m "..."
+```
+
+### Local dev workflow going forward
+```bash
+# Code change → push → Vercel auto-deploys
+git add . && git commit -m "..." && git push
+
+# Data refresh → run local Python (writes to Supabase, no redeploy needed)
+cd c:\Workspace\joola-intel-nextjs
+pip install python-dotenv requests  # one-time
+python scripts/run_resumable.py
+```
+
+### Architecture clarification (asked + answered this session)
+- **Single deployable Next.js app** — frontend + API routes bundled, deployed to Vercel
+- **Supabase** = managed Postgres, browser reads directly via anon key (no custom API layer)
+- **Python scripts** = run locally on laptop, write to Supabase via service-role key, NOT deployed with Next.js
+- Vercel auto-ignores `scripts/`, `design/`, `docs/`, `migrations/`, `_legacy/` since they're outside the Next.js dep graph
