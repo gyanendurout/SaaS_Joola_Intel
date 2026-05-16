@@ -394,3 +394,42 @@ python scripts/run_resumable.py
 - **Supabase** = managed Postgres, browser reads directly via anon key (no custom API layer)
 - **Python scripts** = run locally on laptop, write to Supabase via service-role key, NOT deployed with Next.js
 - Vercel auto-ignores `scripts/`, `design/`, `docs/`, `migrations/`, `_legacy/` since they're outside the Next.js dep graph
+
+---
+
+## Session Log — Brand Filter UX + QA Bug Fixes (2026-05-16)
+
+### Brand filter panel UX overhaul
+- **Sidebar.tsx**: Moved `<BrandFilter />` from bottom of sidebar to **top** (above nav links), defaulting to open (`useState(true)`). Previously it was invisible because 10 nav links pushed it off-screen.
+- **BrandFilterContext.tsx**: Added `useEffect` to auto-fetch brands on mount — filter panel now populates independently of page loading (no more empty panel on first visit).
+- **v2.css**: `.bf-wrap` border moved from top to bottom; `.bf-list` max-height reduced to `180px` to fit at top of sidebar.
+
+### 7 QA bugs fixed (commit `054757f`)
+
+| Bug | File | Fix |
+|-----|------|-----|
+| BUG-01 | `ads/page.tsx` | SoV KPI + rank + bar chart + bar % all now computed from `displayAds` (filtered). DB `share` field is global — recomputed as `d.total / totalAds * 100` |
+| BUG-02 | `promotions/page.tsx` | Eyebrow brand count: `brandsWithPromos` → `displayPromos.length` |
+| BUG-03 | `promotions/page.tsx` | Sub text brand count: `promos.length` → `displayPromos.length` |
+| BUG-04 | `promotions`, `comments`, `youtube` | "across all brands" → `` `across ${displayXxx.length} brands` `` |
+| BUG-05 | `reddit`, `comments`, `ads` | "All brands" dropdown → `All ${displayXxx.length} brands` |
+| BUG-06 | `BrandFilterContext.tsx` | `isFiltered` was `selectedSlugs.length > 0` — showed yellow banner even when all brands manually re-selected. Fixed: `selectedSlugs.length > 0 && selectedSlugs.length < allBrands.length` |
+| BUG-07 | `Sidebar.tsx` | Last-brand tooltip updated to warn that removing it resets to all brands |
+
+### Key invariant: Share of Voice recalculation
+The DB `share` field on `v2_ads` rows is pre-computed across all 11 brands. **Never use it for KPIs when a brand filter is active.** Always recompute dynamically:
+```ts
+const totalAds = displayAds.reduce((s, a) => s + a.total, 0)
+// SoV for JOOLA:
+const joolaSOV = (joolaAd.total / totalAds * 100).toFixed(1) + '%'
+// Bar chart share for any brand:
+const barShare = (totalAds > 0 ? d.total / totalAds * 100 : 0).toFixed(1) + '%'
+```
+
+### `isFiltered` contract (never break this)
+```ts
+// In BrandFilterContext.tsx
+isFiltered: selectedSlugs.length > 0 && selectedSlugs.length < allBrands.length
+// true  → filter is active, FilterBanner shown, displayXxx arrays are sliced
+// false → show all brands (either nothing selected OR all selected)
+```
