@@ -3,7 +3,7 @@ Standalone TikTok scraper test — runs ONLY the TikTok step from the main
 pipeline so we can validate the fix in isolation (without burning 90 min of
 the full pipeline).
 
-Run: python scripts/test_tiktok_only.py
+Run: python scripts/pipeline/test_tiktok_only.py
 """
 
 import os, sys

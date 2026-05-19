@@ -138,7 +138,7 @@ export default function TwitterPage() {
             </div>
             <div>
               <h4>X DATA NOT YET COLLECTED</h4>
-              <p>Run the Python pipeline to populate X follower counts and posts. Add <strong style={{ color: 'var(--fg)' }}>run_x_twitter()</strong> to <code>scripts/apify_to_supabase.py</code> and execute it once.</p>
+              <p>Run the Python pipeline to populate X follower counts and posts. Add <strong style={{ color: 'var(--fg)' }}>run_x_twitter()</strong> to <code>scripts/pipeline/apify_to_supabase.py</code> and execute it once.</p>
             </div>
           </div>
         </section>
@@ -352,7 +352,7 @@ export default function TwitterPage() {
           ) : (
             <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
               <div style={{ fontSize: 13, marginBottom: 8 }}>No post data yet.</div>
-              <div style={{ fontSize: 11 }}>Run <code>python scripts/apify_to_supabase.py</code> to populate X posts.</div>
+              <div style={{ fontSize: 11 }}>Run <code>python scripts/pipeline/apify_to_supabase.py</code> to populate X posts.</div>
             </div>
           )}
         </div>

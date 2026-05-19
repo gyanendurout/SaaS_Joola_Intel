@@ -7,5 +7,5 @@
     "incremental": true, "plugins": [{"name": "next"}], "paths": {"@/*": ["./*"]}
   },
   "include": ["next-env.d.ts","**/*.ts","**/*.tsx",".next/types/**/*.ts"],
-  "exclude": ["node_modules", "_legacy"]
+  "exclude": ["node_modules", "_legacy", "e2e", "playwright.config.ts", "qa/playwright-report", "qa/test-results"]
 }

@@ -5,7 +5,7 @@ fetching comments via the `startUrls` field (passing the post URL).
 
 Run AFTER migration 009 is applied.
 
-Run: python scripts/scrape_reddit_comments.py
+Run: python scripts/pipeline/scrape_reddit_comments.py
 """
 
 import os, sys

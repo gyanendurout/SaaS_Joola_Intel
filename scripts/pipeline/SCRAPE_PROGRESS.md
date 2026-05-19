@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-05-15 04:27 (auto-updated by loop monitor)
 **Background task ID:** `b44j73kcj` — **COMPLETED at 03:37:50**
-**Script:** `scripts/scrape_may15.py`
+**Script:** `scripts/pipeline/scrape_may15.py`
 **Started:** 03:13:06 | **Finished:** 03:37:50
 
 ---
@@ -94,9 +94,9 @@
 
 | File | Change |
 |------|--------|
-| `scripts/apify_to_supabase.py` | Added `sb_delete_insert_weekly()` — fixes 42P10 for future runs |
-| `scripts/scrape_may15.py` | Full May 15 scrape pipeline (8 steps) |
-| `scripts/fix_missing_data.py` | Data recovery for steps 1–4 that hit 42P10 |
+| `scripts/pipeline/apify_to_supabase.py` | Added `sb_delete_insert_weekly()` — fixes 42P10 for future runs |
+| `scripts/pipeline/scrape_may15.py` | Full May 15 scrape pipeline (8 steps) |
+| `scripts/pipeline/fix_missing_data.py` | Data recovery for steps 1–4 that hit 42P10 |
 | `scripts/SCRAPE_PROGRESS.md` | This file — persistent progress tracker |
 
 ---

@@ -46,7 +46,7 @@ All migrations live in `migrations/` at the repo root. **Do not modify them — 
 > - `reddit_mentions(id uuid PK, reddit_post_id text, brand_id uuid, subreddit text, post_title text, content_text text, upvotes int, comment_count int, posted_at timestamptz, country_code text, …)`.
 > - `influencer_posts(id uuid PK, influencer_id uuid, post_url text, …)`.
 >
-> **TODO: verify with team** — the exact `CREATE TABLE` statements for the base schema aren't in `migrations/`. Either recover from a Supabase backup, or reverse-engineer the schemas from `scripts/apify_to_supabase.py`'s `sb_upsert` calls and the `select=…` strings in `lib/v2/data.ts`.
+> **TODO: verify with team** — the exact `CREATE TABLE` statements for the base schema aren't in `migrations/`. Either recover from a Supabase backup, or reverse-engineer the schemas from `scripts/pipeline/apify_to_supabase.py`'s `sb_upsert` calls and the `select=…` strings in `lib/v2/data.ts`.
 
 ---
 

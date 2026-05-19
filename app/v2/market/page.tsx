@@ -30,6 +30,8 @@ export default function MarketIntelPage() {
     }).catch(() => setLoading(false))
   }, [setAllBrands])
 
+  useEffect(() => { document.title = 'JOOLA INTEL — Market Intel' }, [])
+
   const displayReddit = applyBrandFilter(reddit, filteredBrands, isFiltered)
   const displayAds = applyBrandFilter(ads, filteredBrands, isFiltered)
   const displayPromos = applyBrandFilter(promos, filteredBrands, isFiltered)

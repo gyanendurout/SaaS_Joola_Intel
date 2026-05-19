@@ -3,7 +3,7 @@ HTTP smoke test for the V2 dashboard. Walks every page, measures load time,
 checks status code, looks for common failure signatures in HTML.
 
 Run AFTER starting `npm run dev`.
-Run: python scripts/smoke_test_v2.py
+Run: python scripts/pipeline/smoke_test_v2.py
 """
 
 import time, sys, json, re

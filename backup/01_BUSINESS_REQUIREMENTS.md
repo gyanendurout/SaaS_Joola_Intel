@@ -112,7 +112,7 @@ Full actor IDs, env vars, and per-run costs are in `03_SCRAPING_PIPELINE.md`.
 ## Update cadence
 
 - **Weekly, Monday 07:00 IST** (TODO: confirm time zone with team).
-- **Manual trigger** for now: a human runs `python scripts/apify_to_supabase.py` on their laptop. Cron is `TODO: set up GitHub Actions cron` (see `08_RUNBOOK.md`).
+- **Manual trigger** for now: a human runs `python scripts/pipeline/apify_to_supabase.py` on their laptop. Cron is `TODO: set up GitHub Actions cron` (see `08_RUNBOOK.md`).
 - **Data flow:** scripts write to Supabase via service-role key → dashboard reads from Supabase via anon key → no redeploy needed when data changes.
 - **Code flow:** dev pushes to `main` on GitHub → Vercel rebuilds in ~90 s.
 

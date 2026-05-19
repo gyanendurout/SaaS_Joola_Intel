@@ -9,8 +9,21 @@ node_modules/
 .env.development
 .env.production
 
-# Claude Code local session state
-.claude/
+# Claude Code — keep portable team artifacts (.claude/agents, .claude/commands, .claude/settings.json)
+# but ignore local-only state (skills cache, scheduled tasks, per-user overrides).
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/skills/
+.claude/projects/
+.claude/sessions/
+.claude/state/
+
+# QA artifacts
+qa/playwright-report/
+qa/test-results/
+
+# Pre-push QA flag (transient)
+joola-intel-qa-*.flag
 
 # Python bytecode
 __pycache__/
@@ -29,8 +42,9 @@ Thumbs.db
 # TypeScript generated
 tsconfig.tsbuildinfo
 
-# Pipeline state (transient)
-scripts/pipeline_state.json
+# Pipeline state (transient — written by run_resumable.py at cwd)
+**/pipeline_state.json
+**/smoke_test_v2_results.json
 
 # Large binary/archive artifacts
 *.zip

@@ -7,7 +7,7 @@ touched, crisis flag.
 
 Run after `populate_mention_facts.py`.
 
-Run: python scripts/populate_topic_lifecycle.py
+Run: python scripts/pipeline/populate_topic_lifecycle.py
 """
 
 import os, sys, re

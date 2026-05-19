@@ -5,7 +5,7 @@ sentiment / topics / brands_mentioned / players_mentioned / products_mentioned /
 is_crisis / is_opportunity / purchase_intent_score / competitor_switch via
 GPT-4o-mini.
 
-Run: python scripts/enrich_with_ai.py
+Run: python scripts/pipeline/enrich_with_ai.py
 """
 
 import os, sys, json, time

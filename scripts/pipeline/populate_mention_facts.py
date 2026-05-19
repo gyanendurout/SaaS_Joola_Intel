@@ -8,7 +8,7 @@ defection.
 Run after `enrich_with_ai.py`. Idempotent — uses ON CONFLICT (channel,
 source_id, brand_id, product_id) to avoid duplicates on re-runs.
 
-Run: python scripts/populate_mention_facts.py
+Run: python scripts/pipeline/populate_mention_facts.py
 """
 
 import os, sys

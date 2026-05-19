@@ -9,7 +9,7 @@
 ```bash
 cd c:\Workspace\joola-intel-nextjs
 pip install python-dotenv requests        # one-time
-python scripts/apify_to_supabase.py       # full weekly run, ~30–90 min
+python scripts/pipeline/apify_to_supabase.py       # full weekly run, ~30–90 min
 ```
 
 Output appears at the console and is also redirected to `resumable_run.log` / `pipeline_run_6mo.log` in some workflows.
@@ -55,7 +55,7 @@ The pipeline tolerates `~40 min of network outage` per request (80 retries × 30
 
 **Total per full weekly run:** roughly **$5–$20 USD on Apify** depending on volume; varies most with Meta Ad Library (large pages) and Reddit (long threads). Track in the Apify dashboard.
 
-Reddit **comments** (replies under OPs) are scraped by the separate `scripts/scrape_reddit_comments.py` because they require a per-post pass — not part of the 13-step main pipeline.
+Reddit **comments** (replies under OPs) are scraped by the separate `scripts/pipeline/scrape_reddit_comments.py` because they require a per-post pass — not part of the 13-step main pipeline.
 
 ---
 

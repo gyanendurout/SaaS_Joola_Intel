@@ -23,6 +23,8 @@ export default function ProductsPage() {
     }).catch(() => setLoading(false))
   }, [setAllBrands])
 
+  useEffect(() => { document.title = 'JOOLA INTEL — Product Catalog' }, [])
+
   if (loading) return <LoadingPage />
 
   function toggleSort(key: string) {

@@ -67,19 +67,20 @@ function Briefing({ d }: { d: V2Overview }) {
       out.push({
         kind: 'threat', tag: '🟡 Pricing pressure',
         title: `JOOLA has 0 active promotions; ${cap(promoLeader.brand)} runs ${promoLeader.count}.`,
-        body: `${promoLeader.pct.toFixed(0)}% of tracked discounts come from ${cap(promoLeader.brand)}. JOOLA is invisible on price-sensitive search.`,
+        body: `${promoLeader.pct.toFixed(1)}% of tracked discounts come from ${cap(promoLeader.brand)}. JOOLA is invisible on price-sensitive search.`,
         action: 'Draft promo plan', href: '/v2/promotions',
       })
     }
     const joolaIG = d.ig.find((r) => r.brand === 'joola')
     if (joolaIG) {
-      const beating = d.ig.filter((r) => r.brand !== 'joola' && r.followers < joolaIG.followers && r.engRate > joolaIG.engRate)
+      const beating = d.ig.filter((r) => r.brand !== 'joola' && r.followers >= 50 && r.followers < joolaIG.followers && r.engRate > joolaIG.engRate)
       if (beating.length >= 1) {
         const leader = [...beating].sort((a, b) => b.engRate - a.engRate)[0]
+        const erRatio = leader.engRate / Math.max(0.01, joolaIG.engRate)
         out.push({
           kind: 'threat', tag: '🟡 Engagement gap',
-          title: `${cap(leader.brand)}'s engagement (${leader.engRate.toFixed(2)}%) beats JOOLA at ${(joolaIG.followers / leader.followers).toFixed(1)}× the audience.`,
-          body: `${beating.length} smaller brands outperform JOOLA on engagement rate despite lower reach. JOOLA: ${joolaIG.engRate.toFixed(2)}%.`,
+          title: `${cap(leader.brand)}'s engagement rate (${leader.engRate.toFixed(2)}%) is ${erRatio.toFixed(1)}× JOOLA's (${joolaIG.engRate.toFixed(2)}%) on a smaller audience.`,
+          body: `${beating.length} smaller brand${beating.length === 1 ? '' : 's'} outperform JOOLA on engagement rate despite lower reach.`,
           action: 'Run content-format audit', href: '/v2/instagram',
         })
       }
@@ -239,7 +240,7 @@ function MoversAndSignals({ d }: { d: V2Overview }) {
     [d.ig],
   )
   const engRanked = useMemo(
-    () => [...d.ig].sort((a, b) => b.engRate - a.engRate).slice(0, 6),
+    () => [...d.ig].filter((r) => r.followers >= 50).sort((a, b) => b.engRate - a.engRate).slice(0, 6),
     [d.ig],
   )
   return (
@@ -305,7 +306,7 @@ function EngagementMatrix({ d }: { d: V2Overview }) {
     () => d.ig.map((r) => ({
       brand: r.brand, name: cap(r.brand), followers: r.followers,
       engRate: r.engRate, color: brandColor(d, r.brand), posts: 30,
-    })).filter((p) => p.followers > 0),
+    })).filter((p) => p.followers >= 50),
     [d],
   )
   return (
@@ -415,7 +416,7 @@ function PromosSection({ d }: { d: V2Overview }) {
           <div className="icn">!</div>
           <div>
             <h4>JOOLA is the only top-3 brand with zero active promos.</h4>
-            <p>{cap(promoLeader.brand)} owns {promoLeader.pct.toFixed(0)}% of the visible discount layer with {promoLeader.count} active promos. JOOLA cedes share-of-voice on every price-sensitive query.</p>
+            <p>{cap(promoLeader.brand)} owns {promoLeader.pct.toFixed(1)}% of the visible discount layer with {promoLeader.count} active promos. JOOLA cedes share-of-voice on every price-sensitive query.</p>
           </div>
           <div className="stat">{promoLeader.count}<span className="sub">{cap(promoLeader.brand)} active</span></div>
         </div>
@@ -433,7 +434,7 @@ function PromosSection({ d }: { d: V2Overview }) {
                 </div>
               </div>
               <div className="spark-mini">{p.types.slice(0, 2).join(', ') || '—'}</div>
-              <div className="delta-mini flat">{p.pct.toFixed(0)}%</div>
+              <div className="delta-mini flat">{p.pct.toFixed(1)}%</div>
             </div>
           )
         })}
@@ -449,6 +450,7 @@ function CommunitySection({ d }: { d: V2Overview }) {
     positive: r.positive, neutral: r.neutral, negative: r.negative,
     mentions: r.mentions, delta: r.delta,
   }))
+  const sentimentMissing = rd.length > 0 && rd.every((r) => r.positive === 0 && r.negative === 0)
   return (
     <section id="reddit">
       <div className="section-head">
@@ -465,6 +467,15 @@ function CommunitySection({ d }: { d: V2Overview }) {
         </div>
         <div className="actions"><a href="/v2/reddit" className="section-link">Open community →</a></div>
       </div>
+      {sentimentMissing && (
+        <div style={{
+          fontSize: 11, color: '#cbd1dc', background: 'rgba(245,230,37,0.06)',
+          border: '1px solid rgba(245,230,37,0.2)', borderRadius: 6,
+          padding: '8px 12px', marginBottom: 12,
+        }}>
+          ⚠ Sentiment classifier in calibration — bars currently render as 100% neutral. Mention volume is accurate.
+        </div>
+      )}
       <div className="card card-pad">
         {rd.length === 0 ? (
           <div style={{ color: '#8a93a4', fontSize: 12 }}>No reddit data yet.</div>
@@ -572,13 +583,13 @@ function Opportunities({ d }: { d: V2Overview }) {
       out.push({
         tag: 'Pricing', color: '#F5E625',
         title: `Launch a Memorial Day promo to match ${cap(promoLeader.brand)}.`,
-        body: `${cap(promoLeader.brand)} runs ${promoLeader.count} active promos (${promoLeader.pct.toFixed(0)}% of tracked). JOOLA: 0. Match the cadence or cede share.`,
-        why: `0 of ${d.promos.reduce((s, p) => s + p.count, 0)} active promos · ${cap(promoLeader.brand)} owns ${promoLeader.pct.toFixed(0)}%`,
+        body: `${cap(promoLeader.brand)} runs ${promoLeader.count} active promos (${promoLeader.pct.toFixed(1)}% of tracked). JOOLA: 0. Match the cadence or cede share.`,
+        why: `0 of ${d.promos.reduce((s, p) => s + p.count, 0)} active promos · ${cap(promoLeader.brand)} owns ${promoLeader.pct.toFixed(1)}%`,
         href: '/v2/promotions',
       })
     }
     if (joolaIG) {
-      const beating = d.ig.filter((r) => r.brand !== 'joola' && r.followers < joolaIG.followers && r.engRate > joolaIG.engRate).sort((a, b) => b.engRate - a.engRate)
+      const beating = d.ig.filter((r) => r.brand !== 'joola' && r.followers >= 50 && r.followers < joolaIG.followers && r.engRate > joolaIG.engRate).sort((a, b) => b.engRate - a.engRate)
       if (beating.length > 0) {
         const leader = beating[0]
         out.push({

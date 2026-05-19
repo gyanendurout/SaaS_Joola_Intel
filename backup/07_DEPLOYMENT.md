@@ -91,10 +91,10 @@ No deploy needed. Just run the pipeline:
 
 ```bash
 cd c:\Workspace\joola-intel-nextjs
-python scripts/run_resumable.py            # or: python scripts/apify_to_supabase.py
-python scripts/enrich_with_ai.py
-python scripts/populate_mention_facts.py
-python scripts/populate_topic_lifecycle.py
+python scripts/pipeline/run_resumable.py            # or: python scripts/pipeline/apify_to_supabase.py
+python scripts/pipeline/enrich_with_ai.py
+python scripts/pipeline/populate_mention_facts.py
+python scripts/pipeline/populate_topic_lifecycle.py
 ```
 
 Refresh the live URL — new data appears.

@@ -24,6 +24,7 @@ Read each file fully before starting recovery. Do not skip ahead — later docs 
 | 7 | `07_DEPLOYMENT.md` | Push to GitHub → Vercel. Configure environment variables. |
 | 8 | `08_RUNBOOK.md` | Day-to-day operations: weekly cadence, troubleshooting, on-call playbook. |
 | 9 | `INVENTORY.md` | Cross-reference of every directory/file in the repo and what each does. |
+| 10 | `code-architecture.md` | At-a-glance directory map + data flow + coding conventions + QA gates. |
 
 ---
 
@@ -35,8 +36,8 @@ Read each file fully before starting recovery. Do not skip ahead — later docs 
 4. **Seed lookup tables** (brands, influencers, products_catalog, x_accounts, tiktok_accounts) — most seeds are embedded inside the migrations themselves; verify counts (11 brands, 27 influencers, 25 paddles in `products_catalog`).
 5. **Set up Apify account** and obtain a token with enough credit (~$5–$20/run depending on actor budgets).
 6. **Create `scripts/.env`** with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `APIFY_TOKEN`, `OPENAI_API_KEY`. See `03_SCRAPING_PIPELINE.md`.
-7. **Run the scraper:** `python scripts/apify_to_supabase.py`. This invokes 10 Apify actors across 13 pipeline steps and writes raw rows.
-8. **Run AI enrichment:** `python scripts/enrich_with_ai.py` → `python scripts/populate_mention_facts.py` → `python scripts/populate_topic_lifecycle.py`. See `04_AI_ENRICHMENT.md`.
+7. **Run the scraper:** `python scripts/pipeline/apify_to_supabase.py`. This invokes 10 Apify actors across 13 pipeline steps and writes raw rows.
+8. **Run AI enrichment:** `python scripts/pipeline/enrich_with_ai.py` → `python scripts/pipeline/populate_mention_facts.py` → `python scripts/pipeline/populate_topic_lifecycle.py`. See `04_AI_ENRICHMENT.md`.
 9. **Stand up the dashboard:** `npm install && npm run dev`. See `05_FRONTEND_REBUILD.md`. Connect to Supabase via anon key.
 10. **Push to GitHub, deploy on Vercel.** See `07_DEPLOYMENT.md`.
 11. **Adopt the weekly cadence** in `08_RUNBOOK.md`.

@@ -139,7 +139,7 @@ export default function TikTokPage() {
             </div>
             <div>
               <h4>TIKTOK DATA NOT YET COLLECTED</h4>
-              <p>Run the Python pipeline to populate TikTok follower counts and videos. Execute <strong style={{ color: 'var(--fg)' }}>run_tiktok()</strong> in <code>scripts/apify_to_supabase.py</code> once.</p>
+              <p>Run the Python pipeline to populate TikTok follower counts and videos. Execute <strong style={{ color: 'var(--fg)' }}>run_tiktok()</strong> in <code>scripts/pipeline/apify_to_supabase.py</code> once.</p>
             </div>
           </div>
         </section>
@@ -354,7 +354,7 @@ export default function TikTokPage() {
           ) : (
             <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
               <div style={{ fontSize: 13, marginBottom: 8 }}>No video data yet.</div>
-              <div style={{ fontSize: 11 }}>Run <code>python scripts/apify_to_supabase.py</code> to populate TikTok videos.</div>
+              <div style={{ fontSize: 11 }}>Run <code>python scripts/pipeline/apify_to_supabase.py</code> to populate TikTok videos.</div>
             </div>
           )}
         </div>

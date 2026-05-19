@@ -188,7 +188,7 @@ export default function InstagramPage() {
         <div className="section-head">
           <div>
             <h2>
-              Top performing posts · by likes
+              Top performing posts · by engagement rate
               <SectionInfo
                 title="Best Posts Across All Brands"
                 description="The highest-engagement posts scraped from every tracked Instagram account. Sorted by engagement rate — the percentage of an audience that liked or commented. Click column headers to re-sort."

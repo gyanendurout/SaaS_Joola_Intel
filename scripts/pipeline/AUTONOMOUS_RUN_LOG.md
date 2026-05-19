@@ -14,8 +14,8 @@
 | 00:03 | Add `run_x_influencers()` step (13/13)          | ✅ DONE     | wired into `main()` |
 | 00:04 | Verify script compiles                          | ✅ DONE     | `py_compile` OK |
 | 00:05 | Kick off pipeline (3-yr X window, ~90 min)      | 🔄 RUNNING | bg task `by7uacy2u`, on step 2/13 |
-| 00:10 | Build `scripts/enrich_with_ai.py`               | ✅ DONE     | 6 tables, gpt-4o-mini |
-| 00:15 | Build `scripts/populate_mention_facts.py`       | ✅ DONE     | reads enriched rows → mention_facts |
+| 00:10 | Build `scripts/pipeline/enrich_with_ai.py`               | ✅ DONE     | 6 tables, gpt-4o-mini |
+| 00:15 | Build `scripts/pipeline/populate_mention_facts.py`       | ✅ DONE     | reads enriched rows → mention_facts |
 | ~01:30| Pipeline finishes → run enrichment              | PENDING     |        |
 | ~01:45| Run mention_facts populator                     | PENDING     |        |
 | ~02:00| Verify cross-channel queries work               | PENDING     |        |
@@ -34,9 +34,9 @@
 _(none yet)_
 
 ## Files created so far
-- `scripts/enrich_with_ai.py` — AI enrichment worker (gpt-4o-mini)
-- `scripts/populate_mention_facts.py` — cross-channel fact populator
-- `scripts/test_tiktok_only.py` — isolated TikTok test runner
+- `scripts/pipeline/enrich_with_ai.py` — AI enrichment worker (gpt-4o-mini)
+- `scripts/pipeline/populate_mention_facts.py` — cross-channel fact populator
+- `scripts/pipeline/test_tiktok_only.py` — isolated TikTok test runner
 
 ## ⚠ Pipeline Crash + Recovery (T+~20m)
 
@@ -55,7 +55,7 @@ pipeline aborted with steps 5-13 never running.
    clamps to 0-5 range (rejects "24 reviews" → None)
 2. Wrapped EVERY step in `_safe_step()` — one step failing now logs the
    error and continues to next step (no more total pipeline loss)
-3. Created `scripts/resume_pipeline.py` — only runs steps 4-13 to avoid
+3. Created `scripts/pipeline/resume_pipeline.py` — only runs steps 4-13 to avoid
    paying Apify again for IG/YT/Reddit (~$5 saved)
 
 **Resume launched**: background task `brpwijoqv` → `scripts/pipeline_resume.log`
@@ -169,4 +169,4 @@ roscoebellamy, simonejardim, tannertomassi`
 - **Total: ~$14-27** — within $25 Apify cap if TikTok stays at 200 res/profile
 
 ## Files modified
-- `scripts/apify_to_supabase.py` — dropped 3 X handles, added INFLUENCER_X_HANDLES + run_x_influencers()
+- `scripts/pipeline/apify_to_supabase.py` — dropped 3 X handles, added INFLUENCER_X_HANDLES + run_x_influencers()

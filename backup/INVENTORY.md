@@ -99,19 +99,19 @@
 
 | Path | Purpose |
 |---|---|
-| `scripts/apify_to_supabase.py` | **Main pipeline.** 13 steps × 10 Apify actors → Supabase. Run weekly. |
-| `scripts/run_resumable.py` | Resumable wrapper around the pipeline (uses `pipeline_state.json`). |
-| `scripts/resume_pipeline.py` | Manual resume helper. |
-| `scripts/fix_missing_data.py` | Re-scrape only the channels that came up empty. |
-| `scripts/scrape_may15.py` | Historical one-shot scrape used during initial population. |
-| `scripts/scrape_reddit_comments.py` | Pulls Reddit reply trees under existing OPs (writes `reddit_comments`). |
-| `scripts/reddit_comments_recover.py` | Recovery helper for Reddit comments. |
-| `scripts/enrich_with_ai.py` | GPT-4o-mini enrichment worker. Populates 12 columns per row across 7 channel tables. |
-| `scripts/populate_mention_facts.py` | Denormalizes enriched rows into `mention_facts` + emits `competitor_switch_events`. |
-| `scripts/populate_topic_lifecycle.py` | Aggregates `topics` into `topic_lifecycle` (first-seen / peak / decay). |
-| `scripts/count_rows.py` | Row-count printer per table. |
-| `scripts/test_products_only.py` | Runs just the products step (used after migration 008). |
-| `scripts/test_tiktok_only.py` | Runs just the TikTok step. |
+| `scripts/pipeline/apify_to_supabase.py` | **Main pipeline.** 13 steps × 10 Apify actors → Supabase. Run weekly. |
+| `scripts/pipeline/run_resumable.py` | Resumable wrapper around the pipeline (uses `pipeline_state.json`). |
+| `scripts/pipeline/resume_pipeline.py` | Manual resume helper. |
+| `scripts/pipeline/fix_missing_data.py` | Re-scrape only the channels that came up empty. |
+| `scripts/pipeline/scrape_may15.py` | Historical one-shot scrape used during initial population. |
+| `scripts/pipeline/scrape_reddit_comments.py` | Pulls Reddit reply trees under existing OPs (writes `reddit_comments`). |
+| `scripts/pipeline/reddit_comments_recover.py` | Recovery helper for Reddit comments. |
+| `scripts/pipeline/enrich_with_ai.py` | GPT-4o-mini enrichment worker. Populates 12 columns per row across 7 channel tables. |
+| `scripts/pipeline/populate_mention_facts.py` | Denormalizes enriched rows into `mention_facts` + emits `competitor_switch_events`. |
+| `scripts/pipeline/populate_topic_lifecycle.py` | Aggregates `topics` into `topic_lifecycle` (first-seen / peak / decay). |
+| `scripts/pipeline/count_rows.py` | Row-count printer per table. |
+| `scripts/pipeline/test_products_only.py` | Runs just the products step (used after migration 008). |
+| `scripts/pipeline/test_tiktok_only.py` | Runs just the TikTok step. |
 | `scripts/SCRAPE_PROGRESS.md` | Manual progress log. |
 | `scripts/AUTONOMOUS_RUN_LOG.md` | Log of autonomous pipeline runs. |
 | `scripts/pipeline_state.json` | Resumable state checkpoint. |

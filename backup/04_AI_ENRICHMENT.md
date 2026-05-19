@@ -8,10 +8,10 @@
 
 Always run in this order. Each step assumes the previous one finished cleanly.
 
-1. **`python scripts/apify_to_supabase.py`** — raw scrape (see `03_SCRAPING_PIPELINE.md`).
-2. **`python scripts/enrich_with_ai.py`** — classifies each new text row via GPT-4o-mini, writes 12 columns per row.
-3. **`python scripts/populate_mention_facts.py`** — denormalizes enriched rows into `mention_facts` (1 row per channel × source × product/athlete) and creates `competitor_switch_events` from Reddit defection signals.
-4. **`python scripts/populate_topic_lifecycle.py`** — rolls up topics into `topic_lifecycle` (first-seen / peak / decay timeline).
+1. **`python scripts/pipeline/apify_to_supabase.py`** — raw scrape (see `03_SCRAPING_PIPELINE.md`).
+2. **`python scripts/pipeline/enrich_with_ai.py`** — classifies each new text row via GPT-4o-mini, writes 12 columns per row.
+3. **`python scripts/pipeline/populate_mention_facts.py`** — denormalizes enriched rows into `mention_facts` (1 row per channel × source × product/athlete) and creates `competitor_switch_events` from Reddit defection signals.
+4. **`python scripts/pipeline/populate_topic_lifecycle.py`** — rolls up topics into `topic_lifecycle` (first-seen / peak / decay timeline).
 
 ---
 

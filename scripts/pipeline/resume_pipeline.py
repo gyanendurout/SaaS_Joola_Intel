@@ -5,7 +5,7 @@ parse bug. Steps 1-3 (IG, YT, Reddit) already populated their tables
 this run — re-running them would just rescrape the same week's data and
 waste Apify credit.
 
-Run: python scripts/resume_pipeline.py
+Run: python scripts/pipeline/resume_pipeline.py
 """
 
 import os, sys

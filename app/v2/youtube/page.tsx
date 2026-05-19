@@ -123,7 +123,7 @@ export default function YouTubePage() {
             label="JOOLA subscribers" src="YouTube channels" flavor="joola"
             value={joolaYT && joolaYT.subs > 0 ? fmt(joolaYT.subs) : 'Pending'}
             color="#22c55e"
-            spark={displayTrend['joola'] || []}
+            spark={joolaYT && joolaYT.subs > 0 ? (displayTrend['joola'] || []) : undefined}
             customVs={joolaYT && joolaYT.subs > 0
               ? `vs. ${name(topByViews.find(d => d.brand !== 'joola')?.brand || 'selkirk')}: ${fmt(topByViews.find(d => d.brand !== 'joola')?.subs || 0)}`
               : 'Weekly snapshots still being collected'}
@@ -207,7 +207,7 @@ export default function YouTubePage() {
                       background: `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
                     }}>{fmt(d.subs)}</div>
                   </div>
-                  <div className="spark-mini">{d.videos} videos</div>
+                  <div className="spark-mini">{d.videos} {d.videos === 1 ? 'video' : 'videos'}</div>
                 </div>
               ))}
             </div></div>

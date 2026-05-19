@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx next:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx playwright:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "PowerShell(pwsh:*)",
+      "PowerShell(./qa/regression.ps1:*)",
+      "PowerShell(./scripts/deploy.ps1:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -Command \"$ts = Get-Date -Format o; $tool = $env:CLAUDE_TOOL_NAME; $file = $env:CLAUDE_TOOL_INPUT_FILE_PATH; if (-not (Test-Path 'c:\\tmp')) { New-Item -ItemType Directory -Path 'c:\\tmp' -Force | Out-Null }; Add-Content -Path 'c:\\tmp\\joola-intel-session-changes.log' -Value (\\\"$ts`t$tool`t$file\\\") -Encoding utf8\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe -ExecutionPolicy Bypass -Command \"$cmd = $env:CLAUDE_TOOL_INPUT_COMMAND; if ($cmd -match 'git\\s+push' -and $cmd -notmatch '--dry-run' -and -not (Test-Path 'c:\\tmp\\joola-intel-qa-passed.flag')) { Write-Host '[hook] WARN: QA flag missing. Consider running qa/regression.ps1 before push.' -ForegroundColor Yellow }\""
+          }
+        ]
+      }
+    ]
+  }
+}

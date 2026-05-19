@@ -567,7 +567,7 @@ def main():
     update_influencer_follower_counts()
     print_accuracy_report()
 
-    log("\nDone. Run 'python scripts/count_rows.py' to verify all counts.")
+    log("\nDone. Run 'python scripts/pipeline/count_rows.py' to verify all counts.")
 
 
 if __name__ == "__main__":

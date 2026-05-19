@@ -10,8 +10,8 @@
 - **Tracked athletes**: 27 (see `influencers` table; full roster seeded in `migrations/005_influencer_x.sql`).
 - **Tracked products**: 25 seeded paddles in `products_catalog` (extensible) — JOOLA Perseus/Hyperion/Scorpeus, Selkirk Vanguard/Luxx, Paddletek Bantam, CRBN-1/3/X, Six Zero DBD, Engage Pursuit Pro, Onix Z5, etc.
 - **Data sources**: Instagram (brand + athlete + comments), YouTube (channel + comments), Reddit (OPs + comment trees), X (brand + athlete), TikTok, Meta Ad Library, Google Ads Transparency, brand homepage banners (promotions), brand product catalogs.
-- **Update cadence**: Weekly (Monday 07:00 IST). Manual trigger: `python scripts/apify_to_supabase.py`. Cron via GitHub Actions is a pending hardening item.
-- **AI enrichment**: GPT-4o-mini (`scripts/enrich_with_ai.py`) for sentiment scoring, topic extraction, brand/player/product NER, crisis flagging, purchase-intent scoring, and Reddit competitor-switch detection. Followed by `populate_mention_facts.py` and `populate_topic_lifecycle.py`.
+- **Update cadence**: Weekly (Monday 07:00 IST). Manual trigger: `python scripts/pipeline/apify_to_supabase.py`. Cron via GitHub Actions is a pending hardening item.
+- **AI enrichment**: GPT-4o-mini (`scripts/pipeline/enrich_with_ai.py`) for sentiment scoring, topic extraction, brand/player/product NER, crisis flagging, purchase-intent scoring, and Reddit competitor-switch detection. Followed by `populate_mention_facts.py` and `populate_topic_lifecycle.py`.
 - **Key KPIs surfaced**: SoV by brand (recomputed from `displayAds`, never the static DB `share` field), sentiment per brand × product, crisis count, purchase-intent count, competitor net defection score, topic lifecycle with first-channel detection.
 - **Full recovery docs**: see `backup/` directory (`README.md` is the master index).
 
@@ -274,7 +274,7 @@ Each page should have CTAs to external platforms (open in new tab):
 ---
 
 ## Scraping / Data Pipeline (Background)
-- Script: `scripts/fix_missing_data.py`
+- Script: `scripts/pipeline/fix_missing_data.py`
 - Progress file: `scripts/SCRAPE_PROGRESS.md`
 - Pipeline state: `pipeline_state.json`
 - Row counts script: `_count_rows.py`
@@ -366,10 +366,10 @@ Fixed 28-item visual defect report (`VIZ-01` through `VIZ-28`):
 1. **`.gitignore` extended** — added `.env*`, `.claude/`, `__pycache__/`, `*.pyc`, `.venv/` (was missing `.env*` — would have leaked `.env.local`)
 2. **Git init + first push** — initial commit `5fad664` (then amended to `6135ca9` after secret removal)
 3. **Secret scrubbing** — GitHub blocked the first push (secret scanner caught hardcoded Supabase service-role key + Apify token in 4 Python files + 1 markdown doc):
-   - `scripts/count_rows.py:5`
-   - `scripts/fix_missing_data.py:18,21`
-   - `scripts/scrape_may15.py:20,23`
-   - `scripts/apify_to_supabase.py:45,49`
+   - `scripts/pipeline/count_rows.py:5`
+   - `scripts/pipeline/fix_missing_data.py:18,21`
+   - `scripts/pipeline/scrape_may15.py:20,23`
+   - `scripts/pipeline/apify_to_supabase.py:45,49`
    - `docs/WHERE_WE_LEFT_OFF.md:62,64`
 4. **Patched all 4 Python scripts** to read from `os.environ` with optional `python-dotenv` loader:
    ```python
@@ -403,7 +403,7 @@ git add . && git commit -m "..." && git push
 # Data refresh → run local Python (writes to Supabase, no redeploy needed)
 cd c:\Workspace\joola-intel-nextjs
 pip install python-dotenv requests  # one-time
-python scripts/run_resumable.py
+python scripts/pipeline/run_resumable.py
 ```
 
 ### Architecture clarification (asked + answered this session)

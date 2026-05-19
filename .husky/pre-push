@@ -1,0 +1,24 @@
+#!/bin/sh
+# Pre-push gate — runs the regression suite before allowing a push.
+# Bypass with: git push --no-verify  (use only when you know what you're doing).
+
+echo ""
+echo "[pre-push] running qa/regression.ps1 -SkipBuild -Continue..."
+powershell.exe -ExecutionPolicy Bypass -File "$(git rev-parse --show-toplevel)/qa/regression.ps1" -SkipBuild -Continue
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo ""
+  echo "[pre-push] regression failed (exit $status). Push blocked."
+  echo "[pre-push] fix the issue, or pass --no-verify to bypass."
+  exit 1
+fi
+
+# Confirm the flag file is fresh (< 1 hour old).
+flag="/c/tmp/joola-intel-qa-passed.flag"
+if [ ! -f "$flag" ]; then
+  echo "[pre-push] WARN: QA flag missing — regression may have skipped critical stages."
+fi
+
+echo "[pre-push] regression PASS — push allowed."
+exit 0
