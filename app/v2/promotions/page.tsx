@@ -78,9 +78,13 @@ export default function PromotionsPage() {
   const calData: Record<string, number[]> = {}
   calBrands.forEach((b) => {
     const count = displayPromos.find((p) => p.brand === b)?.count || 0
-    calData[b] = Array.from({ length: 13 }, () => {
+    calData[b] = Array.from({ length: 13 }, (_, week) => {
       if (count === 0) return 0
-      return Math.random() < Math.min(0.9, count / 4) ? 1 : 0
+      // Deterministic hash so the heatmap doesn't flicker on re-render
+      let h = 0
+      const key = b + week
+      for (let k = 0; k < key.length; k++) h = (h * 31 + key.charCodeAt(k)) >>> 0
+      return (h % 100) / 100 < Math.min(0.9, count / 4) ? 1 : 0
     })
   })
 

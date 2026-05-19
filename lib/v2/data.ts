@@ -247,7 +247,7 @@ export async function fetchInfluencers(brands: V2Brand[]): Promise<V2InfluencerR
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
   const [{ data: infs }, { data: posts }] = await Promise.all([
     supabase.from('influencers').select('id,name,brand_id,follower_count_ig').order('follower_count_ig', { ascending: false }),
-    supabase.from('influencer_posts').select('influencer_id,like_count,comment_count'),
+    supabase.from('influencer_posts').select('influencer_id,like_count,comment_count').limit(2000),
   ])
   const eng: Record<string, { likes: number; comments: number; n: number }> = {}
   ;(posts || []).forEach((p: any) => {

@@ -10,7 +10,6 @@ export const ROUTES = {
   promotions: '/v2/promotions',
   products: '/v2/products',
   market: '/v2/market',
-  contentBrief: '/v2/content-brief',
 } as const
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES]

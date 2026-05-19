@@ -248,14 +248,48 @@ def sb_upsert_returning(table: str, rows: list[dict], on_conflict: str) -> list[
 
 # ─── X (Twitter) handle registry ────────────────────────────────────────────
 X_HANDLES = {
-    "joola":     "joolausa",
+    "joola":     "joolapickleball",
     "selkirk":   "SelkirkSport",
     "franklin":  "FranklinSports",
-    "engage":    "engagepickleball",
     "paddletek": "PaddletekLLC",
     "onix":      "OnixPickleball",
-    "wilson":    "WilsonSportingG",
-    "gamma":     "gammasportsusa",
+    # Dropped after 2026-05-19 pipeline run: no scrapable X presence.
+    # "engage":    "engagepickleball",
+    # "wilson":    "WilsonSportingG",
+    # "gamma":     "gammasportsusa",
+}
+
+# Best-guess X handles for the 27 athletes seeded in `influencers.x_handle`.
+# Diagnostic logging on each run reveals which return empty so this can be
+# tightened over time.
+INFLUENCER_X_HANDLES = {
+    "alexneumann_pb":         "AlexNeumann",
+    "allycejones_pb":         "AllyceJones",
+    "andreidae_pb":           "AndreiDaescu",
+    "anna.leigh.waters":      "AnnaLeighWaters",
+    "annabright.pb":          "AnnaBright",
+    "aspenkern_pb":           "AspenKern",
+    "benjohns_pb":            "BenJohns_pb",
+    "blainehovenier":         "BlaineHovenier",
+    "bobbioshiro":            "BobbiOshiro",
+    "catherineparenteau":     "CParenteau",
+    "connorgarnett_pb":       "ConnorGarnett",
+    "ericoncins_pb":          "EricOncins",
+    "gabejoseph_pb":          "GabeJoseph",
+    "jamesignatowich":        "JIgnatowich",
+    "jaydevilliers":          "JayDevilliers",
+    "jessie_irvine_pb":       "JessieIrvine",
+    "jorjajohnsonpb":         "JorjaJohnson",
+    "kyle_yates_pb":          "KyleYates_pb",
+    "leighwaters_pb":         "LeighWaters",
+    "patricksmithpb":         "PatrickSmithPB",
+    "rileynewmanpb":          "RileyNewmanPB",
+    "roscoebellamy":          "RoscoeBellamy",
+    "sarahansboury":          "SarahAnsboury",
+    "simonejardim_pb":        "SimoneJardim",
+    "tannertomassi":          "TannerTomassi",
+    "tysonmcguffin":          "TysonMcGuffin",
+    "zanenavratil":           "ZaneNavratil",
 }
 
 # ─── TikTok handle registry ───────────────────────────────────────────────────
@@ -306,7 +340,7 @@ def run_instagram_brands(ig_map: dict[str, dict]) -> tuple[int, int]:
     print("\n[1/5] Instagram brand profiles & posts")
     run_id = run_actor("apify/instagram-profile-scraper", {
         "usernames": list(ig_map.keys()),
-        "resultsLimit": 30,
+        "resultsLimit": 150,
     })
     if not wait_for_run(run_id):
         return 0, 0
@@ -380,7 +414,7 @@ def run_youtube(yt_map: dict[str, dict]) -> tuple[int, int]:
     print("\n[2/5] YouTube channels & videos")
     run_id = run_actor("streamers/youtube-scraper", {
         "startUrls": [{"url": u} for u in yt_map.keys()],
-        "maxResults": 50,
+        "maxResults": 100,
         "maxResultsShorts": 0,
     })
     if not wait_for_run(run_id):
@@ -393,18 +427,41 @@ def run_youtube(yt_map: dict[str, dict]) -> tuple[int, int]:
     channel_seen: dict[str, dict] = {}
     videos = []
 
+    # Build alt lookup: channelName (lowercased) → info, since Apify returns
+    # `/channel/UCxxx` URLs that won't match our custom `/@handle` URLs in DB.
+    name_to_info: dict[str, dict] = {}
+    for stored_url, stored_info in yt_map.items():
+        tail = stored_url.rstrip("/").rsplit("/", 1)[-1].lstrip("@").lower()
+        if tail:
+            name_to_info[tail] = (stored_url, stored_info)
+
+    unmatched_log: set[str] = set()
     for item in items:
-        ch_url = (item.get("channelUrl") or "").rstrip("/")
-        info = yt_map.get(ch_url)
+        input_url = (item.get("inputUrl") or item.get("input_url") or "").rstrip("/")
+        ch_url    = (item.get("channelUrl") or "").rstrip("/")
+        ch_name   = (item.get("channelName") or item.get("channelHandle") or "").lstrip("@").lower()
+
+        info = yt_map.get(input_url) or yt_map.get(ch_url)
+        matched_url = input_url if yt_map.get(input_url) else (ch_url if yt_map.get(ch_url) else None)
+
         if not info:
             for stored_url, stored_info in yt_map.items():
-                if stored_url.lower() in ch_url.lower() or ch_url.lower() in stored_url.lower():
+                low_stored = stored_url.lower()
+                if low_stored in ch_url.lower() or low_stored in input_url.lower():
                     info = stored_info
-                    ch_url = stored_url
+                    matched_url = stored_url
                     break
+
+        if not info and ch_name and ch_name in name_to_info:
+            matched_url, info = name_to_info[ch_name]
+
         if not info:
-            print(f"  ⚠ No yt_channels record for YT channel: {ch_url!r}")
+            key = ch_url or input_url or ch_name
+            if key not in unmatched_log:
+                print(f"  ⚠ No yt_channels record for YT channel: {key!r} (name={ch_name!r})")
+                unmatched_log.add(key)
             continue
+        ch_url = matched_url or ch_url
         brand_id   = info["brand_id"]
         channel_id = info["channel_id"]
 
@@ -531,25 +588,43 @@ def run_products(brand_map: dict[str, str]) -> int:
     ]
 
     # pageFunction extracts products from Shopify / generic collection pages
+    # Returns each product wrapped with the source URL so we can map back to brand.
     page_function = """
 async function pageFunction(context) {
     const { page, request } = context;
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
     const items = await page.evaluate(() => {
         const results = [];
-        // Shopify product cards
-        document.querySelectorAll('.product-card, .product-item, [data-product-id], .grid__item').forEach(el => {
-            const name  = el.querySelector('.product-card__title, .product__title, h3, h2, .title')?.innerText?.trim();
-            const price = el.querySelector('.price, .product-price, .money, [class*="price"]')?.innerText?.trim();
-            const img   = el.querySelector('img')?.src;
-            const link  = el.querySelector('a')?.href;
-            const ratingEl = el.querySelector('[class*="rating"], [class*="stars"], .star-rating');
+        const seen = new Set();
+        // Broad selector: covers Shopify, generic e-com, BigCommerce, custom HTML
+        const cardSels = [
+            '.product-card', '.product-item', '.product', '.product-tile',
+            '[data-product-id]', '[data-product]', '.grid__item',
+            '.collection-product', '.products-list-item', '.product-grid-item',
+            'li[class*="product"]', 'div[class*="product-card"]',
+            'article[class*="product"]'
+        ];
+        const all = [];
+        cardSels.forEach(s => document.querySelectorAll(s).forEach(el => all.push(el)));
+        all.forEach(el => {
+            const name = el.querySelector(
+                '.product-card__title, .product__title, .product-item-name, ' +
+                '.product-title, h3, h2, .title, [class*="title"], [class*="name"]'
+            )?.innerText?.trim();
+            if (!name || seen.has(name)) return;
+            seen.add(name);
+            const price = el.querySelector(
+                '.price, .product-price, .money, [class*="price"], [data-price]'
+            )?.innerText?.trim();
+            const img  = el.querySelector('img')?.src;
+            const link = el.querySelector('a')?.href;
+            const ratingEl = el.querySelector('[class*="rating"], [class*="stars"], .star-rating, [data-rating]');
             const rating = ratingEl?.getAttribute('data-rating') || ratingEl?.innerText?.trim();
-            if (name) results.push({ name, price, img, link, rating });
+            results.push({ name, price, img, link, rating });
         });
         return results;
     });
-    return items;
+    return items.map(it => Object.assign({}, it, { sourceUrl: request.url }));
 }
 """
 
@@ -573,13 +648,27 @@ async function pageFunction(context) {
         m = re.search(r"[\d,]+\.?\d*", raw.replace(",", ""))
         return float(m.group()) if m else None
 
+    def parse_rating(raw) -> float | None:
+        if raw is None or raw == '':
+            return None
+        import re
+        m = re.search(r"\d+\.?\d*", str(raw))
+        try:
+            v = float(m.group()) if m else None
+            # If string was "24 reviews" we get 24.0 — clamp to 0-5 rating range
+            return v if v is not None and 0 <= v <= 5 else None
+        except (ValueError, TypeError):
+            return None
+
     rows = []
     for item in items:
-        # item has request URL embedded in some scrapers
-        source_url = item.get("requestUrl") or item.get("#referrer") or ""
+        # `sourceUrl` is injected by the pageFunction; fall back to legacy fields.
+        source_url = (item.get("sourceUrl") or item.get("requestUrl")
+                      or item.get("#referrer") or item.get("url") or "")
+        link_url = item.get("link") or ""
         slug = None
         for u, s in url_to_slug.items():
-            if u in source_url:
+            if u in source_url or (link_url and u.split("/")[2] in link_url):
                 slug = s
                 break
         brand_id = brand_map.get(slug) if slug else None
@@ -597,7 +686,7 @@ async function pageFunction(context) {
             "price_usd":    parse_price(item.get("price")),
             "currency":     "USD",
             "country_code": "US",
-            "avg_rating":   float(item["rating"]) if item.get("rating") else None,
+            "avg_rating":   parse_rating(item.get("rating")),
             "in_stock":     True,
         })
 
@@ -1048,9 +1137,12 @@ def run_x_twitter(brand_map: dict[str, str]) -> tuple[int, int]:
         print("  ⚠ No X handles configured")
         return 0, 0
 
+    # 3-year historical window for X scraping (data is sparse year-to-year)
+    three_years_ago = (date.today() - timedelta(days=365 * 3)).isoformat()
     run_id = run_actor("apidojo/twitter-scraper-lite", {
         "startUrls": profile_urls,
-        "maxTweets": 20,
+        "maxTweets": 3000,
+        "start":     three_years_ago,
     })
     if not wait_for_run(run_id, poll_sec=20):
         return 0, 0
@@ -1064,19 +1156,24 @@ def run_x_twitter(brand_map: dict[str, str]) -> tuple[int, int]:
 
     profiles: dict[str, dict] = {}
     posts = []
+    seen_handles: set[str] = set()
+    unmatched_handles: set[str] = set()
+
+    # Pre-build lowercase handle → slug map for O(1) lookup
+    handle_to_slug = {h.lower(): s for s, h in X_HANDLES.items()}
 
     for item in items:
-        user_name = (item.get("author", {}) or {}).get("userName") or item.get("userName") or ""
+        author = item.get("author") or {}
+        user_name = author.get("userName") or item.get("userName") or item.get("authorUsername") or ""
         handle_key = user_name.lower()
+        if handle_key:
+            seen_handles.add(handle_key)
 
-        # Try to match back to a known slug
-        slug = None
-        for s, h in X_HANDLES.items():
-            if h.lower() == handle_key:
-                slug = s
-                break
+        slug = handle_to_slug.get(handle_key)
         brand_id = brand_map.get(slug) if slug else None
         if not brand_id:
+            if handle_key:
+                unmatched_handles.add(handle_key)
             continue
 
         # Profile snapshot (take first occurrence per brand)
@@ -1112,6 +1209,14 @@ def run_x_twitter(brand_map: dict[str, str]) -> tuple[int, int]:
             "posted_at":     item.get("createdAt"),
         })
 
+    # Diagnostics: which handles did we expect vs which did the scraper return?
+    expected_handles = {h.lower() for h in X_HANDLES.values()}
+    missing = sorted(expected_handles - seen_handles)
+    if missing:
+        print(f"  ⚠ X scraper returned no data for: {missing}")
+    if unmatched_handles:
+        print(f"  ⚠ X scraper returned handles not in registry: {sorted(unmatched_handles)}")
+
     # Upsert profiles (weekly delete-insert) and posts
     profile_rows = list(profiles.values())
     p = sb_delete_insert_weekly("x_profiles_weekly", profile_rows, "week_number", iso_week, iso_year)
@@ -1140,20 +1245,30 @@ def load_tiktok_account_map(brand_map: dict[str, str]) -> dict[str, dict]:
 def run_tiktok(brand_map: dict[str, str]) -> tuple[int, int]:
     print("\n[12/12] TikTok profiles & videos")
 
-    profile_urls = [
-        f"https://www.tiktok.com/@{handle}"
-        for handle in TIKTOK_HANDLES.values()
-    ]
-    if not profile_urls:
+    if not TIKTOK_HANDLES:
         print("  ⚠ No TikTok handles configured")
         return 0, 0
 
+    # clockworks/tiktok-scraper schema (verified against the actor's
+    # input-schema page):
+    #   - `profiles`: BARE handles (no @ prefix)
+    #   - `profileScrapeSections`: must include "videos"
+    #   - `profileSorting`: "latest" for chronological newest-first
+    #   - `oldestPostDateUnified`: ISO date for "last N years" filter
+    #   - `resultsPerPage`: max items per profile
+    three_years_ago = (date.today() - timedelta(days=365 * 3)).isoformat()
     run_id = run_actor("clockworks/tiktok-scraper", {
-        "startUrls": profile_urls,
-        "type":      "user",
-        "maxItems":  25,
+        "profiles":              list(TIKTOK_HANDLES.values()),
+        "profileScrapeSections": ["videos"],
+        "profileSorting":        "latest",
+        "resultsPerPage":        300,
+        "oldestPostDateUnified": three_years_ago,
+        "excludePinnedPosts":    False,
+        "shouldDownloadVideos":  False,
+        "shouldDownloadCovers":  False,
+        "shouldDownloadSubtitles": False,
     })
-    if not wait_for_run(run_id, poll_sec=20):
+    if not wait_for_run(run_id, poll_sec=30):
         return 0, 0
 
     items = fetch_results(run_id)
@@ -1227,7 +1342,137 @@ def run_tiktok(brand_map: dict[str, str]) -> tuple[int, int]:
     return p, q
 
 
+# ─── Step 13 — Influencer X (Twitter) ────────────────────────────────────────
+
+def load_influencer_x_map() -> dict[str, dict]:
+    """ig_handle → {influencer_id, brand_id, x_handle}"""
+    rows = sb_get("influencers", "id,brand_id,instagram_handle,x_handle")
+    return {
+        r["instagram_handle"]: {
+            "influencer_id": r["id"],
+            "brand_id":      r["brand_id"],
+            "x_handle":      r.get("x_handle"),
+        }
+        for r in rows if r.get("x_handle")
+    }
+
+
+def run_x_influencers(brand_map: dict[str, str]) -> tuple[int, int]:
+    print("\n[13/13] Influencer X profiles & posts")
+
+    inf_x_map = load_influencer_x_map()
+    if not inf_x_map:
+        print("  ⚠ No influencers with x_handle configured")
+        return 0, 0
+
+    profile_urls = [
+        {"url": f"https://twitter.com/{info['x_handle']}"}
+        for info in inf_x_map.values()
+    ]
+
+    three_years_ago = (date.today() - timedelta(days=365 * 3)).isoformat()
+    run_id = run_actor("apidojo/twitter-scraper-lite", {
+        "startUrls": profile_urls,
+        "maxTweets": 1500,
+        "start":     three_years_ago,
+    })
+    if not wait_for_run(run_id, poll_sec=20):
+        return 0, 0
+
+    items = fetch_results(run_id)
+    today = date.today()
+    iso_year, iso_week, _ = today.isocalendar()
+
+    # Lowercase x_handle → influencer record for matching
+    handle_to_info: dict[str, dict] = {}
+    for ig_handle, info in inf_x_map.items():
+        x_handle = (info.get("x_handle") or "").lower()
+        if x_handle:
+            handle_to_info[x_handle] = {**info, "ig_handle": ig_handle}
+
+    snapshots: dict[str, dict] = {}   # x_handle (lower) → snapshot dict
+    posts = []
+    seen_handles: set[str] = set()
+    unmatched_handles: set[str] = set()
+
+    for item in items:
+        author = item.get("author") or {}
+        user_name = (author.get("userName") or item.get("userName")
+                     or item.get("authorUsername") or "")
+        handle_key = user_name.lower()
+        if handle_key:
+            seen_handles.add(handle_key)
+
+        info = handle_to_info.get(handle_key)
+        if not info:
+            if handle_key:
+                unmatched_handles.add(handle_key)
+            continue
+
+        influencer_id = info["influencer_id"]
+        brand_id      = info["brand_id"]
+
+        if handle_key not in snapshots:
+            snapshots[handle_key] = {
+                "influencer_id": influencer_id,
+                "brand_id":      brand_id,
+                "handle":        user_name,
+                "followers":     author.get("followers") or author.get("followersCount", 0),
+                "following":     author.get("following") or author.get("friendsCount", 0),
+                "tweet_count":   author.get("statusesCount") or author.get("tweetCount", 0),
+                "is_verified":   bool(author.get("isVerified") or author.get("verified", False)),
+                "week_number":   iso_week,
+                "year":          iso_year,
+            }
+
+        tweet_id = str(item.get("id") or item.get("tweetId") or "")
+        if not tweet_id:
+            continue
+
+        text = item.get("text") or item.get("fullText") or ""
+        posts.append({
+            "influencer_id": influencer_id,
+            "brand_id":      brand_id,
+            "handle":        user_name,
+            "tweet_id":      tweet_id,
+            "post_url":      item.get("url") or f"https://twitter.com/{user_name}/status/{tweet_id}",
+            "text":          text[:2000],
+            "like_count":    item.get("likeCount") or item.get("favoriteCount", 0),
+            "retweet_count": item.get("retweetCount", 0),
+            "reply_count":   item.get("replyCount", 0),
+            "view_count":    item.get("viewCount") or item.get("views", 0),
+            "posted_at":     item.get("createdAt"),
+        })
+
+    # Diagnostics
+    expected = {h.lower() for h in INFLUENCER_X_HANDLES.values()}
+    missing = sorted(expected - seen_handles)
+    if missing:
+        print(f"  ⚠ Influencer X scraper returned no data for: {missing}")
+    if unmatched_handles:
+        extras = sorted(unmatched_handles)[:20]
+        print(f"  ⚠ Influencer X returned unmatched handles (sample): {extras}")
+
+    snapshot_rows = list(snapshots.values())
+    s = sb_upsert("influencer_x_snapshots", snapshot_rows, "influencer_id,week_number,year")
+    q = sb_upsert("influencer_x_posts", posts, "tweet_id")
+    print(f"  ✓ {s} influencer X snapshots, {q} tweets upserted")
+    return s, q
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
+
+def _safe_step(label, fn, *args):
+    """Run a pipeline step; catch and log exceptions instead of aborting."""
+    try:
+        return fn(*args)
+    except Exception as e:
+        import traceback
+        print(f"\n  ✗ STEP FAILED [{label}]: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        print(f"  ⤴ Continuing with remaining steps...\n")
+        return None
+
 
 def main():
     print("=" * 55)
@@ -1243,20 +1488,24 @@ def main():
     print(f"  {len(brand_map)} brands, {len(ig_map)} IG accounts, "
           f"{len(yt_map)} YT channels, {len(inf_map)} influencers loaded")
 
-    ig_profiles, ig_posts = run_instagram_brands(ig_map)
-    yt_channels, yt_videos = run_youtube(yt_map)
-    reddit_rows = run_reddit(brand_map)
-    product_rows = run_products(brand_map)
-    inf_posts, inf_snaps = run_influencers(inf_map)
+    def unpack(result, default=(0, 0)):
+        return result if isinstance(result, tuple) else default
 
-    # New Particl-style steps (run once)
-    promo_rows  = run_homepage_promos(brand_map)
-    meta_ads    = run_meta_ad_library(brand_map)
-    google_ads  = run_google_ads_transparency(brand_map)
-    ig_cmt      = run_ig_comments(brand_map)
-    yt_cmt      = run_yt_comments(brand_map)
-    x_profiles, x_posts   = run_x_twitter(brand_map)
-    tt_profiles, tt_videos = run_tiktok(brand_map)
+    ig_profiles, ig_posts   = unpack(_safe_step("instagram", run_instagram_brands, ig_map))
+    yt_channels, yt_videos  = unpack(_safe_step("youtube",   run_youtube, yt_map))
+    reddit_rows             = _safe_step("reddit",           run_reddit, brand_map) or 0
+    product_rows            = _safe_step("products",         run_products, brand_map) or 0
+    inf_posts, inf_snaps    = unpack(_safe_step("influencers", run_influencers, inf_map))
+
+    # Particl-style steps
+    promo_rows  = _safe_step("homepage_promos", run_homepage_promos, brand_map) or 0
+    meta_ads    = _safe_step("meta_ads",        run_meta_ad_library, brand_map) or 0
+    google_ads  = _safe_step("google_ads",      run_google_ads_transparency, brand_map) or 0
+    ig_cmt      = _safe_step("ig_comments",     run_ig_comments, brand_map) or 0
+    yt_cmt      = _safe_step("yt_comments",     run_yt_comments, brand_map) or 0
+    x_profiles, x_posts       = unpack(_safe_step("x_twitter",       run_x_twitter, brand_map))
+    tt_profiles, tt_videos    = unpack(_safe_step("tiktok",          run_tiktok, brand_map))
+    inf_x_snaps, inf_x_posts  = unpack(_safe_step("x_influencers",   run_x_influencers, brand_map))
 
     print("\n" + "=" * 55)
     print("Done.")
@@ -1277,6 +1526,8 @@ def main():
     print(f"  X posts:            {x_posts}")
     print(f"  TikTok profiles:    {tt_profiles}")
     print(f"  TikTok videos:      {tt_videos}")
+    print(f"  Influencer X snaps: {inf_x_snaps}")
+    print(f"  Influencer X posts: {inf_x_posts}")
     print("=" * 55)
 
 

@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { fetchOverview, type V2Overview } from '@/lib/v2/data'
 import { fmt, fmtPct, Sparkline, Delta, ScatterChart, Donut, BoxPlot, SentimentBar } from '@/components/v2/charts'
-import { SectionInfo, FilterBanner } from '@/components/v2/PageShell'
+import { SectionInfo, FilterBanner, displayBrandName } from '@/components/v2/PageShell'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 // ─── Page header ─────────────────────────────────────────────────────
@@ -659,7 +659,7 @@ function Opportunities({ d }: { d: V2Overview }) {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
-function cap(s: string) { return s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) }
+function cap(s: string) { return displayBrandName(s, s.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())) }
 function truncate(s: string, n: number) { return s.length > n ? s.slice(0, n) + '…' : s }
 function brandColor(d: V2Overview, brandId: string): string { return d.brands.find((b) => b.id === brandId)?.color || '#888' }
 

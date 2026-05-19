@@ -9,8 +9,26 @@ export function pgColor(slug: string): string {
   return BRAND_COLORS[slug] || '#888'
 }
 
+/**
+ * UI-only brand display-name override map.
+ *
+ * Keep this list short — it's the right place for *display* rebrands
+ * (e.g. "Franklin Sports" → "Franklin Pickleball") that we do NOT want
+ * to push into the database/seed migrations. The map is keyed by brand
+ * slug, so any UI surface that asks for a brand label by slug picks up
+ * the override automatically via `pgName()`.
+ */
+const BRAND_DISPLAY_OVERRIDES: Record<string, string> = {
+  franklin: 'Franklin Pickleball',
+}
+
+export function displayBrandName(slug: string, fallback: string): string {
+  return BRAND_DISPLAY_OVERRIDES[slug] || fallback
+}
+
 export function pgName(slug: string, brands: V2Brand[]): string {
-  return brands.find((b) => b.id === slug)?.name || slug
+  const fallback = brands.find((b) => b.id === slug)?.name || slug
+  return displayBrandName(slug, fallback)
 }
 
 export function BrandPill({ slug, brands }: { slug: string; brands: V2Brand[] }) {
@@ -168,6 +186,46 @@ export function useSortTable<T extends Record<string, unknown>>(data: T[]) {
   }
 
   return { sorted, sortKey, sortDir, toggle }
+}
+
+// ─── Per-column filter input (case-insensitive substring) ───────────
+//
+// Usage pattern (see app/v2/twitter & app/v2/tiktok for full example):
+//
+//   const [colFilter, setColFilter] = useState<Record<string, string>>({})
+//   ...
+//   <thead>
+//     <tr>{ /* SortTh row */ }</tr>
+//     <tr className="col-filter-row">
+//       <th><ColumnFilter col="brand" value={colFilter.brand}
+//                         onChange={v => setColFilter(p => ({...p, brand: v}))} /></th>
+//       <th><ColumnFilter col="text" .../></th>
+//       <th colSpan={4} />
+//     </tr>
+//   </thead>
+//
+//   // Filter rows before mapping:
+//   const filtered = rows.filter(r => Object.entries(colFilter).every(([k, q]) =>
+//     !q || String((r as any)[k] ?? '').toLowerCase().includes(q.toLowerCase())))
+//
+// Adopt on other table pages (instagram, youtube, reddit, ads, comments,
+// influencers) by repeating the same shape.
+export function ColumnFilter({
+  col, value, onChange, placeholder,
+}: {
+  col: string; value?: string; onChange: (v: string) => void; placeholder?: string
+}) {
+  return (
+    <input
+      type="text"
+      className="col-filter-input"
+      placeholder={placeholder || 'filter…'}
+      value={value || ''}
+      onChange={(e) => onChange(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      aria-label={`Filter ${col}`}
+    />
+  )
 }
 
 // ─── Sort-aware <th> ─────────────────────────────────────────────────

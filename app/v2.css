@@ -1646,3 +1646,238 @@ html { scroll-behavior: smooth; }
   white-space: nowrap;
 }
 .v2-root .filter-banner .fb-clear:hover { background: rgba(245,230,37,0.15); }
+
+/* ----------------------------------------------------------
+   10. Top-right brand filter dropdown (replaces sidebar BrandFilter)
+   ---------------------------------------------------------- */
+.v2-root .topbar {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  z-index: 60;
+  pointer-events: none;
+}
+.v2-root .topbar > * { pointer-events: auto; }
+
+.v2-root .bfd-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.v2-root .bfd-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(20,24,33,0.92);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line);
+  color: var(--fg-2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 140ms, color 140ms, background 140ms, box-shadow 140ms;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.32);
+}
+.v2-root .bfd-trigger:hover {
+  border-color: rgba(255,255,255,0.18);
+  color: var(--fg);
+  background: rgba(26,31,43,0.96);
+}
+.v2-root .bfd-trigger.is-open {
+  border-color: var(--yellow-edge);
+  color: var(--yellow);
+  background: rgba(20,24,33,0.96);
+}
+.v2-root .bfd-trigger.is-filtered {
+  border-color: var(--yellow-edge);
+  color: var(--yellow);
+  background: var(--yellow-dim);
+}
+.v2-root .bfd-ic { flex-shrink: 0; }
+.v2-root .bfd-chev { font-size: 9px; opacity: 0.75; }
+
+.v2-root .bfd-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: rgba(14,17,24,0.98);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.55);
+  padding: 10px;
+  z-index: 70;
+  animation: bfd-fade 140ms ease-out;
+}
+@keyframes bfd-fade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.v2-root .bfd-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+.v2-root .bfd-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  flex: 1;
+}
+.v2-root .bfd-count {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--fg-4);
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.03);
+}
+.v2-root .bfd-count.is-active {
+  color: var(--yellow);
+  border-color: var(--yellow-edge);
+  background: var(--yellow-dim);
+}
+.v2-root .bfd-clear {
+  background: none;
+  border: 1px solid var(--yellow-edge);
+  border-radius: 4px;
+  color: var(--yellow);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: background 140ms;
+}
+.v2-root .bfd-clear:hover { background: rgba(245,230,37,0.15); }
+
+.v2-root .bfd-list {
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.1) transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.v2-root .bfd-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--fg-3);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 120ms, color 120ms;
+}
+.v2-root .bfd-item:hover { background: rgba(255,255,255,0.04); color: var(--fg); }
+.v2-root .bfd-item.is-on { color: var(--fg-2); }
+
+.v2-root .bfd-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 3px;
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color 140ms, background 140ms;
+}
+.v2-root .bfd-check:checked {
+  background: var(--yellow);
+  border-color: var(--yellow);
+}
+.v2-root .bfd-check:checked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='%23000' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/10px no-repeat;
+}
+
+.v2-root .bfd-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.v2-root .bfd-only {
+  opacity: 0;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--fg-4);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 1px 5px;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: opacity 120ms, color 120ms, border-color 120ms;
+  flex-shrink: 0;
+}
+.v2-root .bfd-item:hover .bfd-only { opacity: 1; }
+.v2-root .bfd-only:hover { color: var(--yellow); border-color: var(--yellow-edge); }
+
+/* Mobile: collapse to icon-only and keep clear of the hamburger */
+@media (max-width: 768px) {
+  .v2-root .topbar {
+    top: 12px;
+    right: 12px;
+  }
+  .v2-root .bfd-trigger {
+    padding: 8px 10px;
+  }
+  .v2-root .bfd-label { display: none; }
+  .v2-root .bfd-chev { display: none; }
+  .v2-root .bfd-popover {
+    width: min(280px, calc(100vw - 24px));
+  }
+}
+
+/* ----------------------------------------------------------
+   11. Column filter input (under sortable table headers)
+   ---------------------------------------------------------- */
+.v2-root .col-filter-row th {
+  background: rgba(255,255,255,0.015) !important;
+  padding: 4px 8px !important;
+  border-bottom: 1px solid var(--line);
+}
+.v2-root .col-filter-input {
+  width: 100%;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--fg-2);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 6px;
+  outline: none;
+  transition: border-color 140ms, background 140ms;
+}
+.v2-root .col-filter-input::placeholder { color: var(--fg-4); opacity: 0.6; }
+.v2-root .col-filter-input:focus {
+  border-color: var(--yellow-edge);
+  background: rgba(0,0,0,0.4);
+}
+

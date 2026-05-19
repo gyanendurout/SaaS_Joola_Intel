@@ -18,6 +18,7 @@ export default function InstagramPage() {
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [chipFilter, setChipFilter] = useState<'all' | 'joola' | 'reels' | 'carousels'>('all')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
@@ -80,7 +81,12 @@ export default function InstagramPage() {
     })
     .sort((a, b) => b.engRate - a.engRate)
 
-  const sortedPosts = sortKey ? [...topByER].sort((a, b) => {
+  const chipPosts = chipFilter === 'all' ? topByER
+    : chipFilter === 'joola' ? topByER.filter(p => p.brand === 'joola')
+    : chipFilter === 'reels' ? topByER.filter(p => p.format === 'Reel' || p.format === 'Video')
+    : topByER.filter(p => p.format === 'Carousel')
+
+  const sortedPosts = sortKey ? [...chipPosts].sort((a, b) => {
     const av = (a as Record<string, unknown>)[sortKey]
     const bv = (b as Record<string, unknown>)[sortKey]
     if (typeof av === 'number' && typeof bv === 'number')
@@ -88,7 +94,7 @@ export default function InstagramPage() {
     return sortDir === 'asc'
       ? String(av ?? '').localeCompare(String(bv ?? ''))
       : String(bv ?? '').localeCompare(String(av ?? ''))
-  }) : topByER
+  }) : chipPosts
 
   const erSorted = [...displayIg].sort((a, b) => b.engRate - a.engRate)
   const maxER = erSorted[0]?.engRate || 1
@@ -193,10 +199,10 @@ export default function InstagramPage() {
           </div>
           <div className="actions">
             <div className="chip-row">
-              <button className="chip on">All</button>
-              <button className="chip">JOOLA</button>
-              <button className="chip">Reels</button>
-              <button className="chip">Carousels</button>
+              <button className={'chip' + (chipFilter === 'all' ? ' on' : '')} onClick={() => setChipFilter('all')}>All</button>
+              <button className={'chip' + (chipFilter === 'joola' ? ' on' : '')} onClick={() => setChipFilter('joola')}>JOOLA</button>
+              <button className={'chip' + (chipFilter === 'reels' ? ' on' : '')} onClick={() => setChipFilter('reels')}>Reels</button>
+              <button className={'chip' + (chipFilter === 'carousels' ? ' on' : '')} onClick={() => setChipFilter('carousels')}>Carousels</button>
             </div>
           </div>
         </div>

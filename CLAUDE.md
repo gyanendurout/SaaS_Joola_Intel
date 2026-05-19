@@ -1,5 +1,22 @@
 # JOOLA Intel — Claude Session Memory
 
+## BUSINESS REQUIREMENTS
+
+- **Product**: JOOLA Intel — pickleball competitive intelligence dashboard.
+- **Owner**: JOOLA (paddle brand). Operating contact: api@joola.com.
+- **Users**: JOOLA's marketing & competitive-intel team (internal only).
+- **Why**: Track 11 brands' performance across all social channels in one view; spot crisis signals, defection trends, product wins/losses, athlete ROI.
+- **Tracked brands (11)**: `joola`, `selkirk`, `paddletek`, `crbn`, `six-zero`, `engage`, `onix`, `franklin` (Franklin Pickleball), `head`, `wilson`, `gamma`.
+- **Tracked athletes**: 27 (see `influencers` table; full roster seeded in `migrations/005_influencer_x.sql`).
+- **Tracked products**: 25 seeded paddles in `products_catalog` (extensible) — JOOLA Perseus/Hyperion/Scorpeus, Selkirk Vanguard/Luxx, Paddletek Bantam, CRBN-1/3/X, Six Zero DBD, Engage Pursuit Pro, Onix Z5, etc.
+- **Data sources**: Instagram (brand + athlete + comments), YouTube (channel + comments), Reddit (OPs + comment trees), X (brand + athlete), TikTok, Meta Ad Library, Google Ads Transparency, brand homepage banners (promotions), brand product catalogs.
+- **Update cadence**: Weekly (Monday 07:00 IST). Manual trigger: `python scripts/apify_to_supabase.py`. Cron via GitHub Actions is a pending hardening item.
+- **AI enrichment**: GPT-4o-mini (`scripts/enrich_with_ai.py`) for sentiment scoring, topic extraction, brand/player/product NER, crisis flagging, purchase-intent scoring, and Reddit competitor-switch detection. Followed by `populate_mention_facts.py` and `populate_topic_lifecycle.py`.
+- **Key KPIs surfaced**: SoV by brand (recomputed from `displayAds`, never the static DB `share` field), sentiment per brand × product, crisis count, purchase-intent count, competitor net defection score, topic lifecycle with first-channel detection.
+- **Full recovery docs**: see `backup/` directory (`README.md` is the master index).
+
+---
+
 ## 🚀 LIVE DEPLOYMENT
 
 | What | Where |

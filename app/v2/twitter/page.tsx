@@ -5,8 +5,8 @@ import {
   fetchBrands, fetchX, fetchXTrend, fetchTopXPosts,
   type V2Brand, type V2XRow, type V2XPost,
 } from '@/lib/v2/data'
-import { fmt, LineChart } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { fmt } from '@/components/v2/charts'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
 
 const X_HANDLES: Record<string, string> = {
@@ -29,6 +29,7 @@ export default function TwitterPage() {
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [colFilter, setColFilter] = useState<Record<string, string>>({})
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => { document.title = 'JOOLA INTEL — X / Twitter' }, [])
@@ -76,11 +77,31 @@ export default function TwitterPage() {
   const erSorted = [...displayX].filter(d => d.tweets > 0).sort((a, b) => b.engRate - a.engRate)
   const maxER = erSorted[0]?.engRate || 1
 
-  const lineSeries = Object.entries(displayTrend)
-    .filter(([, data]) => data.length > 0)
-    .map(([id, data]) => ({ id, label: name(id), color: pgColor(id), data }))
+  // Follower snapshot bars — one row per brand, latest non-zero value.
+  // We deduplicate by brand id (keys of displayTrend are already unique,
+  // but we use a Map for safety in case upstream ever returns dupes).
+  const snapshotMap = new Map<string, number>()
+  for (const [id, data] of Object.entries(displayTrend)) {
+    if (!data || data.length === 0) continue
+    const latest = [...data].reverse().find(v => v > 0) ?? data[data.length - 1] ?? 0
+    if (latest > 0) snapshotMap.set(id, latest)
+  }
+  const followerSnapshotBars = Array.from(snapshotMap.entries())
+    .map(([id, followers]) => ({ id, followers, color: pgColor(id) }))
+    .sort((a, b) => b.followers - a.followers)
+  const maxSnapshot = followerSnapshotBars[0]?.followers || 1
 
-  const sortedPosts = sortKey ? [...displayPosts].sort((a, b) => {
+  // Apply per-column filters (case-insensitive substring match) BEFORE sorting.
+  const filteredPosts = displayPosts.filter(p => {
+    const rec = p as unknown as Record<string, unknown>
+    return Object.entries(colFilter).every(([col, q]) => {
+      if (!q) return true
+      const cell = col === 'brand' ? name(p.brand) : String(rec[col] ?? '')
+      return cell.toLowerCase().includes(q.toLowerCase())
+    })
+  })
+
+  const sortedPosts = sortKey ? [...filteredPosts].sort((a, b) => {
     const av = (a as Record<string, unknown>)[sortKey]
     const bv = (b as Record<string, unknown>)[sortKey]
     if (typeof av === 'number' && typeof bv === 'number')
@@ -88,7 +109,7 @@ export default function TwitterPage() {
     return sortDir === 'asc'
       ? String(av ?? '').localeCompare(String(bv ?? ''))
       : String(bv ?? '').localeCompare(String(av ?? ''))
-  }) : displayPosts
+  }) : filteredPosts
 
   const hasData = displayX.some(d => d.followers > 0)
 
@@ -155,21 +176,32 @@ export default function TwitterPage() {
         </div>
       </section>
 
-      {lineSeries.length > 0 && (
+      {followerSnapshotBars.length > 0 && (
         <section>
           <div className="section-head"><div>
             <h2>
               X follower snapshots by brand
               <SectionInfo
-                title="Weekly Follower Snapshots"
-                description="Each brand's X follower count tracked every week. Rising lines show a growing audience on X."
+                title="Latest Follower Snapshot per Brand"
+                description="Latest non-zero X follower count for each tracked brand. One bar per brand — duplicates are removed by taking the most recent snapshot."
                 source="x_profiles_weekly · scraped via apidojo/twitter-scraper-lite every Monday"
               />
             </h2>
-            <div className="sub">Weekly follower counts from scraped X profile data.</div>
+            <div className="sub">{followerSnapshotBars.length} brands · latest snapshot</div>
           </div></div>
           <div className="card"><div className="card-pad">
-            <LineChart series={lineSeries} />
+            {followerSnapshotBars.map(d => (
+              <div key={d.id} className={'bar-row ' + (d.id === 'joola' ? 'joola' : '')}>
+                <div className="lbl">{name(d.id)}</div>
+                <div className="track">
+                  <div className="fill" style={{
+                    width: Math.max(2, d.followers / maxSnapshot * 100) + '%',
+                    background: d.id === 'joola' ? '#22c55e' : `linear-gradient(90deg, ${d.color}, ${d.color}99)`,
+                  }}>{fmt(d.followers)}</div>
+                </div>
+                <div className="spark-mini">followers</div>
+              </div>
+            ))}
           </div></div>
         </section>
       )}
@@ -264,15 +296,22 @@ export default function TwitterPage() {
           {sortedPosts.length > 0 ? (
             <div className="table-wrap">
               <table className="data">
-                <thead><tr>
-                  <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                  <SortTh col="text" label="Post" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '42%' }} />
-                  <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="retweets" label="RTs" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="replies" label="Replies" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                </tr></thead>
+                <thead>
+                  <tr>
+                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
+                    <SortTh col="text" label="Post" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '42%' }} />
+                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="retweets" label="RTs" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="replies" label="Replies" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
+                  </tr>
+                  <tr className="col-filter-row">
+                    <th><ColumnFilter col="brand" value={colFilter.brand} onChange={v => setColFilter(p => ({ ...p, brand: v }))} placeholder="brand…" /></th>
+                    <th><ColumnFilter col="text" value={colFilter.text} onChange={v => setColFilter(p => ({ ...p, text: v }))} placeholder="search post text…" /></th>
+                    <th colSpan={5} />
+                  </tr>
+                </thead>
                 <tbody>
                   {sortedPosts.map((p, i) => (
                     <tr key={i} className={p.brand === 'joola' ? 'joola' : ''}>

@@ -27,7 +27,7 @@ export default function MarketIntelPage() {
         fetchReddit(b), fetchRedditSubreddits(b), fetchAds(b), fetchPromos(b), fetchIG(b),
       ])
       setBrands(b); setAllBrands(b); setReddit(r); setSubreddits(s); setAds(a); setPromos(p); setIg(i); setLoading(false)
-    })
+    }).catch(() => setLoading(false))
   }, [setAllBrands])
 
   const displayReddit = applyBrandFilter(reddit, filteredBrands, isFiltered)

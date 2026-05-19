@@ -20,7 +20,7 @@ export default function ProductsPage() {
     fetchBrands().then(async (b) => {
       const [s, p] = await Promise.all([fetchProductStats(b), fetchProductsList(b)])
       setBrands(b); setAllBrands(b); setStats(s); setProducts(p); setLoading(false)
-    })
+    }).catch(() => setLoading(false))
   }, [setAllBrands])
 
   if (loading) return <LoadingPage />

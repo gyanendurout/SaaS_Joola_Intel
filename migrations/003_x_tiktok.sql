@@ -44,7 +44,7 @@ insert into x_accounts (brand_id, handle, profile_url)
 select b.id, v.handle, 'https://x.com/' || v.handle
 from brands b
 join (values
-  ('joola',     'joolausa'),
+  ('joola',     'joolapickleball'),
   ('selkirk',   'SelkirkSport'),
   ('franklin',  'FranklinSports'),
   ('engage',    'engagepickleball'),

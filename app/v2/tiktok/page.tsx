@@ -5,8 +5,8 @@ import {
   fetchBrands, fetchTikTok, fetchTikTokTrend, fetchTopTikTokVideos,
   type V2Brand, type V2TikTokRow, type V2TikTokVideo,
 } from '@/lib/v2/data'
-import { fmt, LineChart } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { fmt } from '@/components/v2/charts'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
 
 const TIKTOK_HANDLES: Record<string, string> = {
@@ -31,6 +31,7 @@ export default function TikTokPage() {
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [colFilter, setColFilter] = useState<Record<string, string>>({})
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => { document.title = 'JOOLA INTEL — TikTok' }, [])
@@ -79,11 +80,30 @@ export default function TikTokPage() {
     .sort((a, b) => b.avgViews - a.avgViews)
   const maxVpv = vpvSorted[0]?.avgViews || 1
 
-  const lineSeries = Object.entries(displayTrend)
-    .filter(([, data]) => data.length > 0)
-    .map(([id, data]) => ({ id, label: name(id), color: pgColor(id), data }))
+  // Follower snapshot bars — one row per brand, latest non-zero value.
+  // Deduplicates by brand id using a Map (defensive against duplicate keys).
+  const snapshotMap = new Map<string, number>()
+  for (const [id, data] of Object.entries(displayTrend)) {
+    if (!data || data.length === 0) continue
+    const latest = [...data].reverse().find(v => v > 0) ?? data[data.length - 1] ?? 0
+    if (latest > 0) snapshotMap.set(id, latest)
+  }
+  const followerSnapshotBars = Array.from(snapshotMap.entries())
+    .map(([id, followers]) => ({ id, followers, color: pgColor(id) }))
+    .sort((a, b) => b.followers - a.followers)
+  const maxSnapshot = followerSnapshotBars[0]?.followers || 1
 
-  const sortedVideos = sortKey ? [...displayVideos].sort((a, b) => {
+  // Apply per-column filters (case-insensitive substring match) before sorting.
+  const filteredVideos = displayVideos.filter(v => {
+    const rec = v as unknown as Record<string, unknown>
+    return Object.entries(colFilter).every(([col, q]) => {
+      if (!q) return true
+      const cell = col === 'brand' ? name(v.brand) : String(rec[col] ?? '')
+      return cell.toLowerCase().includes(q.toLowerCase())
+    })
+  })
+
+  const sortedVideos = sortKey ? [...filteredVideos].sort((a, b) => {
     const av = (a as Record<string, unknown>)[sortKey]
     const bv = (b as Record<string, unknown>)[sortKey]
     if (typeof av === 'number' && typeof bv === 'number')
@@ -91,7 +111,7 @@ export default function TikTokPage() {
     return sortDir === 'asc'
       ? String(av ?? '').localeCompare(String(bv ?? ''))
       : String(bv ?? '').localeCompare(String(av ?? ''))
-  }) : displayVideos
+  }) : filteredVideos
 
   const hasData = displayTT.some(d => d.followers > 0)
 
@@ -157,21 +177,32 @@ export default function TikTokPage() {
         </div>
       </section>
 
-      {lineSeries.length > 0 && (
+      {followerSnapshotBars.length > 0 && (
         <section>
           <div className="section-head"><div>
             <h2>
               TikTok follower snapshots by brand
               <SectionInfo
-                title="TikTok Follower Growth"
-                description="Each brand's TikTok follower count tracked every Monday. A steep rise signals viral content or a successful creator collaboration."
+                title="Latest Follower Snapshot per Brand"
+                description="Latest non-zero TikTok follower count for each tracked brand. One bar per brand — duplicate weekly rows are collapsed by keeping the most recent snapshot."
                 source="tiktok_profiles_weekly · scraped via clockworks/tiktok-scraper every Monday"
               />
             </h2>
-            <div className="sub">Weekly follower counts from scraped TikTok profile data.</div>
+            <div className="sub">{followerSnapshotBars.length} brands · latest snapshot</div>
           </div></div>
           <div className="card"><div className="card-pad">
-            <LineChart series={lineSeries} />
+            {followerSnapshotBars.map(d => (
+              <div key={d.id} className={'bar-row ' + (d.id === 'joola' ? 'joola' : '')}>
+                <div className="lbl">{name(d.id)}</div>
+                <div className="track">
+                  <div className="fill" style={{
+                    width: Math.max(2, d.followers / maxSnapshot * 100) + '%',
+                    background: d.id === 'joola' ? '#22c55e' : `linear-gradient(90deg, ${d.color}, ${d.color}99)`,
+                  }}>{fmt(d.followers)}</div>
+                </div>
+                <div className="spark-mini">followers</div>
+              </div>
+            ))}
           </div></div>
         </section>
       )}
@@ -267,15 +298,22 @@ export default function TikTokPage() {
           {sortedVideos.length > 0 ? (
             <div className="table-wrap">
               <table className="data">
-                <thead><tr>
-                  <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                  <SortTh col="text" label="Caption" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />
-                  <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="shares" label="Shares" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                </tr></thead>
+                <thead>
+                  <tr>
+                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
+                    <SortTh col="text" label="Caption" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />
+                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="shares" label="Shares" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
+                  </tr>
+                  <tr className="col-filter-row">
+                    <th><ColumnFilter col="brand" value={colFilter.brand} onChange={v => setColFilter(p => ({ ...p, brand: v }))} placeholder="brand…" /></th>
+                    <th><ColumnFilter col="text" value={colFilter.text} onChange={v => setColFilter(p => ({ ...p, text: v }))} placeholder="search caption…" /></th>
+                    <th colSpan={5} />
+                  </tr>
+                </thead>
                 <tbody>
                   {sortedVideos.map((v, i) => (
                     <tr key={i} className={v.brand === 'joola' ? 'joola' : ''}>
