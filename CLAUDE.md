@@ -450,3 +450,81 @@ isFiltered: selectedSlugs.length > 0 && selectedSlugs.length < allBrands.length
 // true  → filter is active, FilterBanner shown, displayXxx arrays are sliced
 // false → show all brands (either nothing selected OR all selected)
 ```
+
+---
+
+## Session Log — QA Infra + Audit Fixes + Project Reorg (2026-05-19)
+
+Commit `755681f` (pushed alongside the prior unpushed `ed16631`).
+
+### Files touched
+
+**Source code (9 fixes from the senior-QA audit):**
+- `app/v2.css` — `.section-nav` now `flex-wrap: wrap` (B1)
+- `app/v2/page.tsx` — ER outlier filter (D2), promo-% rounding (D1), sentiment caveat (D3), briefing-card grammar (M4)
+- `app/v2/instagram/page.tsx` — heading "by likes" → "by engagement rate" (D5)
+- `app/v2/youtube/page.tsx` — Pending KPI no fake spark (B4); "1 videos" → "1 video" (B3)
+- `app/v2/products/page.tsx`, `app/v2/market/page.tsx` — `document.title` set (M1)
+
+**QA infrastructure (new):**
+- `playwright.config.ts`, `e2e/smoke.spec.ts` — 12 v2 routes + 4 API routes + nav + 404
+- `qa/regression.ps1` — 4-stage gate (typecheck → build → routes → playwright); writes `c:\tmp\joola-intel-qa-passed.flag`
+- `qa/.gitignore` — excludes `playwright-report/`, `test-results/`
+- `.husky/pre-push` — secondary gate calling regression.ps1
+- `scripts/deploy.ps1` — QA-gated deploy command (required `-Message`, `-SkipQa` override)
+- `.claude/agents/{qa-runner, backup-curator, session-archivist, brd-curator}.md` — portable agent team
+- `.claude/commands/end-session.md` — orchestrator
+- `.claude/settings.json` — PostToolUse Write/Edit → `c:\tmp\joola-intel-session-changes.log`; PreToolUse `git push` → warns if QA flag missing
+
+**Project reorg:**
+- Deleted `docs/` (4 files: `BUSINESS_REQUIREMENTS.md`, `CODE_ARCHITECTURE.md`, `DESIGN_SYSTEM.md`, `WHERE_WE_LEFT_OFF.md` — duplicates of `backup/` or obsolete)
+- Moved 14 Python pipeline scripts + 2 markdown logs to `scripts/pipeline/`
+- Bulk sed rewrite: `scripts/X.py` → `scripts/pipeline/X.py` across `CLAUDE.md` + 8 `backup/*.md` + `.claude/agents/` + `app/v2/{twitter,tiktok}/page.tsx`
+- New: `backup/code-architecture.md` (at-a-glance reference doc)
+
+**Config:**
+- `package.json` — added `@playwright/test ^1.49`, `husky ^9`; added scripts `test:e2e`, `test:e2e:ui`, `qa`, `qa:fast`, `deploy`, `prepare`
+- `.gitignore` — un-ignored `.claude/{agents,commands,settings.json}`; ignore `**/pipeline_state.json` (covers any cwd)
+- `tsconfig.json` — exclude `e2e/`, `playwright.config.ts`, `qa/playwright-report`, `qa/test-results` (keeps typecheck green until `npm install`)
+- `backup/README.md` — index row 10 added for `code-architecture.md`
+
+### Bugs fixed
+
+| ID | Severity | File | Fix |
+|---|---|---|---|
+| B1 | P1 | `app/v2.css:545` | `.section-nav` `flex-wrap: wrap`; removed hidden-scrollbar rules; removed `::after` fade. All 10 nav anchors visible without overflow scroll. |
+| D2 | P1 | `app/v2/page.tsx` | Filter `r.followers >= 50` in `EngagementMatrix`, `MoversAndSignals` engRanked, `Briefing` engagement-gap card, `Opportunities` content card. Paddletek (1 follower, 69708% ER) no longer skews charts. |
+| B4 | P1 | `app/v2/youtube/page.tsx:126` | `spark={joolaYT && joolaYT.subs > 0 ? (displayTrend['joola'] \|\| []) : undefined}` — no fake sparkline when "Pending". |
+| D5 | P2 | `app/v2/instagram/page.tsx:191` | "Top performing posts · by likes" → "Top performing posts · by engagement rate" (matches actual sort). |
+| D1 | P2 | `app/v2/page.tsx` (4 places) | Promo % standardized to `toFixed(1)` in Briefing body, price-war text, bar-row `delta-mini`, Opportunities body + why. |
+| D3 | P2 | `app/v2/page.tsx:451` | `CommunitySection` checks `rd.every(r => r.positive===0 && r.negative===0)` and renders a yellow "Sentiment classifier in calibration" caveat when true. |
+| B3 | P3 | `app/v2/youtube/page.tsx:211` | `{d.videos} {d.videos === 1 ? 'video' : 'videos'}` — proper pluralization. |
+| M4 | P3 | `app/v2/page.tsx:81` | Briefing card grammar: "beats JOOLA at N× the audience" → "is N× JOOLA's (X%) on a smaller audience" (semantically correct ER-ratio + grammatical). |
+| M1 | P4 | `products/page.tsx`, `market/page.tsx` | Added `useEffect(() => { document.title = 'JOOLA INTEL — Product Catalog' / 'Market Intel' }, [])`. |
+
+**Not addressed** (out of code scope): B2 intermittent render lag, UX5 "Assign" button no-op (needs task backend), CP1–CP4 brand-color audit (needs design review), most M5 table-header naming (largely covered by earlier `displayBrandName()` work).
+
+### Decisions made
+
+- **Single Next.js app, no `frontend/`/`backend/` split** — applied the SaaS_Joola_pulse blueprint with adaptations. Python scrapers in `scripts/pipeline/` are NOT a long-running API; skipped the backend pytest stage. Next.js API routes (`/api/{generate-content,keyword-research,content-brief,seo-analyzer}`) tested inline via Playwright's `request` fixture.
+- **No staging repo** — per project convention, `main` IS the Vercel deploy branch. `scripts/deploy.ps1` collapses to QA → commit → push.
+- **Refresh `backup/` in place** — existing 9-doc recovery package is solid; added `code-architecture.md` rather than rewriting.
+- **Tier A + B cleanup, deferred Tier C** — `utils/`, `hooks/`, `constants/`, `types/` stay at root for now. Collapse into `lib/` would require ~10–20 import path changes and deserves its own focused commit + run-time smoke.
+- **`flex-wrap` for nav over JS scroll arrows** — CSS-only fix is portable, doesn't require a state hook or scroll detection.
+- **`followers >= 50` threshold for ER outliers** — 1-follower accounts are unambiguously scraping artifacts. Real micro-influencers will still appear; a brand with truly < 50 followers isn't a meaningful competitor.
+
+### Next steps (one-time setup on dev machine)
+
+```powershell
+npm install                     # installs @playwright/test + husky; husky wires .husky/pre-push via "prepare" script
+npx playwright install chromium # ~130 MB browser binary
+```
+
+Then `npm run qa` runs the full local regression, `npm run deploy -- -Message "..."` is the standard ship path. The `.husky/pre-push` hook fires automatically on every direct `git push` once husky is installed.
+
+### Notes / known soft spots
+
+- `.claude/settings.local.json` (gitignored) still holds permission grants like `Bash(python scripts/X.py)` from before the reorg. Will silently re-prompt the next time the user runs `python scripts/pipeline/X.py`. Harmless.
+- `scripts/pipeline_state.json` exists at the OLD location (sibling to `pipeline/`); future `run_resumable.py` runs from repo root will write `./pipeline_state.json` at the repo root. Both are gitignored via the new `**/pipeline_state.json` rule.
+- The `c:\tmp\joola-intel-session-changes.log` for THIS session is empty — the PostToolUse hook only activates from the next session onward (settings.json was authored mid-session, after the agent had already started).
+
