@@ -19,6 +19,8 @@ const I = {
   comments: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12a8 8 0 11-3.5-6.6L21 4l-1.4 3.4A8 8 0 0121 12z" /></svg>,
   brief: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" /></svg>,
   seo: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="10.5" cy="10.5" r="6.5" /><path d="M21 21l-5-5" /><path d="M7.5 10.5h6M10.5 7.5v6" /></svg>,
+  tw:  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/></svg>,
+  tt:  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.22 8.22 0 004.83 1.55V6.79a4.85 4.85 0 01-1.06-.1z"/></svg>,
 }
 
 const ChevronLeft = () => (
@@ -47,6 +49,8 @@ const nav: NavItem[] = [
   { href: '/v2/market',          label: 'Market Intel',          ic: I.mkt },
   { href: '/v2/content-brief',  label: 'Content Brief',         ic: I.brief, badge: 'NEW' },
   { href: '/v2/seo',            label: 'SEO Reporting',         ic: I.seo },
+  { href: '/v2/twitter',        label: 'X / Twitter',           ic: I.tw,  badge: 'NEW' },
+  { href: '/v2/tiktok',         label: 'TikTok',                ic: I.tt,  badge: 'NEW' },
 ]
 
 function BrandFilter() {

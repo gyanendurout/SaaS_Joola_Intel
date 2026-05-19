@@ -735,6 +735,191 @@ export async function fetchSeoData(): Promise<V2SeoData> {
   return { brands, keywordTrends, crawlSummary, onPageTrend, briefStats }
 }
 
+// ─── X (Twitter) ─────────────────────────────────────────────────────────────
+export type V2XRow = {
+  brand: string; handle: string; followers: number; following: number;
+  tweets: number; engRate: number; delta: number | null; deltaPct: number | null; trend: number[]
+}
+export type V2XPost = {
+  brand: string; handle: string; text: string; post_url: string;
+  likes: number; retweets: number; replies: number; views: number; days: number
+}
+
+export async function fetchX(brands: V2Brand[]): Promise<V2XRow[]> {
+  const slugByBid = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
+  const [{ data: profiles }, { data: posts }] = await Promise.all([
+    supabase.from('x_profiles_weekly').select('brand_id,handle,followers,following,tweet_count,week_number,year,scraped_at').order('scraped_at', { ascending: false }),
+    supabase.from('x_posts').select('brand_id,like_count,retweet_count').limit(2000),
+  ])
+  const byBrand: Record<string, { current: number; following: number; tweetCount: number; trend: number[] }> = {}
+  ;(profiles || []).forEach((p: any) => {
+    const slug = slugByBid[p.brand_id]
+    if (!slug) return
+    if (!byBrand[slug]) byBrand[slug] = { current: 0, following: 0, tweetCount: 0, trend: [] }
+    if (byBrand[slug].current === 0) { byBrand[slug].current = p.followers || 0; byBrand[slug].following = p.following || 0; byBrand[slug].tweetCount = p.tweet_count || 0 }
+    if (byBrand[slug].trend.length < 8) byBrand[slug].trend.push(p.followers || 0)
+  })
+  const engAcc: Record<string, { likes: number; rts: number; n: number }> = {}
+  ;(posts || []).forEach((p: any) => {
+    const slug = slugByBid[p.brand_id]
+    if (!slug) return
+    if (!engAcc[slug]) engAcc[slug] = { likes: 0, rts: 0, n: 0 }
+    engAcc[slug].likes += p.like_count || 0
+    engAcc[slug].rts += p.retweet_count || 0
+    engAcc[slug].n++
+  })
+  const rows = sb_get_x_handles()
+  return brands.map(b => {
+    const f = byBrand[b.id]?.current || 0
+    const trendRaw = (byBrand[b.id]?.trend || []).slice().reverse()
+    const trend = trendRaw.length ? trendRaw : [f]
+    const prev = trend.length > 1 ? trend[trend.length - 2] : null
+    const e = engAcc[b.id]
+    const engRate = e?.n ? (e.likes + e.rts) / e.n : 0
+    return {
+      brand: b.id,
+      handle: rows[b.id] || '',
+      followers: f,
+      following: byBrand[b.id]?.following || 0,
+      tweets: e?.n || 0,
+      engRate: Number(engRate.toFixed(2)),
+      delta: prev !== null ? f - prev : null,
+      deltaPct: prev && prev > 0 ? ((f - prev) / prev) * 100 : null,
+      trend,
+    }
+  }).sort((a, b) => b.followers - a.followers)
+}
+
+function sb_get_x_handles(): Record<string, string> {
+  return {
+    joola: 'joolausa', selkirk: 'SelkirkSport', franklin: 'FranklinSports',
+    engage: 'engagepickleball', paddletek: 'PaddletekLLC', onix: 'OnixPickleball',
+    wilson: 'WilsonSportingG', gamma: 'gammasportsusa',
+  }
+}
+
+export async function fetchXTrend(brands: V2Brand[]): Promise<Record<string, number[]>> {
+  const slugByBid = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
+  const { data } = await supabase.from('x_profiles_weekly').select('brand_id,followers,year,week_number').order('year', { ascending: true }).order('week_number', { ascending: true })
+  const trend: Record<string, number[]> = {}
+  ;(data || []).forEach((c: any) => {
+    const slug = slugByBid[c.brand_id]
+    if (!slug) return
+    if (!trend[slug]) trend[slug] = []
+    trend[slug].push(c.followers || 0)
+  })
+  return trend
+}
+
+export async function fetchTopXPosts(brands: V2Brand[], limit = 15): Promise<V2XPost[]> {
+  const slugByBid = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
+  const { data } = await supabase.from('x_posts').select('brand_id,handle,tweet_id,post_url,text,like_count,retweet_count,reply_count,view_count,posted_at').order('like_count', { ascending: false }).limit(limit)
+  return (data || []).map((p: any) => ({
+    brand: slugByBid[p.brand_id] || 'unknown',
+    handle: '@' + (p.handle || ''),
+    text: p.text || '',
+    post_url: p.post_url || '',
+    likes: p.like_count || 0,
+    retweets: p.retweet_count || 0,
+    replies: p.reply_count || 0,
+    views: p.view_count || 0,
+    days: p.posted_at ? Math.max(0, Math.floor((Date.now() - new Date(p.posted_at).getTime()) / 86400000)) : 0,
+  }))
+}
+
+// ─── TikTok ───────────────────────────────────────────────────────────────────
+export type V2TikTokRow = {
+  brand: string; handle: string; followers: number; following: number;
+  videos: number; totalHearts: number; avgViews: number; delta: number | null; deltaPct: number | null; trend: number[]
+}
+export type V2TikTokVideo = {
+  brand: string; handle: string; text: string; video_url: string;
+  views: number; likes: number; comments: number; shares: number; days: number
+}
+
+export async function fetchTikTok(brands: V2Brand[]): Promise<V2TikTokRow[]> {
+  const slugByBid = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
+  const [{ data: profiles }, { data: vids }] = await Promise.all([
+    supabase.from('tiktok_profiles_weekly').select('brand_id,handle,followers,following,video_count,total_hearts,week_number,year,scraped_at').order('scraped_at', { ascending: false }),
+    supabase.from('tiktok_videos').select('brand_id,view_count').limit(3000),
+  ])
+  const byBrand: Record<string, { current: number; following: number; videoCount: number; hearts: number; trend: number[] }> = {}
+  ;(profiles || []).forEach((p: any) => {
+    const slug = slugByBid[p.brand_id]
+    if (!slug) return
+    if (!byBrand[slug]) byBrand[slug] = { current: 0, following: 0, videoCount: 0, hearts: 0, trend: [] }
+    if (byBrand[slug].current === 0) { byBrand[slug].current = p.followers || 0; byBrand[slug].following = p.following || 0; byBrand[slug].videoCount = p.video_count || 0; byBrand[slug].hearts = p.total_hearts || 0 }
+    if (byBrand[slug].trend.length < 8) byBrand[slug].trend.push(p.followers || 0)
+  })
+  const viewAcc: Record<string, { total: number; n: number }> = {}
+  ;(vids || []).forEach((v: any) => {
+    const slug = slugByBid[v.brand_id]
+    if (!slug) return
+    if (!viewAcc[slug]) viewAcc[slug] = { total: 0, n: 0 }
+    viewAcc[slug].total += v.view_count || 0
+    viewAcc[slug].n++
+  })
+  const handles = sb_get_tiktok_handles()
+  return brands.map(b => {
+    const f = byBrand[b.id]?.current || 0
+    const trendRaw = (byBrand[b.id]?.trend || []).slice().reverse()
+    const trend = trendRaw.length ? trendRaw : [f]
+    const prev = trend.length > 1 ? trend[trend.length - 2] : null
+    const va = viewAcc[b.id]
+    const avgViews = va?.n ? va.total / va.n : 0
+    return {
+      brand: b.id,
+      handle: handles[b.id] || '',
+      followers: f,
+      following: byBrand[b.id]?.following || 0,
+      videos: va?.n || byBrand[b.id]?.videoCount || 0,
+      totalHearts: byBrand[b.id]?.hearts || 0,
+      avgViews: Number(avgViews.toFixed(0)),
+      delta: prev !== null ? f - prev : null,
+      deltaPct: prev && prev > 0 ? ((f - prev) / prev) * 100 : null,
+      trend,
+    }
+  }).sort((a, b) => b.followers - a.followers)
+}
+
+function sb_get_tiktok_handles(): Record<string, string> {
+  return {
+    joola: 'joolapickleball', selkirk: 'selkirksport', crbn: 'crbnpickleball',
+    franklin: 'franklinsportsofficial', engage: 'engage_pickleball',
+    'six-zero': 'sixzeropickleball', onix: 'onix_pickleball',
+    wilson: 'wilsonsportinggoods', gamma: 'gammasports', prokennex: 'prokennexpickleball',
+  }
+}
+
+export async function fetchTikTokTrend(brands: V2Brand[]): Promise<Record<string, number[]>> {
+  const slugByBid = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
+  const { data } = await supabase.from('tiktok_profiles_weekly').select('brand_id,followers,year,week_number').order('year', { ascending: true }).order('week_number', { ascending: true })
+  const trend: Record<string, number[]> = {}
+  ;(data || []).forEach((c: any) => {
+    const slug = slugByBid[c.brand_id]
+    if (!slug) return
+    if (!trend[slug]) trend[slug] = []
+    trend[slug].push(c.followers || 0)
+  })
+  return trend
+}
+
+export async function fetchTopTikTokVideos(brands: V2Brand[], limit = 15): Promise<V2TikTokVideo[]> {
+  const slugByBid = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
+  const { data } = await supabase.from('tiktok_videos').select('brand_id,handle,tiktok_video_id,video_url,text,view_count,like_count,comment_count,share_count,posted_at').order('view_count', { ascending: false }).limit(limit)
+  return (data || []).map((v: any) => ({
+    brand: slugByBid[v.brand_id] || 'unknown',
+    handle: '@' + (v.handle || ''),
+    text: v.text || '',
+    video_url: v.video_url || '',
+    views: Number(v.view_count) || 0,
+    likes: v.like_count || 0,
+    comments: v.comment_count || 0,
+    shares: v.share_count || 0,
+    days: v.posted_at ? Math.max(0, Math.floor((Date.now() - new Date(v.posted_at).getTime()) / 86400000)) : 0,
+  }))
+}
+
 export async function fetchOverview(): Promise<V2Overview> {
   const brands = await fetchBrands()
   const [ig, ads, promos, products, yt, reddit, influencers, adSample, topIGPosts, topYTVideos, topComments] = await Promise.all([

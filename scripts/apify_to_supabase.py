@@ -246,6 +246,33 @@ def sb_upsert_returning(table: str, rows: list[dict], on_conflict: str) -> list[
     return out
 
 
+# ─── X (Twitter) handle registry ────────────────────────────────────────────
+X_HANDLES = {
+    "joola":     "joolausa",
+    "selkirk":   "SelkirkSport",
+    "franklin":  "FranklinSports",
+    "engage":    "engagepickleball",
+    "paddletek": "PaddletekLLC",
+    "onix":      "OnixPickleball",
+    "wilson":    "WilsonSportingG",
+    "gamma":     "gammasportsusa",
+}
+
+# ─── TikTok handle registry ───────────────────────────────────────────────────
+TIKTOK_HANDLES = {
+    "joola":     "joolapickleball",
+    "selkirk":   "selkirksport",
+    "crbn":      "crbnpickleball",
+    "franklin":  "franklinsportsofficial",
+    "engage":    "engage_pickleball",
+    "six-zero":  "sixzeropickleball",
+    "onix":      "onix_pickleball",
+    "wilson":    "wilsonsportinggoods",
+    "gamma":     "gammasports",
+    "prokennex": "prokennexpickleball",
+}
+
+
 # ─── Load lookup maps from Supabase ──────────────────────────────────────────
 
 def load_brand_map() -> dict[str, str]:
@@ -992,6 +1019,214 @@ def run_yt_comments(brand_map: dict[str, str], top_per_brand: int = 10) -> int:
     return n
 
 
+# ─── Step 11 — X (Twitter) profiles + posts ──────────────────────────────────
+
+def load_x_account_map(brand_map: dict[str, str]) -> dict[str, dict]:
+    """handle → {account_id, brand_id, slug}"""
+    rows = sb_get("x_accounts", "id,brand_id,handle")
+    result = {}
+    bid_to_slug = {v: k for k, v in brand_map.items()}
+    for r in rows:
+        result[r["handle"].lower()] = {
+            "account_id": r["id"],
+            "brand_id":   r["brand_id"],
+            "slug":       bid_to_slug.get(r["brand_id"], ""),
+            "handle":     r["handle"],
+        }
+    return result
+
+
+def run_x_twitter(brand_map: dict[str, str]) -> tuple[int, int]:
+    print("\n[11/12] X (Twitter) profiles & posts")
+
+    # Build profile URL list from X_HANDLES
+    profile_urls = [
+        {"url": f"https://twitter.com/{handle}"}
+        for handle in X_HANDLES.values()
+    ]
+    if not profile_urls:
+        print("  ⚠ No X handles configured")
+        return 0, 0
+
+    run_id = run_actor("apidojo/twitter-scraper-lite", {
+        "startUrls": profile_urls,
+        "maxTweets": 20,
+    })
+    if not wait_for_run(run_id, poll_sec=20):
+        return 0, 0
+
+    items = fetch_results(run_id)
+    today = date.today()
+    iso_year, iso_week, _ = today.isocalendar()
+
+    # Load account map from DB
+    x_map = load_x_account_map(brand_map)
+
+    profiles: dict[str, dict] = {}
+    posts = []
+
+    for item in items:
+        user_name = (item.get("author", {}) or {}).get("userName") or item.get("userName") or ""
+        handle_key = user_name.lower()
+
+        # Try to match back to a known slug
+        slug = None
+        for s, h in X_HANDLES.items():
+            if h.lower() == handle_key:
+                slug = s
+                break
+        brand_id = brand_map.get(slug) if slug else None
+        if not brand_id:
+            continue
+
+        # Profile snapshot (take first occurrence per brand)
+        if slug not in profiles:
+            author = item.get("author") or item
+            profiles[slug] = {
+                "brand_id":    brand_id,
+                "handle":      user_name,
+                "followers":   author.get("followers") or author.get("followersCount", 0),
+                "following":   author.get("following") or author.get("friendsCount", 0),
+                "tweet_count": author.get("statusesCount") or author.get("tweetCount", 0),
+                "is_verified": bool(author.get("isVerified") or author.get("verified", False)),
+                "week_number": iso_week,
+                "year":        iso_year,
+            }
+
+        # Post row
+        tweet_id = str(item.get("id") or item.get("tweetId") or "")
+        if not tweet_id:
+            continue
+
+        text = item.get("text") or item.get("fullText") or ""
+        posts.append({
+            "brand_id":      brand_id,
+            "handle":        user_name,
+            "tweet_id":      tweet_id,
+            "post_url":      item.get("url") or f"https://twitter.com/{user_name}/status/{tweet_id}",
+            "text":          text[:2000],
+            "like_count":    item.get("likeCount") or item.get("favoriteCount", 0),
+            "retweet_count": item.get("retweetCount", 0),
+            "reply_count":   item.get("replyCount", 0),
+            "view_count":    item.get("viewCount") or item.get("views", 0),
+            "posted_at":     item.get("createdAt"),
+        })
+
+    # Upsert profiles (weekly delete-insert) and posts
+    profile_rows = list(profiles.values())
+    p = sb_delete_insert_weekly("x_profiles_weekly", profile_rows, "week_number", iso_week, iso_year)
+    q = sb_upsert("x_posts", posts, "tweet_id")
+    print(f"  ✓ {p} X profile snapshots, {q} posts upserted")
+    return p, q
+
+
+# ─── Step 12 — TikTok profiles + videos ──────────────────────────────────────
+
+def load_tiktok_account_map(brand_map: dict[str, str]) -> dict[str, dict]:
+    """handle → {account_id, brand_id, slug}"""
+    rows = sb_get("tiktok_accounts", "id,brand_id,handle")
+    bid_to_slug = {v: k for k, v in brand_map.items()}
+    return {
+        r["handle"].lower(): {
+            "account_id": r["id"],
+            "brand_id":   r["brand_id"],
+            "slug":       bid_to_slug.get(r["brand_id"], ""),
+            "handle":     r["handle"],
+        }
+        for r in rows
+    }
+
+
+def run_tiktok(brand_map: dict[str, str]) -> tuple[int, int]:
+    print("\n[12/12] TikTok profiles & videos")
+
+    profile_urls = [
+        f"https://www.tiktok.com/@{handle}"
+        for handle in TIKTOK_HANDLES.values()
+    ]
+    if not profile_urls:
+        print("  ⚠ No TikTok handles configured")
+        return 0, 0
+
+    run_id = run_actor("clockworks/tiktok-scraper", {
+        "startUrls": profile_urls,
+        "type":      "user",
+        "maxItems":  25,
+    })
+    if not wait_for_run(run_id, poll_sec=20):
+        return 0, 0
+
+    items = fetch_results(run_id)
+    today = date.today()
+    iso_year, iso_week, _ = today.isocalendar()
+
+    profiles: dict[str, dict] = {}
+    videos = []
+
+    for item in items:
+        author_meta = item.get("authorMeta") or {}
+        handle_raw  = author_meta.get("name") or item.get("authorUniqueId") or ""
+        handle_key  = handle_raw.lower()
+
+        # Match back to a known slug
+        slug = None
+        for s, h in TIKTOK_HANDLES.items():
+            if h.lower() == handle_key:
+                slug = s
+                break
+        brand_id = brand_map.get(slug) if slug else None
+        if not brand_id:
+            continue
+
+        # Profile snapshot
+        if slug not in profiles:
+            profiles[slug] = {
+                "brand_id":    brand_id,
+                "handle":      handle_raw,
+                "followers":   author_meta.get("fans") or author_meta.get("followerCount", 0),
+                "following":   author_meta.get("following", 0),
+                "video_count": author_meta.get("video") or author_meta.get("videoCount", 0),
+                "total_hearts": author_meta.get("heart") or author_meta.get("heartCount", 0),
+                "is_verified": bool(author_meta.get("verified", False)),
+                "week_number": iso_week,
+                "year":        iso_year,
+            }
+
+        # Video row
+        video_id = str(item.get("id") or "")
+        if not video_id:
+            continue
+
+        create_time = item.get("createTime") or item.get("createTimeISO")
+        posted_at = None
+        if create_time:
+            if isinstance(create_time, int):
+                posted_at = datetime.utcfromtimestamp(create_time).isoformat()
+            else:
+                posted_at = str(create_time)
+
+        videos.append({
+            "brand_id":        brand_id,
+            "handle":          handle_raw,
+            "tiktok_video_id": video_id,
+            "video_url":       item.get("webVideoUrl") or f"https://www.tiktok.com/@{handle_raw}/video/{video_id}",
+            "text":            (item.get("text") or item.get("desc") or "")[:2000],
+            "view_count":      item.get("playCount") or item.get("stats", {}).get("playCount", 0),
+            "like_count":      item.get("diggCount") or item.get("stats", {}).get("diggCount", 0),
+            "comment_count":   item.get("commentCount") or item.get("stats", {}).get("commentCount", 0),
+            "share_count":     item.get("shareCount") or item.get("stats", {}).get("shareCount", 0),
+            "duration_seconds": (item.get("videoMeta") or {}).get("duration") or item.get("duration"),
+            "thumbnail_url":   (item.get("videoMeta") or {}).get("coverUrl") or item.get("thumbnailUrl"),
+            "posted_at":       posted_at,
+        })
+
+    profile_rows = list(profiles.values())
+    p = sb_delete_insert_weekly("tiktok_profiles_weekly", profile_rows, "week_number", iso_week, iso_year)
+    q = sb_upsert("tiktok_videos", videos, "tiktok_video_id")
+    print(f"  ✓ {p} TikTok profile snapshots, {q} videos upserted")
+    return p, q
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -1020,6 +1255,8 @@ def main():
     google_ads  = run_google_ads_transparency(brand_map)
     ig_cmt      = run_ig_comments(brand_map)
     yt_cmt      = run_yt_comments(brand_map)
+    x_profiles, x_posts   = run_x_twitter(brand_map)
+    tt_profiles, tt_videos = run_tiktok(brand_map)
 
     print("\n" + "=" * 55)
     print("Done.")
@@ -1036,6 +1273,10 @@ def main():
     print(f"  Google ads:         {google_ads}")
     print(f"  IG comments:        {ig_cmt}")
     print(f"  YT comments:        {yt_cmt}")
+    print(f"  X profiles:         {x_profiles}")
+    print(f"  X posts:            {x_posts}")
+    print(f"  TikTok profiles:    {tt_profiles}")
+    print(f"  TikTok videos:      {tt_videos}")
     print("=" * 55)
 
 
