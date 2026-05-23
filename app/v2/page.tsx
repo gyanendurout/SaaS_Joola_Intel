@@ -16,7 +16,7 @@ function PageHeader() {
           LIVE INTELLIGENCE · MON 7:00 AM IST
         </div>
         <h1>Executive <em>briefing</em></h1>
-        <div className="sub">JOOLA's competitive position across 11 brands, 5,500 data points, refreshed every Monday. What changed, what it means, and what to do.</div>
+        <div className="sub">JOOLA's competitive position across the tracked brand set, refreshed every Monday. What changed, what it means, and what to do.</div>
       </div>
     </header>
   )
@@ -176,7 +176,7 @@ function KpiStrip({ d }: { d: V2Overview }) {
     {
       label: 'Total ads tracked',
       value: fmt(totalAds),
-      tooltip: 'Total ad creatives tracked across all 11 brands (Meta + Google combined). JOOLA\'s share of voice = ' + (joolaAd ? joolaAd.share.toFixed(1) : '0') + '%.',
+      tooltip: 'Total ad creatives tracked across the tracked brand set (Meta + Google combined). JOOLA\'s share of voice = ' + (joolaAd ? joolaAd.share.toFixed(1) : '0') + '%.',
       cls: '',
       src: 'Meta & Google Ads',
     },

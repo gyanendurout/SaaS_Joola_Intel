@@ -4,6 +4,8 @@ import { V2Sidebar } from '@/components/v2/Sidebar'
 import { FooterLinks } from '@/components/v2/FooterLinks'
 import { BrandFilterProvider } from '@/lib/v2/BrandFilterContext'
 import { BrandFilterDropdown } from '@/components/v2/BrandFilterDropdown'
+import { DateRangeProvider } from '@/lib/v2/DateRangeContext'
+import { DateRangePicker } from '@/components/v2/DateRangePicker'
 
 export const metadata: Metadata = {
   title: 'JOOLA INTEL — Executive Briefing',
@@ -16,7 +18,9 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
       <div className="app-bg" />
       <div className="dot-grid" />
       <BrandFilterProvider>
+       <DateRangeProvider>
         <div className="topbar">
+          <DateRangePicker />
           <BrandFilterDropdown />
         </div>
         <div className="shell">
@@ -34,6 +38,7 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
             </div>
           </main>
         </div>
+       </DateRangeProvider>
       </BrandFilterProvider>
     </div>
   )

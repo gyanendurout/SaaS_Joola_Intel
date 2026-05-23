@@ -1,0 +1,140 @@
+# 11 tracked pickleball brands with all platform handles and URLs
+# slug is the canonical key used throughout the pipeline and in Supabase brands.slug
+
+brands:
+  - slug: joola
+    name: JOOLA Pickleball
+    website: https://www.joola.com
+    instagram: joolapickleball
+    youtube: https://www.youtube.com/@joolapickleball
+    x_handle: joolapickleball
+    tiktok: joolapickleball
+    facebook_url: https://www.facebook.com/joolapickleball/
+    facebook_page_name: JOOLA Pickleball
+    reddit_subreddits: []
+    google_ads_query: joola pickleball
+
+  - slug: selkirk
+    name: Selkirk Sport
+    website: https://www.selkirk.com
+    instagram: selkirksport
+    youtube: https://www.youtube.com/@SelkirkSport
+    x_handle: SelkirkSport
+    tiktok: selkirksport
+    facebook_url: https://www.facebook.com/SelkirkSport/
+    facebook_page_name: Selkirk Sport
+    reddit_subreddits: []
+    google_ads_query: selkirk pickleball
+
+  - slug: paddletek
+    name: Paddletek
+    website: https://www.paddletek.com
+    instagram: paddletek_pickleball
+    youtube: https://www.youtube.com/@Paddletek
+    x_handle: PaddletekLLC
+    tiktok: ""
+    facebook_url: https://www.facebook.com/Paddletek/
+    facebook_page_name: Paddletek
+    reddit_subreddits: []
+    google_ads_query: paddletek pickleball
+
+  - slug: crbn
+    name: CRBN Pickleball
+    website: https://www.crbnpickleball.com
+    instagram: crbn_pickleball
+    youtube: https://www.youtube.com/@CRBNPickleball
+    x_handle: ""
+    tiktok: crbnpickleball
+    facebook_url: https://www.facebook.com/crbnpickleball/
+    facebook_page_name: CRBN Pickleball
+    reddit_subreddits: []
+    google_ads_query: crbn pickleball
+
+  - slug: six-zero
+    name: Six Zero Pickleball
+    website: https://www.sixzeropickleball.com
+    instagram: sixzeropickleball
+    youtube: https://www.youtube.com/@sixzeropickleball
+    x_handle: ""
+    tiktok: sixzeropickleball
+    facebook_url: https://www.facebook.com/sixzeropickleball/
+    facebook_page_name: Six Zero Pickleball
+    reddit_subreddits: []
+    google_ads_query: six zero pickleball
+
+  - slug: engage
+    name: Engage Pickleball
+    website: https://www.engagepickleball.com
+    instagram: engagepickleball
+    youtube: https://www.youtube.com/@EngagePickleball
+    x_handle: ""
+    tiktok: engage_pickleball
+    facebook_url: https://www.facebook.com/engagepickleball/
+    facebook_page_name: Engage Pickleball
+    reddit_subreddits: []
+    google_ads_query: engage pickleball
+
+  - slug: onix
+    name: Onix Pickleball
+    website: https://www.onixpickleball.com
+    instagram: onix_pickleball
+    youtube: https://www.youtube.com/@OnixPickleball
+    x_handle: OnixPickleball
+    tiktok: onix_pickleball
+    facebook_url: https://www.facebook.com/OnixPickleball/
+    facebook_page_name: Onix Pickleball
+    reddit_subreddits: []
+    google_ads_query: onix pickleball
+
+  - slug: franklin
+    name: Franklin Pickleball
+    website: https://www.franklinsports.com
+    instagram: franklinsports
+    youtube: https://www.youtube.com/@FranklinSports
+    x_handle: FranklinSports
+    tiktok: franklinsportsofficial
+    facebook_url: https://www.facebook.com/FranklinSports/
+    facebook_page_name: Franklin Sports
+    reddit_subreddits: []
+    google_ads_query: franklin pickleball
+
+  - slug: head
+    name: HEAD Pickleball
+    website: https://www.head.com/en/sports/padel/pickleball
+    instagram: headpickleball
+    youtube: https://www.youtube.com/@HEADPickleball
+    x_handle: ""
+    tiktok: ""
+    facebook_url: https://www.facebook.com/headpickleball/
+    facebook_page_name: HEAD Pickleball
+    reddit_subreddits: []
+    google_ads_query: head pickleball
+
+  - slug: wilson
+    name: Wilson Pickleball
+    website: https://www.wilson.com/en-us/sport/pickleball
+    instagram: wilsonsportinggoods
+    youtube: https://www.youtube.com/@WilsonSportingGoods
+    x_handle: ""
+    tiktok: wilsonsportinggoods
+    facebook_url: https://www.facebook.com/WilsonPickleball/
+    facebook_page_name: Wilson Pickleball
+    reddit_subreddits: []
+    google_ads_query: wilson pickleball
+
+  - slug: gamma
+    name: Gamma Pickleball
+    website: https://www.gammasports.com
+    instagram: gammasportsusa
+    youtube: https://www.youtube.com/@GammaSports
+    x_handle: ""
+    tiktok: gammasports
+    facebook_url: https://www.facebook.com/GammaPickleball/
+    facebook_page_name: Gamma Pickleball
+    reddit_subreddits: []
+    google_ads_query: gamma pickleball
+
+# Reddit community monitoring (cross-brand)
+reddit_subreddits:
+  - pickleball
+  - pickleballpaddle

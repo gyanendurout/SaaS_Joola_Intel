@@ -1,0 +1,60 @@
+# Default pipeline behaviour settings
+# These can be overridden via environment variables
+
+pipeline:
+  # Weekly full run schedule (GitHub Actions / cron)
+  weekly_day: monday
+  weekly_hour_utc: 2
+
+  # Dry-run: log what would be scraped, make no Apify calls, no DB writes
+  dry_run: false
+
+  # Resume from checkpoint by default (--restart flag overrides)
+  resume: true
+
+  # Log level: DEBUG | INFO | WARNING | ERROR
+  log_level: INFO
+
+network:
+  max_retries: 80
+  retry_wait_seconds: 30
+  actor_poll_seconds: 15
+
+enrichment:
+  workers: 5
+  batch_size: 500
+  max_text_chars: 1500
+
+scraping:
+  ig_posts_limit: 150
+  youtube_videos_limit: 100
+  youtube_shorts_limit: 50
+  reddit_posts_per_subreddit: 100
+  twitter_posts_per_handle: 100
+  tiktok_videos_per_handle: 50
+  meta_ads_per_brand: 200
+  ig_comments_per_post: 100
+  yt_comments_per_video: 200
+
+scheduler:
+  # News scraping: every 6 hours
+  news_interval_hours: 6
+
+  # SEO scraping: every Monday at 03:00 UTC
+  seo_day_of_week: monday
+  seo_hour_utc: 3
+  seo_minute_utc: 0
+
+sales_intelligence:
+  # Snapshot frequency: twice daily for tracked products
+  snapshot_interval_hours: 12
+
+  # Minimum confidence to emit a sale estimate
+  min_confidence: 0.4
+
+  # Inventory methods in priority order
+  signal_priority:
+    - json_ld       # JSON-LD structured data on page
+    - shopify_json  # /products.json Shopify endpoint
+    - cart_signal   # Add-to-cart qty limit (if allowed)
+    - html_text     # Regex on page text ("Only N left")

@@ -1,0 +1,88 @@
+# Apify actor configurations for all 12 scraping actors
+# actor_id is the Apify actor identifier (owner/name format)
+
+actors:
+  instagram_profile:
+    actor_id: apify/instagram-profile-scraper
+    description: Brand Instagram profiles and latest posts
+    default_input:
+      resultsLimit: 150
+
+  instagram_comments:
+    actor_id: apify/instagram-comment-scraper
+    description: Comments on Instagram posts
+    default_input:
+      resultsLimit: 100
+
+  youtube_channels:
+    actor_id: streamers/youtube-scraper
+    description: YouTube channel stats and videos
+    default_input:
+      maxResults: 100
+      maxResultsShorts: 50
+
+  youtube_comments:
+    actor_id: streamers/youtube-comments-scraper
+    description: YouTube video comments
+    default_input:
+      maxComments: 200
+
+  reddit_mentions:
+    actor_id: trudax/reddit-scraper-lite
+    description: Reddit posts mentioning brands
+    default_input:
+      maxItems: 100
+      time: "month"
+
+  reddit_comments:
+    actor_id: trudax/reddit-scraper-lite
+    description: Reddit comments in pickleball subreddits
+    default_input:
+      maxItems: 200
+
+  twitter_brands:
+    actor_id: apidojo/twitter-scraper-lite
+    description: Brand X/Twitter posts
+    default_input:
+      maxItems: 100
+      addUserInfo: true
+
+  twitter_influencers:
+    actor_id: apidojo/twitter-scraper-lite
+    description: Athlete/influencer X/Twitter posts
+    default_input:
+      maxItems: 50
+      addUserInfo: true
+
+  tiktok_brands:
+    actor_id: clockworks/tiktok-scraper
+    description: Brand TikTok videos
+    default_input:
+      resultsPerPage: 50
+
+  meta_ads:
+    actor_id: apify/facebook-ads-scraper
+    description: Meta Ad Library brand ads
+    default_input:
+      adType: "all"
+      activeStatus: "all"
+      country: "US"
+
+  google_ads:
+    actor_id: apify/google-ads-transparency-scraper
+    description: Google Ads Transparency Centre
+    default_input: {}
+
+  playwright_generic:
+    actor_id: apify/playwright-scraper
+    description: Generic Playwright for homepage promos and product pages
+    default_input:
+      pageFunction: |
+        async ({ page, request }) => {
+          await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+          return {
+            url: request.url,
+            title: await page.title(),
+            html: await page.content(),
+          };
+        }

@@ -1,0 +1,83 @@
+# Product page URLs for sales intelligence inventory tracking
+# Each brand lists their product catalog page + individual paddle URLs
+# Method: shopify_json | json_ld | html | cart_signal
+
+sources:
+  joola:
+    catalog_url: https://www.joola.com/collections/pickleball-paddles
+    shopify_json: https://www.joola.com/products.json?limit=250
+    method: shopify_json
+    priority_products:
+      - https://www.joola.com/products/joola-perseus-cgs-16-pickleball-paddle
+      - https://www.joola.com/products/joola-hyperion-cgs-16-pickleball-paddle
+      - https://www.joola.com/products/joola-scorpeus-cgs-16-pickleball-paddle
+
+  selkirk:
+    catalog_url: https://www.selkirk.com/collections/pickleball-paddles
+    shopify_json: https://www.selkirk.com/products.json?limit=250
+    method: shopify_json
+    priority_products:
+      - https://www.selkirk.com/products/vanguard-2-0-power-air
+      - https://www.selkirk.com/products/luxx-control-air-invikta
+
+  paddletek:
+    catalog_url: https://www.paddletek.com/collections/pickleball-paddles
+    shopify_json: https://www.paddletek.com/products.json?limit=250
+    method: shopify_json
+    priority_products:
+      - https://www.paddletek.com/products/bantam-ts-5
+
+  crbn:
+    catalog_url: https://www.crbnpickleball.com/collections/pickleball-paddles
+    shopify_json: https://www.crbnpickleball.com/products.json?limit=250
+    method: shopify_json
+    priority_products:
+      - https://www.crbnpickleball.com/products/crbn-1x
+      - https://www.crbnpickleball.com/products/crbn-3x
+
+  six-zero:
+    catalog_url: https://www.sixzeropickleball.com/collections/all
+    shopify_json: https://www.sixzeropickleball.com/products.json?limit=250
+    method: shopify_json
+    priority_products:
+      - https://www.sixzeropickleball.com/products/double-black-diamond
+
+  engage:
+    catalog_url: https://www.engagepickleball.com/collections/pickleball-paddles
+    shopify_json: https://www.engagepickleball.com/products.json?limit=250
+    method: shopify_json
+    priority_products:
+      - https://www.engagepickleball.com/products/engage-pursuit-pro
+
+  onix:
+    catalog_url: https://www.onixpickleball.com/collections/pickleball-paddles
+    shopify_json: ""
+    method: html
+    priority_products:
+      - https://www.onixpickleball.com/products/graphite-z5-pickleball-paddle
+
+  franklin:
+    catalog_url: https://www.franklinsports.com/pickleball-paddles
+    shopify_json: ""
+    method: html
+    priority_products:
+      - https://www.franklinsports.com/ben-johns-signature-pickleball-paddle
+
+  head:
+    catalog_url: https://www.head.com/en/sports/padel/pickleball/paddles
+    shopify_json: ""
+    method: html
+    priority_products: []
+
+  wilson:
+    catalog_url: https://www.wilson.com/en-us/pickleball/paddles
+    shopify_json: ""
+    method: html
+    priority_products: []
+
+  gamma:
+    catalog_url: https://www.gammasports.com/collections/pickleball-paddles
+    shopify_json: https://www.gammasports.com/products.json?limit=250
+    method: shopify_json
+    priority_products:
+      - https://www.gammasports.com/products/obsidian-pickleball-paddle
