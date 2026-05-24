@@ -16,7 +16,7 @@ Brands handled here (currently 5; engage + wilson are still blocked):
   - head       [class*="productCard-root"] (HEAD uses hashed class names)
 
 Run standalone:
-    python -m scripts.pipeline.v2.sources.products.scrape_catalog_local
+    python -m scripts.scraping.sources.products.scrape_catalog_local
 
 Run via pipeline:
     Called automatically by run.py through products_scrape_catalog_local step.

@@ -1,0 +1,13 @@
+# Analytics backend dependencies — installed on top of the scraping requirements.
+# Pin major versions; allow minor upgrades.
+
+scipy~=1.13
+statsmodels~=0.14
+ruptures~=1.1
+scikit-learn~=1.4
+numpy~=1.26
+pandas~=2.2
+
+# Already required by scraping but listed here for standalone install:
+supabase~=2.5
+python-dotenv~=1.0

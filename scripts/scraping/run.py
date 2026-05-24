@@ -17,12 +17,12 @@ Pass `--no-parallel` to force fully sequential execution (useful for debugging
 or rate-limit-sensitive scenarios).
 
 Usage:
-  python -m scripts.pipeline.v2.run --module all
-  python -m scripts.pipeline.v2.run --module products --brands joola,selkirk
-  python -m scripts.pipeline.v2.run --module instagram --source scrape-comments
-  python -m scripts.pipeline.v2.run --module all --dry-run
-  python -m scripts.pipeline.v2.run --module all --restart
-  python -m scripts.pipeline.v2.run --module all --no-parallel
+  python -m scripts.scraping.run --module all
+  python -m scripts.scraping.run --module products --brands joola,selkirk
+  python -m scripts.scraping.run --module instagram --source scrape-comments
+  python -m scripts.scraping.run --module all --dry-run
+  python -m scripts.scraping.run --module all --restart
+  python -m scripts.scraping.run --module all --no-parallel
 """
 
 from __future__ import annotations
@@ -50,93 +50,93 @@ Module = list[Group]                         # groups run in order
 MODULE_STEPS: dict[str, Module] = {
     # Instagram: profiles → posts → (comments || detect-replies) → influencers
     "instagram": [
-        [("scripts.pipeline.v2.sources.instagram.scrape_profiles",       "run")],
-        [("scripts.pipeline.v2.sources.instagram.scrape_posts",          "run")],
-        [("scripts.pipeline.v2.sources.instagram.scrape_comments",       "run"),
-         ("scripts.pipeline.v2.sources.instagram.detect_brand_replies",  "run")],
-        [("scripts.pipeline.v2.sources.instagram.scrape_influencers",    "run")],
+        [("scripts.scraping.sources.instagram.scrape_profiles",       "run")],
+        [("scripts.scraping.sources.instagram.scrape_posts",          "run")],
+        [("scripts.scraping.sources.instagram.scrape_comments",       "run"),
+         ("scripts.scraping.sources.instagram.detect_brand_replies",  "run")],
+        [("scripts.scraping.sources.instagram.scrape_influencers",    "run")],
     ],
     # YouTube: must walk channels → videos → comments → transcripts (each
     # step depends on IDs produced by the previous one)
     "youtube": [
-        [("scripts.pipeline.v2.sources.youtube.scrape_channels",         "run")],
-        [("scripts.pipeline.v2.sources.youtube.scrape_videos",           "run")],
-        [("scripts.pipeline.v2.sources.youtube.scrape_comments",         "run")],
-        [("scripts.pipeline.v2.sources.youtube.scrape_transcripts",      "run")],
+        [("scripts.scraping.sources.youtube.scrape_channels",         "run")],
+        [("scripts.scraping.sources.youtube.scrape_videos",           "run")],
+        [("scripts.scraping.sources.youtube.scrape_comments",         "run")],
+        [("scripts.scraping.sources.youtube.scrape_transcripts",      "run")],
     ],
     # Reddit: mentions first (gives us post IDs), then comments
     "reddit": [
-        [("scripts.pipeline.v2.sources.reddit.scrape_mentions",          "run")],
-        [("scripts.pipeline.v2.sources.reddit.scrape_comments",          "run")],
+        [("scripts.scraping.sources.reddit.scrape_mentions",          "run")],
+        [("scripts.scraping.sources.reddit.scrape_comments",          "run")],
     ],
     # Twitter: brand + influencer accounts are completely independent
     "twitter": [
-        [("scripts.pipeline.v2.sources.twitter.scrape_brand_posts",      "run"),
-         ("scripts.pipeline.v2.sources.twitter.scrape_influencer_posts", "run")],
+        [("scripts.scraping.sources.twitter.scrape_brand_posts",      "run"),
+         ("scripts.scraping.sources.twitter.scrape_influencer_posts", "run")],
     ],
     "tiktok": [
-        [("scripts.pipeline.v2.sources.tiktok.scrape_videos",            "run")],
+        [("scripts.scraping.sources.tiktok.scrape_videos",            "run")],
     ],
     # Meta + Google ad libraries — totally separate APIs
     "ads": [
-        [("scripts.pipeline.v2.sources.ads.scrape_meta_ads",             "run"),
-         ("scripts.pipeline.v2.sources.ads.scrape_google_ads",           "run")],
+        [("scripts.scraping.sources.ads.scrape_meta_ads",             "run"),
+         ("scripts.scraping.sources.ads.scrape_google_ads",           "run")],
     ],
     # Products: Apify catalog || Local Playwright catalog || promotions
     # All independent — each writes to a different table/conflict-key combo
     "products": [
-        [("scripts.pipeline.v2.sources.products.scrape_catalog",         "run"),
-         ("scripts.pipeline.v2.sources.products.scrape_catalog_local",   "run"),
-         ("scripts.pipeline.v2.sources.products.scrape_promotions",      "run")],
+        [("scripts.scraping.sources.products.scrape_catalog",         "run"),
+         ("scripts.scraping.sources.products.scrape_catalog_local",   "run"),
+         ("scripts.scraping.sources.products.scrape_promotions",      "run")],
     ],
     "news": [
-        [("scripts.pipeline.v2.sources.news.scrape_news",                "run")],
+        [("scripts.scraping.sources.news.scrape_news",                "run")],
     ],
     "seo": [
-        [("scripts.pipeline.v2.sources.seo.scrape_seo",                  "run")],
+        [("scripts.scraping.sources.seo.scrape_seo",                  "run")],
     ],
     # Enrichment: every substep reads from a different scraped table and
     # writes back to a separate column/table → fully parallelizable.
     "enrichment": [
-        [("scripts.pipeline.v2.enrichment.ai_enricher",                  "run"),
-         ("scripts.pipeline.v2.enrichment.tiktok_enrichment",            "run"),
-         ("scripts.pipeline.v2.enrichment.twitter_enrichment",           "run"),
-         ("scripts.pipeline.v2.enrichment.reddit_backfill",              "run"),
-         ("scripts.pipeline.v2.enrichment.influencer_sponsored",         "run"),
-         ("scripts.pipeline.v2.enrichment.analyze_videos",               "run")],
+        [("scripts.scraping.enrichment.ai_enricher",                  "run"),
+         ("scripts.scraping.enrichment.tiktok_enrichment",            "run"),
+         ("scripts.scraping.enrichment.twitter_enrichment",           "run"),
+         ("scripts.scraping.enrichment.reddit_backfill",              "run"),
+         ("scripts.scraping.enrichment.influencer_sponsored",         "run"),
+         ("scripts.scraping.enrichment.analyze_videos",               "run")],
     ],
     # Facts: mention_facts must come before topic_lifecycle; product_mentions
     # must come before product_attention; competitor_switch + instagram_themes
     # are independent.
     "facts": [
-        [("scripts.pipeline.v2.facts.mention_facts",                     "run"),
-         ("scripts.pipeline.v2.facts.competitor_switch",                 "run"),
-         ("scripts.pipeline.v2.facts.instagram_themes",                  "run"),
-         ("scripts.pipeline.v2.facts.populate_product_mentions",         "run")],
-        [("scripts.pipeline.v2.facts.topic_lifecycle",                   "run"),
-         ("scripts.pipeline.v2.facts.populate_product_attention",        "run")],
+        [("scripts.scraping.facts.mention_facts",                     "run"),
+         ("scripts.scraping.facts.competitor_switch",                 "run"),
+         ("scripts.scraping.facts.instagram_themes",                  "run"),
+         ("scripts.scraping.facts.populate_product_mentions",         "run")],
+        [("scripts.scraping.facts.topic_lifecycle",                   "run"),
+         ("scripts.scraping.facts.populate_product_attention",        "run")],
     ],
     "intelligence": [
-        [("scripts.pipeline.v2.sources.youtube.scrape_transcripts",      "run")],
-        [("scripts.pipeline.v2.enrichment.analyze_videos",               "run")],
-        [("scripts.pipeline.v2.facts.populate_product_mentions",         "run")],
-        [("scripts.pipeline.v2.facts.populate_product_attention",        "run")],
+        [("scripts.scraping.sources.youtube.scrape_transcripts",      "run")],
+        [("scripts.scraping.enrichment.analyze_videos",               "run")],
+        [("scripts.scraping.facts.populate_product_mentions",         "run")],
+        [("scripts.scraping.facts.populate_product_attention",        "run")],
     ],
     "sales-intelligence": [
-        [("scripts.pipeline.v2.sales_intelligence.discover",             "run")],
-        [("scripts.pipeline.v2.sales_intelligence.scrape_inventory",     "run")],
-        [("scripts.pipeline.v2.sales_intelligence.estimate",             "run"),
-         ("scripts.pipeline.v2.sales_intelligence.restock",              "run"),
-         ("scripts.pipeline.v2.sales_intelligence.sellout",              "run"),
-         ("scripts.pipeline.v2.sales_intelligence.launches",             "run")],
-        [("scripts.pipeline.v2.sales_intelligence.revenue",              "run"),
-         ("scripts.pipeline.v2.sales_intelligence.correlation",          "run")],
+        [("scripts.scraping.sales_intelligence.discover",             "run")],
+        [("scripts.scraping.sales_intelligence.scrape_inventory",     "run")],
+        [("scripts.scraping.sales_intelligence.estimate",             "run"),
+         ("scripts.scraping.sales_intelligence.restock",              "run"),
+         ("scripts.scraping.sales_intelligence.sellout",              "run"),
+         ("scripts.scraping.sales_intelligence.launches",             "run")],
+        [("scripts.scraping.sales_intelligence.revenue",              "run"),
+         ("scripts.scraping.sales_intelligence.correlation",          "run")],
     ],
     "maintenance": [
-        [("scripts.pipeline.v2.maintenance.backfill_youtube_comments",   "run"),
-         ("scripts.pipeline.v2.maintenance.backfill_athlete_names",      "run")],
-        [("scripts.pipeline.v2.maintenance.validate_data",               "run")],
-        [("scripts.pipeline.v2.maintenance.count_rows",                  "run")],
+        [("scripts.scraping.maintenance.backfill_youtube_comments",   "run"),
+         ("scripts.scraping.maintenance.backfill_athlete_names",      "run")],
+        [("scripts.scraping.maintenance.validate_data",               "run")],
+        [("scripts.scraping.maintenance.count_rows",                  "run")],
     ],
 }
 

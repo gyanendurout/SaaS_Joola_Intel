@@ -6,8 +6,8 @@ Runs two recurring jobs:
   • SEO scraping:  every Monday at 03:00 UTC
 
 Usage:
-  python -m scripts.pipeline.v2.scheduler
-  python -m scripts.pipeline.v2.scheduler --dry-run
+  python -m scripts.scraping.scheduler
+  python -m scripts.scraping.scheduler --dry-run
 """
 
 from __future__ import annotations

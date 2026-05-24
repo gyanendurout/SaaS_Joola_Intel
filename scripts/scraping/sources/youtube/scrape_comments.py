@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ...core import apify_client as apify
 from ...core import supabase_client as sb
 from ...core.logger import get_logger
+
+
+def _yt_vid_id(url: str) -> str | None:
+    """Extract YouTube video ID from any URL format."""
+    m = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url or "")
+    return m.group(1) if m else None
 
 log = get_logger("yt.comments")
 
@@ -38,33 +45,41 @@ def run(ctx: dict[str, Any]) -> int:
         return 0
 
     url_to_video: dict[str, dict] = {v["video_url"]: v for v in videos}
+    # fallback: match by extracted YouTube video ID (handles youtu.be vs youtube.com/watch?v= mismatches)
+    ytid_to_video: dict[str, dict] = {
+        _yt_vid_id(v["video_url"]): v
+        for v in videos
+        if _yt_vid_id(v["video_url"])
+    }
 
     items = apify.run_and_fetch("streamers/youtube-comments-scraper", {
         "startUrls": [{"url": u} for u in video_urls[:50]],
         "maxComments": 200,
     })
 
-    rows: list[dict] = []
+    seen: dict[str, dict] = {}
     for item in items:
-        video_url = item.get("videoUrl") or item.get("inputUrl") or ""
-        vid = url_to_video.get(video_url)
-        brand_id   = vid["brand_id"]   if vid else None
-        channel_id = vid["channel_id"] if vid else None
-        yt_vid_id  = vid["youtube_video_id"] if vid else None
+        video_url = item.get("videoUrl") or item.get("url") or item.get("inputUrl") or ""
+        vid = url_to_video.get(video_url) or ytid_to_video.get(_yt_vid_id(video_url))
+        brand_id = vid["brand_id"] if vid else None
+        vid_uuid  = vid["id"]       if vid else None  # yt_videos.id (uuid)
 
-        rows.append({
-            "video_id":       yt_vid_id,
-            "brand_id":       brand_id,
-            "channel_id":     channel_id,
-            "comment_id":     item.get("id"),
-            "author_name":    item.get("authorDisplayName") or item.get("author"),
-            "comment_text":   (item.get("textOriginal") or item.get("text") or "")[:2000],
-            "like_count":     item.get("likeCount", 0),
-            "reply_count":    item.get("totalReplyCount", 0),
-            "posted_at":      item.get("publishedAt") or item.get("timestamp"),
-            "is_reply":       bool(item.get("parentId")),
-        })
+        yt_comment_id = item.get("commentId") or item.get("id") or item.get("comment_id")
+        if not yt_comment_id:
+            continue
 
-    n = sb.upsert("yt_comments", rows, "comment_id")
+        seen[yt_comment_id] = {
+            "youtube_comment_id": yt_comment_id,
+            "video_id":           vid_uuid,
+            "brand_id":           brand_id,
+            "commenter_username": item.get("authorDisplayName") or item.get("author"),
+            "comment_text":       (item.get("textOriginal") or item.get("text") or "")[:2000],
+            "comment_likes":      item.get("likeCount", 0),
+            "posted_at":          item.get("publishedAt") or item.get("timestamp"),
+        }
+
+    rows = list(seen.values())
+
+    n = sb.upsert("yt_comments", rows, "youtube_comment_id")
     log.info("✓ %d YT comments upserted", n)
     return n

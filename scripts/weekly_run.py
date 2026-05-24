@@ -158,22 +158,48 @@ def main() -> int:
     log.info("Pipeline args: %s", " ".join(pipeline_argv))
     log.info("")
 
-    # Import and run — wrap SystemExit so we control the exit code
+    # Phase 1-4 — scraping pipeline (instagram, youtube, …, enrichment, facts)
     try:
-        from scripts.pipeline.v2.run import main as _pipeline_main
-        _pipeline_main(pipeline_argv)
-        return 0
+        from scripts.scraping.run import main as _scraping_main
+        _scraping_main(pipeline_argv)
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else (1 if exc.code else 0)
         if code != 0:
-            log.error("Pipeline exited with code %d", code)
-        return code
+            log.error("Scraping pipeline exited with code %d", code)
+            return code
     except KeyboardInterrupt:
         log.warning("Run interrupted by user. Re-run without --restart to resume.")
         return 130
     except Exception as exc:
-        log.exception("Unexpected error: %s", exc)
+        log.exception("Unexpected error in scraping phase: %s", exc)
         return 1
+
+    # Phase 5 — analytics backend (marts + statistical jobs).
+    # Only runs when --module is all or analytics; other module filters
+    # are scraping-specific and should not trigger analytics.
+    if args.module in ("all", "analytics"):
+        log.info("")
+        log.info("=" * 65)
+        log.info("  Scraping done. Starting analytics backend.")
+        log.info("=" * 65)
+        try:
+            from scripts.analytics_backend.run import main as _analytics_main
+            analytics_argv: list[str] = ["--module", "all"]
+            if args.dry_run:
+                analytics_argv.append("--dry-run")
+            if args.brands:
+                analytics_argv.extend(["--brands", args.brands])
+            _analytics_main(analytics_argv)
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else (1 if exc.code else 0)
+            if code != 0:
+                log.error("Analytics backend exited with code %d", code)
+                return code
+        except Exception as exc:
+            log.exception("Unexpected error in analytics phase: %s", exc)
+            return 1
+
+    return 0
 
 
 if __name__ == "__main__":

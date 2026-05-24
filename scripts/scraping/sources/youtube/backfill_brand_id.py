@@ -7,7 +7,7 @@ This one-time fix reassigns them to JOOLA's correct brand_id.
 yt_comments has NO channel_id column — it has video_id. We join through
 yt_videos to find the channel each comment belongs to.
 
-Run via: python -m scripts.pipeline.v2.run --module maintenance --source backfill_youtube_comments
+Run via: python -m scripts.scraping.run --module maintenance --source backfill_youtube_comments
 """
 
 from __future__ import annotations

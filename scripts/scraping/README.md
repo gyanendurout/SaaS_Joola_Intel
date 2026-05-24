@@ -28,7 +28,7 @@ python scripts/weekly_run.py --module instagram --brands joola,selkirk
 python scripts/weekly_run.py --dry-run
 
 # Force sequential execution if something is rate-limited
-python -m scripts.pipeline.v2.run --module all --no-parallel
+python -m scripts.scraping.run --module all --no-parallel
 ```
 
 Logs go to `c:/tmp/joola_weekly_YYYYMMDD_HHMM.log`. Checkpoint state lives in
@@ -141,9 +141,9 @@ likelihood, and new-launch detection from product inventory + attention.
 
 ## Adding a new scraper — the recipe
 
-1. Create `scripts/pipeline/v2/sources/<channel>/scrape_<thing>.py` exposing
+1. Create `scripts/scraping/sources/<channel>/scrape_<thing>.py` exposing
    `def run(ctx: dict) -> int:` (return the number of rows upserted).
-2. Add the import path to `MODULE_STEPS` in `scripts/pipeline/v2/run.py`.
+2. Add the import path to `MODULE_STEPS` in `scripts/scraping/run.py`.
    - Put it in its own group if other steps depend on it finishing first.
    - Add it to an existing group's inner list to make it parallel with siblings.
 3. Use the helpers in `core/`:
@@ -154,13 +154,13 @@ likelihood, and new-launch detection from product inventory + attention.
 4. Honour `ctx["brands"]` for filtering and `ctx["dry_run"]` for no-op runs.
 5. Smoke test:
    ```bash
-   python -m scripts.pipeline.v2.run --module <channel> --dry-run
-   python -m scripts.pipeline.v2.run --module <channel> --brands joola
+   python -m scripts.scraping.run --module <channel> --dry-run
+   python -m scripts.scraping.run --module <channel> --brands joola
    ```
 
 ## Adding a new local-Playwright product brand
 
-Edit `scripts/pipeline/v2/sources/products/scrape_catalog_local.py`:
+Edit `scripts/scraping/sources/products/scrape_catalog_local.py`:
 
 1. Write a `JS_<BRAND>` extraction function (returns `[{name, price, rating, ...}]`).
 2. Append an entry to `BRAND_SCRAPERS`:
@@ -222,7 +222,7 @@ cp scripts/.env.example scripts/.env
 ## CLI reference
 
 `scripts/weekly_run.py` is a thin wrapper. The real CLI is
-`python -m scripts.pipeline.v2.run`:
+`python -m scripts.scraping.run`:
 
 ```
 --module <name>      one of: all instagram youtube reddit twitter tiktok ads
