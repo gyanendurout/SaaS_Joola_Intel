@@ -26,11 +26,19 @@ log = get_logger("statistics.changepoints")
 
 _WINDOW_DAYS = 180
 _TOP_N_PRODUCTS = 10
-_MIN_OBS = 30
-_SMOOTH_WINDOW = 7
+# Lowered from 30 -> 5: product_attention_daily is sparse (~5-15 days
+# per product); brand-level rollup has 100+ daily rows so it stays well
+# above this threshold. Raise back to 30 once historical backfill grows.
+_MIN_OBS = 5
+# Lowered from 7 -> 3: with sparse data the 7-day window dropped the
+# first 6 observations entirely.
+_SMOOTH_WINDOW = 3
 _PENALTY = 8
 _MODEL = "rbf"
-_SERIES = ("attention_score", "estimated_units_sold", "ad_pressure_score")
+# Dropped estimated_units_sold (always NULL until sales_estimates populates)
+# and added mention_count which is dense in the MV. Once units-sold data
+# exists, add it back to this tuple.
+_SERIES = ("attention_score", "mention_count", "ad_pressure_score")
 _MAX_WORKERS = 4  # ruptures is CPU-heavy; keep modest
 
 
@@ -126,7 +134,8 @@ def _product_series(df: pd.DataFrame, product_id: str, column: str) -> pd.Series
 
 def _changepoint_one(
     brand_id: str,
-    product_id: str,
+    lookup_pid: str,
+    stored_pid: str | None,
     series_name: str,
     df: pd.DataFrame,
     run_date: date,
@@ -138,7 +147,7 @@ def _changepoint_one(
         return None
 
     try:
-        raw = _product_series(df, product_id, series_name)
+        raw = _product_series(df, lookup_pid, series_name)
         if raw.empty:
             return None
         smoothed = raw.rolling(window=_SMOOTH_WINDOW, min_periods=_SMOOTH_WINDOW).mean()
@@ -180,7 +189,7 @@ def _changepoint_one(
         return {
             "kind": "changepoint",
             "brand_id": brand_id,
-            "product_id": product_id,
+            "product_id": stored_pid,
             "driver": series_name,
             "target": series_name,
             "metric_date": run_date.isoformat(),
@@ -193,7 +202,7 @@ def _changepoint_one(
     except Exception as exc:
         log.warning(
             "changepoint failed brand=%s product=%s series=%s: %s",
-            brand_id, product_id, series_name, exc,
+            brand_id, stored_pid, series_name, exc,
         )
         return None
 
@@ -209,18 +218,35 @@ def run(ctx: dict[str, Any]) -> int:
     brand_ids = _filter_brand_ids(brand_map, brands)
     log.info("changepoints: %d brands in scope", len(brand_ids))
 
-    tasks: list[tuple[str, str, str, pd.DataFrame]] = []
+    # Each task: (brand_id, lookup_pid, stored_pid, series_name, df)
+    #   lookup_pid is used to filter `df` inside _product_series
+    #   stored_pid is what gets persisted to analysis_results.product_id
+    # For brand-level rollup these differ (lookup uses a synthetic sentinel
+    # so the series aggregates across all products; stored is None so the
+    # page shows it as a brand-wide signal).
+    BRAND_AGG = "__brand_agg__"
+    tasks: list[tuple[str, str, str | None, str, pd.DataFrame]] = []
     for brand_id in brand_ids:
         df = _fetch_brand_window(brand_id)
         if df.empty:
             continue
-        products = _top_products(df)
-        if not products:
-            continue
+
         present_series = [s for s in _SERIES if s in df.columns]
+        if not present_series:
+            continue
+
+        # Brand-level: 100+ daily obs even when individual products are sparse.
+        brand_df = df.copy()
+        brand_df["canonical_product_id"] = BRAND_AGG
+        for series_name in present_series:
+            tasks.append((brand_id, BRAND_AGG, None, series_name, brand_df))
+
+        # Product-level (original). Many products will still skip via
+        # _MIN_OBS, but the brand-level row above guarantees data.
+        products = _top_products(df)
         for product_id in products:
             for series_name in present_series:
-                tasks.append((brand_id, product_id, series_name, df))
+                tasks.append((brand_id, product_id, product_id, series_name, df))
 
     if not tasks:
         log.info("changepoints: nothing to do")
@@ -232,8 +258,8 @@ def run(ctx: dict[str, Any]) -> int:
     rows: list[dict[str, Any]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
         futures = [
-            pool.submit(_changepoint_one, b, p, sn, df, run_date)
-            for (b, p, sn, df) in tasks
+            pool.submit(_changepoint_one, b, lp, sp, sn, df, run_date)
+            for (b, lp, sp, sn, df) in tasks
         ]
         for fut in concurrent.futures.as_completed(futures):
             row = fut.result()

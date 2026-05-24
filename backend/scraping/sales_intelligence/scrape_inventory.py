@@ -174,14 +174,42 @@ def run(ctx: dict[str, Any]) -> int:
     log.info("Scraping inventory for %d products across %d brands",
              len(products_table), len(brand_ids))
 
+    # Try to map products.id -> products_catalog.id by name. products_catalog
+    # is the FK target for product_snapshots.product_id; pass NULL when no
+    # match (snapshot still works as a brand-level inventory signal).
+    catalog = sb.get("products_catalog", "id,brand_id,display_name,aliases")
+    catalog_by_brand_name: dict[tuple[str, str], str] = {}
+    for c in catalog:
+        if not c.get("brand_id") or not c.get("id"):
+            continue
+        if c.get("display_name"):
+            catalog_by_brand_name[(c["brand_id"], c["display_name"].lower())] = c["id"]
+        for alias in (c.get("aliases") or []):
+            if alias:
+                catalog_by_brand_name[(c["brand_id"], alias.lower())] = c["id"]
+
+    def _catalog_id_for(product: dict) -> str | None:
+        name = (product.get("name") or "").lower()
+        # Exact match first
+        m = catalog_by_brand_name.get((product["brand_id"], name))
+        if m:
+            return m
+        # Substring match: any catalog alias appears in the product name
+        for (bid, key), cid in catalog_by_brand_name.items():
+            if bid == product["brand_id"] and key and key in name:
+                return cid
+        return None
+
     now = datetime.now(timezone.utc).isoformat()
     rows: list[dict] = []
     for product in products_table:
         url = product["url"]
+        catalog_id = _catalog_id_for(product)
         signal = _scrape_page(url)
         rows.append({
             "brand_id":              product["brand_id"],
-            "product_id":            product["id"],
+            # Null is OK — snapshot is still meaningful at brand level.
+            "product_id":            catalog_id,
             "variant_id":            None,
             "snapshot_time":         now,
             "product_url":           url,

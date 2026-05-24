@@ -122,17 +122,33 @@ export default function ProductsIntelPage() {
     let cancelled = false
     async function load() {
       try {
+        // Migration 012 column names differ from the AttentionDaily/Summary
+        // interfaces this page was written against. Use PostgREST select-aliases
+        // (alias:column) so the row shapes the page expects survive unchanged.
         const [bRes, pRes, dRes, sRes] = await Promise.all([
           supabase.from('brands').select('id,slug,name').order('name'),
           supabase.from('products_catalog').select('id,brand_id,display_name,sku,category'),
           supabase
             .from('product_attention_daily')
-            .select('product_id,brand_id,date,mention_count,weighted_score,avg_sentiment')
-            .order('date', { ascending: false })
+            .select(
+              'product_id,brand_id,' +
+              'date:attention_date,' +
+              'mention_count:mentions_total,' +
+              'weighted_score:attention_score,' +
+              'avg_sentiment:sales_likelihood_score',
+            )
+            .order('attention_date', { ascending: false })
             .limit(10000),
           supabase
             .from('product_attention_summary')
-            .select('product_id,brand_id,period,total_mentions,weighted_total,avg_sentiment,gap_to_top_competitor,rank_in_category')
+            .select(
+              'product_id,brand_id,period,' +
+              'total_mentions:mentions_total,' +
+              'weighted_total:attention_score,' +
+              'avg_sentiment:sales_likelihood_score,' +
+              'gap_to_top_competitor:joola_vs_competitor_gap,' +
+              'rank_in_category:rank_in_brand',
+            )
             .limit(1000),
         ])
         if (cancelled) return

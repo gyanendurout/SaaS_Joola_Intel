@@ -241,11 +241,32 @@
       "Bash(grep -rn \"scripts\\\\.scraping\\\\|scripts/scraping\\\\|scripts\\\\.analytics_backend\\\\|scripts/analytics_backend\\\\|scripts/.env\\\\|scripts\\\\\\\\\\\\\\\\.env\\\\|scripts\\\\.pipeline\" analytics_backend backend scripts --include=\"*.py\")",
       "Bash(python -m backend.scraping.run --module maintenance --source backfill_youtube_comments --dry-run)",
       "Bash(python -m analytics_backend.run --module all --dry-run)",
-      "Bash(python -c \"import yaml; [yaml.safe_load\\(open\\(f\\)\\) for f in ['.github/workflows/ci.yml', '.github/workflows/weekly-pipeline.yml']]; print\\('YAML valid'\\)\")"
+      "Bash(python -c \"import yaml; [yaml.safe_load\\(open\\(f\\)\\) for f in ['.github/workflows/ci.yml', '.github/workflows/weekly-pipeline.yml']]; print\\('YAML valid'\\)\")",
+      "Bash(curl -s -o /dev/null -w \"GET /v2 -> %{http_code} \\(%{time_total}s\\)\\\\n\" http://localhost:3002/v2)",
+      "Bash(curl -s -o /dev/null -w \"GET /v2/crisis -> %{http_code} \\(%{time_total}s\\)\\\\n\" http://localhost:3002/v2/crisis)",
+      "Bash(python -m backend.scraping.run --module facts)",
+      "Bash(curl -s \"http://localhost:3002/v2/products-intel\" -o /dev/null -w \"HTTP %{http_code}, %{time_total}s\\\\n\")",
+      "Bash(python -m backend.scraping.run --module sales-intelligence)",
+      "Bash(python -m analytics_backend.run --module all)",
+      "Bash(python -m analytics_backend.run --module statistics)",
+      "Bash(curl -s \"http://localhost:3002/v2/leaderboard\" -o /dev/null -w \"leaderboard: %{http_code} %{time_total}s\\\\n\")",
+      "Bash(curl -s \"http://localhost:3002/v2/products-intel\" -o /dev/null -w \"products-intel: %{http_code} %{time_total}s\\\\n\")",
+      "Bash(curl -s \"http://localhost:3002/v2/correlations\" -o /dev/null -w \"correlations: %{http_code} %{time_total}s\\\\n\")",
+      "Bash(curl -s \"http://localhost:3002/v2/crisis\" -o /dev/null -w \"crisis: %{http_code} %{time_total}s\\\\n\")",
+      "Bash(curl -s \"http://localhost:3002/v2/sales-intel\" -o /dev/null -w \"sales-intel: %{http_code} %{time_total}s\\\\n\")",
+      "Bash(python -m backend.scraping.run --module facts --source mention_facts)",
+      "Bash(python -m backend.scraping.run --module facts --source mention_facts --restart)",
+      "Bash(python -m backend.scraping.run --module sales-intelligence --source scrape_inventory --restart)",
+      "Bash(rm -f /c/Workspace/pipeline_v2_state.prev /c/Workspace/pipeline_v2_state.json)",
+      "Bash(python -m backend.scraping.run --module sales-intelligence --source scrape_inventory)",
+      "Bash(rm -f /c/Workspace/pipeline_v2_state.json /c/Workspace/pipeline_v2_state.prev 2>&1 *)",
+      "Bash(curl -s \"http://localhost:3002/v2/crisis\")",
+      "Bash(python -m analytics_backend.run --module statistics --source changepoints)"
     ],
     "additionalDirectories": [
       "\\tmp",
-      "C:\\Workspace\\joola-intel-nextjs\\scripts"
+      "C:\\Workspace\\joola-intel-nextjs\\scripts",
+      "C:\\Workspace"
     ]
   },
   "hooks": {
