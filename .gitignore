@@ -50,3 +50,10 @@ tsconfig.tsbuildinfo
 *.zip
 *.docx
 SaaS Marketing/
+
+# Ruflo swarm working directories
+.claude-flow/
+.swarm/
+ruvector.db
+logs/
+*.prev

@@ -20,6 +20,9 @@ const I = {
   tt:  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.22 8.22 0 004.83 1.55V6.79a4.85 4.85 0 01-1.06-.1z"/></svg>,
   trend: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
   sales: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  corr: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/><rect x="15" y="15" width="6" height="6"/><rect x="15" y="3" width="6" height="6" strokeDasharray="2 2"/><rect x="3" y="15" width="6" height="6" strokeDasharray="2 2"/></svg>,
+  change: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 17 9 11 13 15 21 7"/><line x1="13" y1="3" x2="13" y2="21" strokeDasharray="3 3"/></svg>,
+  board: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="5" height="10"/><rect x="9.5" y="6" width="5" height="15"/><rect x="16" y="2" width="5" height="19"/></svg>,
 }
 
 const ChevronLeft = () => (
@@ -49,6 +52,9 @@ const navGroups: NavGroup[] = [
       { href: '/v2/products-intel', label: 'Product Intel', ic: I.trend, badge: 'NEW' },
       { href: '/v2/sales-intel',    label: 'Sales Intel',   ic: I.sales, badge: 'NEW' },
       { href: '/v2/market',      label: 'Market Intel',       ic: I.mkt },
+      { href: '/v2/correlations', label: 'Correlations',     ic: I.corr,   badge: 'NEW' },
+      { href: '/v2/changepoints', label: 'Changepoints',     ic: I.change, badge: 'NEW' },
+      { href: '/v2/leaderboard',  label: 'Product Leaderboard', ic: I.board, badge: 'NEW' },
     ],
   },
   {

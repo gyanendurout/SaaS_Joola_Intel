@@ -472,7 +472,51 @@
 .v2-root .bar-row .delta-mini.flat { color: var(--fg-4); }
 
 /* Table */
-.v2-root .table-wrap { overflow-x: auto; }
+.v2-root .table-wrap {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.45) rgba(255,255,255,0.04);
+}
+.v2-root .table-wrap::-webkit-scrollbar { height: 10px; width: 10px; }
+.v2-root .table-wrap::-webkit-scrollbar-track { background: rgba(255,255,255,0.04); border-radius: 5px; }
+.v2-root .table-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.45); border-radius: 5px; border: 2px solid transparent; background-clip: padding-box; }
+.v2-root .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.7); background-clip: padding-box; border: 2px solid transparent; }
+
+/* Date-range dropdown (global, top-right next to brand filter) */
+.v2-root .drd-wrap { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; }
+.v2-root .drd-ic { color: var(--fg-3); flex-shrink: 0; }
+.v2-root .drd-select {
+  background: rgba(0,0,0,0.4); color: var(--fg);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+  padding: 6px 28px 6px 10px; font-size: 12px; font-weight: 600;
+  cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a93a4' stroke-width='2.5'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.v2-root .drd-select:hover { border-color: rgba(255,255,255,0.25); color: var(--fg); }
+.v2-root .drd-select.is-filtered { color: var(--yellow); border-color: rgba(245,230,37,0.45); background-color: rgba(245,230,37,0.08); }
+.v2-root .drd-select:focus { outline: 2px solid var(--yellow); outline-offset: 1px; }
+/* From → To calendar date picker (replaces single preset dropdown). */
+.v2-root .drd-label-inline {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--fg-4);
+  user-select: none;
+}
+.v2-root .drd-date {
+  padding: 6px 8px; min-width: 130px;
+  background-image: none;
+  font-family: inherit;
+  color-scheme: dark;
+}
+.v2-root .drd-arrow {
+  color: var(--fg-4); font-size: 12px; opacity: 0.7; padding: 0 2px;
+}
+@media (max-width: 768px) {
+  .v2-root .drd-label-inline { display: none; }
+  .v2-root .drd-arrow { display: none; }
+  .v2-root .drd-date { min-width: 110px; }
+}
+.v2-root .topbar { display: inline-flex; align-items: center; gap: 8px; }
 .v2-root table.data {
   width: 100%; border-collapse: collapse; font-size: 12.5px;
 }
@@ -1870,3 +1914,95 @@ html { scroll-behavior: smooth; }
   background: rgba(0,0,0,0.4);
 }
 
+/* ==========================================================
+   Analytics — VIZ
+   Styles for analytics MVP chart components
+   (CorrelationHeatmap, LagScanChart, ChangepointTimeline,
+    IndexedTimeSeries, LeaderboardTable)
+   Re-uses existing .tip, .scatter-wrap, .scatter-axis,
+   .scatter-label primitives where possible.
+   ========================================================== */
+
+/* Optional interpretation note above any analytics chart */
+.v2-root .viz-note {
+  font-size: 11.5px;
+  color: #cbd1dc;
+  background: rgba(245, 230, 37, 0.05);
+  border-left: 2px solid var(--yellow, #F5E625);
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  border-radius: 0 4px 4px 0;
+  line-height: 1.45;
+}
+
+/* ---- CorrelationHeatmap ---- */
+.v2-root .heatmap-wrap { width: 100%; }
+.v2-root .heatmap-cell {
+  shape-rendering: crispEdges;
+}
+.v2-root .heatmap-cell:hover {
+  filter: drop-shadow(0 0 6px rgba(245, 230, 37, 0.5));
+}
+
+/* ---- LagScanChart ---- */
+.v2-root .lag-scan { width: 100%; }
+
+/* ---- ChangepointTimeline ---- */
+.v2-root .changepoint-timeline { width: 100%; }
+.v2-root .changepoint-line {
+  transition: stroke-width 140ms ease;
+}
+.v2-root .changepoint-timeline g:hover .changepoint-line {
+  stroke-width: 2.4;
+  filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.6));
+}
+
+/* ---- IndexedTimeSeries ---- */
+.v2-root .indexed-series { width: 100%; }
+
+/* ---- LeaderboardTable ---- */
+.v2-root .leaderboard-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+.v2-root .leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.v2-root .leaderboard-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 140ms ease, transform 140ms ease;
+}
+.v2-root .leaderboard-row:hover {
+  background: rgba(245, 230, 37, 0.04);
+  transform: translateX(3px);
+}
+.v2-root .leaderboard-row:focus {
+  outline: 1px solid var(--yellow, #F5E625);
+  outline-offset: -1px;
+}
+.v2-root .leaderboard-row-joola {
+  border-left: 3px solid #22c55e;
+  background: rgba(34, 197, 94, 0.04);
+}
+.v2-root .leaderboard-row-joola:hover {
+  background: rgba(34, 197, 94, 0.09);
+}
+.v2-root .leaderboard-table th {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a93a4;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  user-select: none;
+}
+.v2-root .leaderboard-table th:hover {
+  color: #F5E625;
+}
+.v2-root .leaderboard-table td {
+  padding: 8px 10px;
+  font-size: 12px;
+  vertical-align: middle;
+}
