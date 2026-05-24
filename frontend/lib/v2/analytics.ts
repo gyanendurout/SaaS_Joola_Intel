@@ -107,15 +107,15 @@ async function fetchBrandLookup(): Promise<{
 }> {
   const [{ data: brandRows }, { data: productRows }] = await Promise.all([
     supabase.from('brands').select('id,slug'),
-    supabase.from('products').select('id,name'),
+    supabase.from('products_catalog').select('id,display_name'),
   ])
   const slugByBid: Record<string, string> = {}
   ;(brandRows || []).forEach((b: { id: string; slug: string }) => {
     slugByBid[b.id] = b.slug
   })
   const nameByPid: Record<string, string> = {}
-  ;(productRows || []).forEach((p: { id: string; name: string | null }) => {
-    nameByPid[p.id] = p.name || ''
+  ;(productRows || []).forEach((p: { id: string; display_name: string | null }) => {
+    nameByPid[p.id] = p.display_name || ''
   })
   return { slugByBid, nameByPid }
 }
@@ -321,18 +321,23 @@ export async function fetchTimeseries(
 
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
 
+  // Migration 013 column names:
+  //   metric_date              (was: date)
+  //   canonical_product_id     (was: product_id)
+  //   mention_count            (was: mentions)
+  //   promo_active_flag        (smallint 0/1, was: promo_active boolean)
   let query = supabase
     .from('joola_timeseries_daily')
     .select(
-      'brand_id,product_id,date,attention_score,mentions,estimated_units_sold,ad_pressure_score,promo_active',
+      'brand_id,canonical_product_id,metric_date,attention_score,mention_count,estimated_units_sold,ad_pressure_score,promo_active_flag',
     )
     .eq('brand_id', brandId)
-    .gte('date', cutoff)
-    .order('date', { ascending: true })
+    .gte('metric_date', cutoff)
+    .order('metric_date', { ascending: true })
     .limit(days * 50)
 
   if (productId) {
-    query = query.eq('product_id', productId)
+    query = query.eq('canonical_product_id', productId)
   }
 
   const { data, error } = await query
@@ -353,13 +358,13 @@ export async function fetchTimeseries(
   return (data as Array<Record<string, unknown>>).map((r): TimeseriesRow => ({
     brand_id: String(r.brand_id),
     brand_slug: slugByBid[String(r.brand_id)] || 'unknown',
-    product_id: (r.product_id as string | null) ?? null,
-    product_name: r.product_id ? nameByPid[String(r.product_id)] || null : null,
-    date: String(r.date).slice(0, 10),
+    product_id: (r.canonical_product_id as string | null) ?? null,
+    product_name: r.canonical_product_id ? nameByPid[String(r.canonical_product_id)] || null : null,
+    date: String(r.metric_date).slice(0, 10),
     attention_score: r.attention_score != null ? Number(r.attention_score) : null,
-    mentions: r.mentions != null ? Number(r.mentions) : null,
+    mentions: r.mention_count != null ? Number(r.mention_count) : null,
     estimated_units_sold: r.estimated_units_sold != null ? Number(r.estimated_units_sold) : null,
     ad_pressure_score: r.ad_pressure_score != null ? Number(r.ad_pressure_score) : null,
-    promo_active: r.promo_active != null ? Boolean(r.promo_active) : null,
+    promo_active: r.promo_active_flag != null ? Number(r.promo_active_flag) > 0 : null,
   }))
 }

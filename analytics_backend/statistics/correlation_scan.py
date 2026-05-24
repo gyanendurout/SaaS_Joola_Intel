@@ -27,13 +27,20 @@ log = get_logger("statistics.correlation_scan")
 _WINDOW_DAYS = 180
 _TOP_N_PRODUCTS = 10
 _MAX_LAG = 28
-_MIN_OBS = 14
-_TARGET = "estimated_units_sold"
+# Lowered from 14 → 5 because product_attention_daily is currently very
+# sparse (~10 product-day rows per top brand). Once enrichment + scraping
+# catch up to historical data, raise this back to 14 for tighter stats.
+_MIN_OBS = 5
+# Was: estimated_units_sold. Switched to mention_count because
+# sales_estimates is empty (no inventory snapshots yet), so the
+# estimated_units_sold column is all NULL — nothing to correlate against.
+# mention_count is dense in joola_timeseries_daily.
+_TARGET = "mention_count"
 _DRIVERS = (
     "attention_score",
     "ad_pressure_score",
     "promo_active_flag",
-    "yt_transcript_attention",
+    "total_engagement",
 )
 _MAX_WORKERS = 8
 

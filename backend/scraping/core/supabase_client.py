@@ -56,6 +56,14 @@ def get_filtered(table: str, select: str, filters: str) -> list[dict]:
 
 
 def upsert(table: str, rows: list[dict[str, Any]], on_conflict: str) -> int:
+    """Upsert with ON CONFLICT. Raises if the constraint is missing (42P10)
+    so callers don't silently drop data — historically this swallowed the
+    error and returned 0, which masked the mention_facts / analysis_results
+    empty-table bugs for weeks.
+
+    If you're rebuilding the whole table (delete-then-insert pattern),
+    prefer `insert()` below — no ON CONFLICT needed, no constraint dance.
+    """
     _init()
     if not rows:
         return 0
@@ -67,9 +75,37 @@ def upsert(table: str, rows: list[dict[str, Any]], on_conflict: str) -> int:
         if resp.status_code in (200, 201):
             inserted += len(batch)
         elif resp.status_code == 400 and "42P10" in resp.text:
-            log.warning("No unique constraint on %s for ON CONFLICT — use delete_insert_weekly", table)
+            raise SupabaseError(
+                f"No unique constraint on {table} matches on_conflict='{on_conflict}'. "
+                f"Either add a UNIQUE CONSTRAINT (not just an expression index) covering "
+                f"these columns exactly, or switch the caller to sb.insert() / "
+                f"sb.delete_insert_weekly() so ON CONFLICT isn't needed."
+            )
         else:
             log.error("Upsert %s batch %d error %d: %s", table, i, resp.status_code, resp.text[:300])
+    return inserted
+
+
+def insert(table: str, rows: list[dict[str, Any]]) -> int:
+    """Plain INSERT — no ON CONFLICT. Use this after _clear_channel_*()
+    style truncation, where rebuilds happen weekly and idempotency comes
+    from the upstream DELETE. Avoids the unique-constraint dance that
+    PostgREST requires for upsert."""
+    _init()
+    if not rows:
+        return 0
+    url = f"{_url}/rest/v1/{table}"
+    inserted = 0
+    # No "resolution=merge-duplicates" header — straight insert.
+    hdrs = {k: v for k, v in _headers.items() if k != "Prefer"}
+    hdrs["Prefer"] = "return=minimal"
+    for i in range(0, len(rows), 500):
+        batch = rows[i:i + 500]
+        resp = http_request("POST", url, headers=hdrs, json=batch, timeout=30)
+        if resp.status_code in (200, 201):
+            inserted += len(batch)
+        else:
+            log.error("Insert %s batch %d error %d: %s", table, i, resp.status_code, resp.text[:300])
     return inserted
 
 

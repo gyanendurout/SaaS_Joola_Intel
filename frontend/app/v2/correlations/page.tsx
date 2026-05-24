@@ -57,6 +57,17 @@ export default function CorrelationsPage() {
     [scans],
   )
 
+  // If the default target ('estimated_units_sold') isn't in the available
+  // targets (currently true — sales_estimates is empty so units_sold is
+  // never produced), auto-pick the first available so the page isn't
+  // permanently empty just because we don't have units-sold data yet.
+  useEffect(() => {
+    if (availableTargets.length === 0) return
+    if (!availableTargets.includes(target)) {
+      setTarget(availableTargets[0])
+    }
+  }, [availableTargets, target])
+
   // Filter scans by brand + target
   const filteredScans = useMemo(() => {
     return scans.filter((s) => {

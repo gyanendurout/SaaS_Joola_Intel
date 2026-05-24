@@ -153,52 +153,36 @@ def run(ctx: dict[str, Any]) -> int:
     brand_map = {r["slug"]: r["id"] for r in sb.get("brands", "id,slug")}
     if brand_filter:
         brand_map = {k: v for k, v in brand_map.items() if k in brand_filter}
-
-    # Get all tracked variants with product URLs
-    variants = sb.get_filtered(
-        "product_variants",
-        "id,brand_id,product_id",
-        "availability_status=not.eq.discontinued&limit=500",
-    )
-    # products_catalog has display_name + sku but NO product_url; join via products
-    # table for URL lookup keyed by (brand_id, lower(name) ~ lower(display_name)).
-    catalog = sb.get("products_catalog", "id,brand_id,display_name,sku")
-    products = {r["id"]: r for r in catalog}
-    url_by_pid: dict[str, str] = {}
-    try:
-        products_table = sb.get("products", "brand_id,name,url")
-        # Map (brand_id, lowercase_name) → url
-        url_lookup = {
-            (p["brand_id"], (p.get("name") or "").lower()): p.get("url")
-            for p in products_table if p.get("url")
-        }
-        for pc in catalog:
-            url = url_lookup.get((pc["brand_id"], (pc.get("display_name") or "").lower()))
-            if url:
-                url_by_pid[pc["id"]] = url
-    except Exception as e:
-        log.warning("Could not load products table for URLs: %s", str(e)[:200])
     brand_ids = set(brand_map.values())
-    variants = [v for v in variants if v.get("brand_id") in brand_ids]
+
+    # Scrape directly from `products` table — every row has brand_id + url.
+    # The earlier path joined products_catalog.display_name → products.name
+    # case-insensitively, which almost never matched, so 0 snapshots were
+    # ever produced. This simpler path takes EVERY product row with a URL
+    # and produces one snapshot per scrape. No variant alignment needed —
+    # the sales-intel page only reads snapshots by brand+product anyway.
+    products_table = sb.get("products", "id,brand_id,name,url")
+    products_table = [
+        p for p in products_table
+        if p.get("url") and p.get("brand_id") in brand_ids
+    ]
 
     if dry_run:
-        log.info("[DRY-RUN] would scrape inventory for %d variants", len(variants))
+        log.info("[DRY-RUN] would scrape inventory for %d products", len(products_table))
         return 0
+
+    log.info("Scraping inventory for %d products across %d brands",
+             len(products_table), len(brand_ids))
 
     now = datetime.now(timezone.utc).isoformat()
     rows: list[dict] = []
-    for variant in variants:
-        product_id = variant.get("product_id") or ""
-        product = products.get(product_id)
-        url = url_by_pid.get(product_id)
-        if not url:
-            continue
-
+    for product in products_table:
+        url = product["url"]
         signal = _scrape_page(url)
         rows.append({
-            "brand_id":              variant["brand_id"],
-            "product_id":            variant.get("product_id"),
-            "variant_id":            variant["id"],
+            "brand_id":              product["brand_id"],
+            "product_id":            product["id"],
+            "variant_id":            None,
             "snapshot_time":         now,
             "product_url":           url,
             "price":                 signal["price"],
@@ -210,6 +194,8 @@ def run(ctx: dict[str, Any]) -> int:
             "raw_payload":           signal["raw_payload"],
         })
 
-    n = sb.upsert("product_snapshots", rows, "variant_id,snapshot_time") if rows else 0
+    # product_snapshots is append-only (each scrape is a new snapshot_time row),
+    # so plain insert is correct here.
+    n = sb.insert("product_snapshots", rows) if rows else 0
     log.info("✓ %d product_snapshots recorded", n)
     return n

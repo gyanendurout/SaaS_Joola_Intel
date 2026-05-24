@@ -21,11 +21,13 @@ const MV_MISSING_RE = /(does not exist|42P01|relation .* does not exist|Could no
 
 async function fetchRecentTimeseries(days: number): Promise<TimeseriesRaw[]> {
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10)
+  // Migration 013 column names: metric_date, canonical_product_id, mention_count.
+  // We alias them back to the TimeseriesRaw shape used downstream.
   const { data, error } = await supabase
     .from('joola_timeseries_daily')
-    .select('brand_id,product_id,date,attention_score,mentions,estimated_units_sold')
-    .gte('date', cutoff)
-    .order('date', { ascending: true })
+    .select('brand_id,canonical_product_id,metric_date,attention_score,mention_count,estimated_units_sold')
+    .gte('metric_date', cutoff)
+    .order('metric_date', { ascending: true })
     .limit(20000)
 
   if (error) {
@@ -39,7 +41,23 @@ async function fetchRecentTimeseries(days: number): Promise<TimeseriesRaw[]> {
     }
     return []
   }
-  return (data as TimeseriesRaw[]) || []
+  // Normalise migration-013 column names into the legacy TimeseriesRaw shape.
+  type Mv013 = {
+    brand_id: string
+    canonical_product_id: string | null
+    metric_date: string
+    attention_score: number | null
+    mention_count: number | null
+    estimated_units_sold: number | null
+  }
+  return ((data as Mv013[]) || []).map((r) => ({
+    brand_id: r.brand_id,
+    product_id: r.canonical_product_id,
+    date: r.metric_date,
+    attention_score: r.attention_score,
+    mentions: r.mention_count,
+    estimated_units_sold: r.estimated_units_sold,
+  }))
 }
 
 export default function LeaderboardPage() {
@@ -62,14 +80,14 @@ export default function LeaderboardPage() {
         const [tsRows, scanRows, { data: prodRows }] = await Promise.all([
           fetchRecentTimeseries(28),
           fetchLagScans(),
-          supabase.from('products').select('id,name').limit(5000),
+          supabase.from('products_catalog').select('id,display_name').limit(5000),
         ])
         if (cancelled) return
         setTs(tsRows)
         setScans(scanRows)
         const pMap: Record<string, string> = {}
-        ;(prodRows || []).forEach((p: { id: string; name: string | null }) => {
-          pMap[p.id] = p.name || ''
+        ;(prodRows || []).forEach((p: { id: string; display_name: string | null }) => {
+          pMap[p.id] = p.display_name || ''
         })
         setProductNames(pMap)
       } catch (err) {

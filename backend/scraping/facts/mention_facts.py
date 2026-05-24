@@ -115,12 +115,18 @@ def _clear_channel_facts(channel: str) -> None:
 
 
 def _insert_facts(rows: list[dict]) -> int:
+    # Plain insert — _clear_channel_facts() already deleted this channel's
+    # rows, so we don't need ON CONFLICT (and the existing unique index
+    # uses COALESCE which PostgREST can't address).
     if not rows:
         return 0
-    return sb.upsert("mention_facts", rows, "channel,source_table,source_id,brand_id,product_id")
+    return sb.insert("mention_facts", rows)
 
 
 def _insert_switch_events(rows: list[dict]) -> int:
+    # competitor_switch_events is not cleared per-run, so we need ON CONFLICT.
+    # If this throws "no unique constraint" the table needs a UNIQUE
+    # CONSTRAINT covering these columns added by a migration.
     if not rows:
         return 0
     return sb.upsert("competitor_switch_events", rows, "posted_at,from_brand_id,to_brand_id")
