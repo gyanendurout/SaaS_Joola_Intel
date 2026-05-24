@@ -137,6 +137,38 @@ JS_FRANKLIN = r"""() => {
     return out;
 }"""
 
+JS_ENGAGE = r"""() => {
+    // Scope to the listing area to avoid menu items that also use /products/
+    const container = document.querySelector('.filters-results, .product-list, .grid--row-gutters');
+    const cards = (container || document).querySelectorAll('.card.column, .card.quarter, .card');
+    const out = []; const seen = new Set();
+    cards.forEach(card => {
+        const titleEl = card.querySelector('.card__title, h3, h2');
+        const linkEl = card.querySelector('.card__link, a[href*="/products/"]');
+        const imgEl = card.querySelector('img');
+        const allText = (card.innerText || '');
+        const name = titleEl?.innerText?.trim();
+        if (!name || seen.has(name) || name.length < 3) return;
+        // Skip nav-menu rejects with very short generic names
+        if (/^(by performance|by type|advanced|intermediate|beginner|new|sale)/i.test(name)
+            && name.length < 25) return;
+        seen.add(name);
+        const priceMatch = allText.match(/\$\d+\.\d{2}/);
+        const ratingMatch = allText.match(/(\d+\.\d+)\s*out\s*(?:of\s*)?5/i);
+        const reviewMatch = allText.match(/(\d+)\s*Reviews?/i);
+        out.push({
+            name,
+            price: priceMatch ? priceMatch[0] : null,
+            rating: ratingMatch ? ratingMatch[1] : null,
+            reviewCount: reviewMatch ? reviewMatch[1] : null,
+            link: linkEl?.href || null,
+            thumbnail: imgEl?.src || imgEl?.getAttribute('data-src') || null,
+            inStock: !allText.toLowerCase().includes('sold out'),
+        });
+    });
+    return out;
+}"""
+
 JS_HEAD = r"""() => {
     const cards = document.querySelectorAll('[class*="productCard-root"]');
     const out = []; const seen = new Set();
@@ -175,15 +207,17 @@ JS_HEAD = r"""() => {
 # ---------------------------------------------------------------------------
 BRAND_SCRAPERS: list[dict[str, Any]] = [
     {"slug": "joola",    "url": "https://joola.com/collections/pickleball-paddles",
-     "wait_for": ".card.card-product", "js": JS_JOOLA, "currency": "USD"},
+     "wait_for": ".card.card-product", "js": JS_JOOLA, "currency": "USD", "stealth": False},
     {"slug": "six-zero", "url": "https://www.sixzeropickleball.com/collections/paddles",
-     "wait_for": ".grid__item",        "js": JS_SIX_ZERO, "currency": "AUD"},
+     "wait_for": ".grid__item",        "js": JS_SIX_ZERO, "currency": "AUD", "stealth": False},
     {"slug": "onix",     "url": "https://www.onixpickleball.com/collections/paddles",
-     "wait_for": ".ProductItem",       "js": JS_ONIX, "currency": "USD"},
+     "wait_for": ".ProductItem",       "js": JS_ONIX, "currency": "USD", "stealth": False},
     {"slug": "franklin", "url": "https://www.franklinsports.com/pickleball/paddles",
-     "wait_for": ".product-item",      "js": JS_FRANKLIN, "currency": "USD"},
+     "wait_for": ".product-item",      "js": JS_FRANKLIN, "currency": "USD", "stealth": False},
     {"slug": "head",     "url": "https://www.head.com/en_US/shop-pickleball/paddle",
-     "wait_for": '[class*="productCard-root"]', "js": JS_HEAD, "currency": "USD"},
+     "wait_for": '[class*="productCard-root"]', "js": JS_HEAD, "currency": "USD", "stealth": False},
+    {"slug": "engage",   "url": "https://engagepickleball.com/collections/allpaddles",
+     "wait_for": ".card", "js": JS_ENGAGE, "currency": "USD", "stealth": True},
 ]
 
 
@@ -197,14 +231,34 @@ def _parse_price(raw: str | None) -> float | None:
     return float(m.group()) if m else None
 
 
-def _scrape_brand(p_ctx, cfg: dict[str, Any]) -> list[dict[str, Any]]:
-    """Scrape one brand using its Playwright context. Returns raw items dicts."""
+def _scrape_brand(browser, cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    """Scrape one brand. Each brand gets a fresh context so per-brand stealth
+    + headers don't leak between brands."""
     log.info("  → local scrape: %s (%s)", cfg["slug"], cfg["url"])
-    page = p_ctx.new_page()
+    ctx = browser.new_context(
+        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        viewport={"width": 1440, "height": 900},
+        locale="en-US",
+        timezone_id="America/New_York",
+        extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+    )
+    # Apply stealth only for brands that need to defeat anti-bot detection
+    if cfg.get("stealth"):
+        try:
+            from playwright_stealth import Stealth
+            Stealth().apply_stealth_sync(ctx)
+        except ImportError:
+            log.warning("  ⚠ %s wants stealth but playwright-stealth not installed", cfg["slug"])
+    page = ctx.new_page()
     try:
         page.goto(cfg["url"], wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_selector(cfg["wait_for"], state="attached", timeout=15000)
-        page.wait_for_timeout(3000)
+        # Stealth-requiring sites tend to need longer settling time
+        page.wait_for_timeout(8000 if cfg.get("stealth") else 3000)
+        try:
+            page.wait_for_selector(cfg["wait_for"], state="attached", timeout=15000)
+        except Exception:
+            pass  # Some pages already have content; wait_for_timeout above covers it
         # Scroll to trigger lazy loading
         for _ in range(6):
             page.evaluate("window.scrollBy(0, 800)")
@@ -219,6 +273,7 @@ def _scrape_brand(p_ctx, cfg: dict[str, Any]) -> list[dict[str, Any]]:
         return []
     finally:
         page.close()
+        ctx.close()
 
 
 # ---------------------------------------------------------------------------
@@ -249,11 +304,9 @@ def run(ctx: dict[str, Any]) -> int:
 
     log.info("Local Playwright catalog scrape for %d brands", len(targets))
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        p_ctx = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1440, "height": 900},
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
         )
         for cfg in targets:
             brand_id = brand_map.get(cfg["slug"])
@@ -261,7 +314,7 @@ def run(ctx: dict[str, Any]) -> int:
                 log.warning("  ⚠ skipping %s: brand not in DB", cfg["slug"])
                 continue
 
-            items = _scrape_brand(p_ctx, cfg)
+            items = _scrape_brand(browser, cfg)
             for it in items:
                 name = (it.get("name") or "").strip()
                 if len(name) < 3:
@@ -282,6 +335,20 @@ def run(ctx: dict[str, Any]) -> int:
                     discount_pct = round((regular - sale) / regular * 100, 1)
                 # Only store price_usd when the source currency is USD
                 price_usd = actual if cfg.get("currency", "USD") == "USD" else None
+                # Rating/reviews — only populated by brands whose collection
+                # page exposes ratings inline (currently engage). Parse defensively.
+                rating_raw = it.get("rating")
+                review_raw = it.get("reviewCount")
+                try:
+                    avg_rating = float(rating_raw) if rating_raw else None
+                    if avg_rating is not None and not (0 < avg_rating <= 5):
+                        avg_rating = None
+                except (TypeError, ValueError):
+                    avg_rating = None
+                try:
+                    review_count = int(review_raw) if review_raw else None
+                except (TypeError, ValueError):
+                    review_count = None
                 all_rows.append({
                     "brand_id":        brand_id,
                     "name":            name[:300],
@@ -291,8 +358,8 @@ def run(ctx: dict[str, Any]) -> int:
                     "sale_price_usd":  sale if cfg.get("currency", "USD") == "USD" else None,
                     "currency":        cfg.get("currency", "USD"),
                     "country_code":    "AU" if cfg.get("currency") == "AUD" else "US",
-                    "avg_rating":      None,
-                    "review_count":    None,
+                    "avg_rating":      avg_rating,
+                    "review_count":    review_count,
                     "in_stock":        bool(it.get("inStock", True)),
                     "discount_pct":    discount_pct,
                     "last_scraped_at": now_iso,
