@@ -239,7 +239,9 @@
       "Bash(python -c \"from pathlib import Path; p = Path\\('backend/scraping/core/settings.py'\\).resolve\\(\\); print\\('file:', p\\); [print\\(f'parents[{i}]:', p.parents[i]\\) for i in range\\(5\\)]\")",
       "Bash(sed -i 's|scripts/scraping/run.py|backend/scraping/run.py|g' analytics_backend/run.py)",
       "Bash(grep -rn \"scripts\\\\.scraping\\\\|scripts/scraping\\\\|scripts\\\\.analytics_backend\\\\|scripts/analytics_backend\\\\|scripts/.env\\\\|scripts\\\\\\\\\\\\\\\\.env\\\\|scripts\\\\.pipeline\" analytics_backend backend scripts --include=\"*.py\")",
-      "Bash(python -m backend.scraping.run --module maintenance --source backfill_youtube_comments --dry-run)"
+      "Bash(python -m backend.scraping.run --module maintenance --source backfill_youtube_comments --dry-run)",
+      "Bash(python -m analytics_backend.run --module all --dry-run)",
+      "Bash(python -c \"import yaml; [yaml.safe_load\\(open\\(f\\)\\) for f in ['.github/workflows/ci.yml', '.github/workflows/weekly-pipeline.yml']]; print\\('YAML valid'\\)\")"
     ],
     "additionalDirectories": [
       "\\tmp",

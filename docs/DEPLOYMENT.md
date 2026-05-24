@@ -1,6 +1,108 @@
-# 07 — Deployment
+# Deployment
 
-> **Goal.** Deploy the Next.js dashboard to Vercel with Supabase as the DB. Cover env vars, secrets, the auto-deploy loop, and the POC → prod hardening list.
+> **Goal.** Three independent deployments — Next.js frontend on Vercel, two
+> Python pipelines on GitHub Actions cron — sharing one Supabase database.
+
+---
+
+## Topology (after 2026-05-24 three-way split)
+
+```
+                              ┌──────────────────────────────┐
+                              │  Supabase Postgres           │
+                              │  project loecyghnkkxyymelgexz│
+                              └──────────────────────────────┘
+                                    ▲           ▲          │
+                       writes       │           │ writes   │ reads (anon)
+                       (service)    │           │(service) ▼
+┌────────────────────────────┐      │   ┌──────────────────────────┐
+│ GH Actions cron            │──────┘   │ Vercel                   │
+│ .github/workflows/         │          │ frontend/ (Next.js 14)   │
+│   weekly-pipeline.yml      │          │ auto-deploy on push main │
+│ ┌──────────────────────┐   │          │ ~90 s build              │
+│ │ backend.scraping     │   │          └──────────────────────────┘
+│ │ (9 channels + AI)    │   │                  ▲
+│ ├──────────────────────┤   │                  │
+│ │ analytics_backend    │   │                  │
+│ │ (marts + statistics) │   │     pushes to main branch
+│ └──────────────────────┘   │                  │
+│ Monday 01:30 UTC weekly    │          ┌──────────────────────────┐
+│ + workflow_dispatch        │          │ Developer laptop         │
+└────────────────────────────┘          │ git push origin main     │
+                                        └──────────────────────────┘
+```
+
+Three deployments, three concerns:
+
+| Unit | Source | Trigger | Host |
+|---|---|---|---|
+| `frontend/` | `git push main` | GitHub → Vercel webhook | Vercel |
+| `backend/` | scheduled | GitHub Actions cron + manual | GH Actions runner |
+| `analytics_backend/` | after backend (same workflow) | GitHub Actions cron + manual | GH Actions runner |
+
+All three read/write the same Supabase project.
+
+---
+
+## Required GitHub repo secrets
+
+Set in **Settings → Secrets and variables → Actions**:
+
+| Secret | Used by | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `ci.yml` (build) | Frontend Supabase REST URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `ci.yml` (build) | Frontend anon-role JWT |
+| `SUPABASE_URL` | `weekly-pipeline.yml` | Backend Supabase REST URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | `weekly-pipeline.yml` | Backend service-role JWT (write access) |
+| `APIFY_TOKEN` | `weekly-pipeline.yml` (scraping) | Apify actor invocations |
+| `OPENAI_API_KEY` | `weekly-pipeline.yml` (enrichment) + `ci.yml` | GPT-4o-mini for sentiment / NER |
+
+> The two `SUPABASE_*` pairs (`NEXT_PUBLIC_*` and bare) hold different keys —
+> anon vs service-role. The frontend MUST only see anon; the pipeline MUST use
+> service-role.
+
+Vercel maintains its own separate copy of the `NEXT_PUBLIC_*` secrets in
+**Vercel Project → Settings → Environment Variables** (production + preview).
+GitHub secrets are only used by the GH Actions builds; they don't propagate
+to Vercel.
+
+---
+
+## One-time Vercel setting (post-reorg)
+
+After the 2026-05-24 reorg, the Next.js app lives in `frontend/` instead of
+the repo root. Update once in the Vercel dashboard:
+
+**Project → Settings → General → Root Directory → `frontend/` → Save**
+
+Vercel re-runs the next build from that path. No code change needed.
+
+---
+
+## Weekly pipeline workflow
+
+File: `.github/workflows/weekly-pipeline.yml`
+
+- **Cron**: `30 1 * * 1` — Monday 01:30 UTC (07:00 IST / 21:30 ET Sunday).
+- **Manual**: Actions tab → "Weekly Data Pipeline" → Run workflow.
+- **Stages** (selectable via manual trigger):
+  - `all` — scrape (with AI enrichment + facts), then analytics
+  - `scraping-only` — just `backend.scraping` (with `--restart`)
+  - `analytics-only` — just `analytics_backend.run`
+  - `enrichment-only` — replay GPT enrichment without re-scraping
+  - `facts-only` — rebuild `mention_facts` after manual fixup
+- **Dry run flag**: skips API calls and DB writes, prints what would happen.
+- **Timeout**: 4 hours (full run normally 30-60 min).
+- **Logs**: uploaded as `pipeline-logs-<run_id>` artifact (14-day retention).
+- **Concurrency**: only one pipeline run at a time; queued (not canceled).
+
+---
+
+## Original deployment notes (pre-reorg detail)
+
+> The section below documents the original Vercel + Supabase setup. Most of
+> it still applies — the only structural change is the Root Directory
+> setting above and the move of all Next.js files into `frontend/`.
 
 ---
 
