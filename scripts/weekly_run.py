@@ -45,16 +45,17 @@ from pathlib import Path
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 REPO_ROOT = Path(__file__).parent.parent
-ENV_FILE  = REPO_ROOT / "scripts" / ".env"
+ENV_FILE  = REPO_ROOT / ".env"
 
-# Add repo root to path so `scripts.pipeline.*` imports work
+# Add repo root to path so `backend.scraping.*` and `analytics_backend.*`
+# imports resolve when this script is invoked as `python scripts/weekly_run.py`.
 sys.path.insert(0, str(REPO_ROOT))
 
 # ── Environment ────────────────────────────────────────────────────────────────
 try:
     from dotenv import load_dotenv
     load_dotenv(ENV_FILE)
-    load_dotenv(REPO_ROOT / ".env")          # fallback
+    load_dotenv(REPO_ROOT / "scripts" / ".env")   # legacy fallback
 except ImportError:
     pass  # python-dotenv optional; env vars can be set in shell instead
 
@@ -160,7 +161,7 @@ def main() -> int:
 
     # Phase 1-4 — scraping pipeline (instagram, youtube, …, enrichment, facts)
     try:
-        from scripts.scraping.run import main as _scraping_main
+        from backend.scraping.run import main as _scraping_main
         _scraping_main(pipeline_argv)
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else (1 if exc.code else 0)
@@ -183,7 +184,7 @@ def main() -> int:
         log.info("  Scraping done. Starting analytics backend.")
         log.info("=" * 65)
         try:
-            from scripts.analytics_backend.run import main as _analytics_main
+            from analytics_backend.run import main as _analytics_main
             analytics_argv: list[str] = ["--module", "all"]
             if args.dry_run:
                 analytics_argv.append("--dry-run")

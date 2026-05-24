@@ -33,7 +33,7 @@ EXPECTED_OBJECTS = [
 
 
 def load_env() -> None:
-    """Load scripts/.env into os.environ if python-dotenv is available."""
+    """Load .env into os.environ if python-dotenv is available."""
     env_file = REPO_ROOT / "scripts" / ".env"
     if not env_file.exists():
         return
@@ -215,7 +215,7 @@ def manual_instructions() -> None:
     print( "  3. Click Run.")
     print()
     print("To enable the automatic path next time, add ONE of these to")
-    print("scripts/.env:")
+    print(".env:")
     print( "  SUPABASE_DB_URL=postgresql://postgres.<ref>:<pwd>@aws-0-<region>"
            ".pooler.supabase.com:6543/postgres")
     print( "  OR")

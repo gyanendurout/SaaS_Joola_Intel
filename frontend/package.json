@@ -1,0 +1,40 @@
+{
+  "name": "joola-intel",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit",
+    "validate": "npm run type-check && npm run lint",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "qa": "powershell.exe -ExecutionPolicy Bypass -File ./qa/regression.ps1",
+    "qa:fast": "powershell.exe -ExecutionPolicy Bypass -File ./qa/regression.ps1 -SkipBuild -Continue",
+    "deploy": "powershell.exe -ExecutionPolicy Bypass -File ../scripts/deploy.ps1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "cheerio": "^1.2.0",
+    "next": "14.2.5",
+    "openai": "^6.33.0",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "husky": "^9.0.0",
+    "playwright-core": "^1.60.0",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}

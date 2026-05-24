@@ -1,10 +1,14 @@
 #!/bin/sh
-# Pre-push gate — runs the regression suite before allowing a push.
+# Pre-push gate — runs the frontend regression suite before allowing a push.
 # Bypass with: git push --no-verify  (use only when you know what you're doing).
+#
+# After the 2026-05-24 reorg, the Next.js app + qa/ live under frontend/, so
+# husky must cd in before invoking the regression script.
 
 echo ""
-echo "[pre-push] running qa/regression.ps1 -SkipBuild -Continue..."
-powershell.exe -ExecutionPolicy Bypass -File "$(git rev-parse --show-toplevel)/qa/regression.ps1" -SkipBuild -Continue
+echo "[pre-push] running frontend qa/regression.ps1 -SkipBuild -Continue..."
+repo_root=$(git rev-parse --show-toplevel)
+powershell.exe -ExecutionPolicy Bypass -File "$repo_root/frontend/qa/regression.ps1" -SkipBuild -Continue
 status=$?
 
 if [ $status -ne 0 ]; then

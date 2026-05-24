@@ -1,46 +1,105 @@
-# JOOLA Intel — Pickleball Competitor Intelligence
+# JOOLA Intel
 
-Next.js 14 dashboard reading live data from Supabase.
+Pickleball competitive intelligence platform. Tracks 11 brands across all
+social channels, ad libraries, product catalogs, and athlete networks; ships
+a Next.js dashboard backed by Supabase.
 
-## Quick Start
+## Layout
 
+```
+joola-intel-nextjs/
+├── frontend/            # Next.js 14 dashboard (deploys to Vercel)
+├── backend/             # Python scraping pipeline (runs locally / cron)
+│   └── scraping/        # All 9 scrape channels + AI enrichment + facts
+├── analytics_backend/   # Python statistical pipeline (lag scans, Granger,
+│                        # changepoints) — runs after scraping
+├── scripts/             # Cross-cutting utilities (deploy, weekly run,
+│                        # one-off migrations)
+├── migrations/          # SQL migrations (shared by backend + analytics)
+├── docs/                # Architecture, runbooks, recovery docs
+├── .env                 # Shared Python env (gitignored)
+├── .env.example         # Template for new clones
+└── CLAUDE.md            # Claude Code session memory
+```
+
+Three independent deployment units:
+
+| Unit | Purpose | Deploy target |
+|---|---|---|
+| `frontend/` | Next.js dashboard | Vercel (auto on push to `main`) |
+| `backend/` | Scrape + enrich + fact-derive | Local cron / Railway / GH Actions |
+| `analytics_backend/` | Refresh marts + run stats | Same host as backend |
+
+## Quick start
+
+### Frontend
 ```bash
+cd frontend
 npm install
-npm run dev
-# Open http://localhost:3000
+cp .env.example .env.local   # then fill in NEXT_PUBLIC_SUPABASE_*
+npm run dev                   # http://localhost:3000
 ```
 
-## Pages
-| Page | Route | Description |
-|------|-------|-------------|
-| Overview & Insights | / | KPIs, IG benchmarking, SOV, engagement matrix, competitive positioning, 8 content gaps, 5 growth opportunities |
-| Instagram | /instagram | Follower comparison, posts by brand, top posts by engagement, posts feed |
-| YouTube | /youtube | Videos per brand, views, subscribers, top videos |
-| Reddit | /reddit | Brand mentions, top upvoted posts |
-| Influencers | /influencers | 2026 verified roster (27 athletes), active/inactive status |
-| Products & Reviews | /products | 114 products, avg rating, review count, price comparison, full catalog |
-
-## Data Sources (updated every Monday 7AM IST)
-- Instagram: 141 posts, 11 brand profiles
-- YouTube: 387 videos, 11 channel snapshots
-- Reddit: 38 brand mentions
-- Products: 114 products from brand websites
-- Influencers: 27 athletes (2026 verified roster)
-
-## Add a New Page
-1. Create `app/your-page/page.tsx`
-2. Add to nav in `components/Sidebar.tsx`
-3. Query Supabase: `supabase.from('table').select('*')`
-
-## Deploy to Vercel
+### Backend (scraping pipeline)
 ```bash
-npm i -g vercel
-vercel
+python -m pip install -r backend/requirements.txt
+cp .env.example .env          # fill in SUPABASE_SERVICE_ROLE_KEY, APIFY_TOKEN, OPENAI_API_KEY
+python -m backend.scraping.run --module all                  # full weekly run
+python -m backend.scraping.run --module enrichment           # just AI enrichment
+python -m backend.scraping.run --module instagram --brands joola,selkirk
 ```
 
-## Database Tables (Supabase)
-brands, ig_accounts, ig_profiles_weekly, ig_posts, ig_post_analysis,
-ig_comments, ig_comment_analysis, yt_channels, yt_channel_weekly,
-yt_videos, yt_video_analysis, yt_comments, yt_comment_analysis,
-products, product_reviews, reddit_mentions, news_mentions,
-influencers, influencer_posts, weekly_run_log
+### Analytics backend
+```bash
+python -m pip install -r analytics_backend/requirements.txt
+python -m analytics_backend.run                              # marts + stats
+```
+
+### One-shot weekly pipeline (scraping → analytics)
+```bash
+python scripts/weekly_run.py
+```
+
+## Deployment
+
+```bash
+# Frontend (Vercel auto-deploys on push to main)
+git push origin main
+
+# Frontend qa-gated deploy from CLI
+cd frontend && npm run deploy -- -Message "fix: …"
+```
+
+Vercel project setting required after the 2026-05-24 reorg:
+**Settings → General → Root Directory → `frontend/`**.
+
+## Key docs
+
+| Doc | Read it when |
+|---|---|
+| [docs/BUSINESS_REQUIREMENTS.md](docs/BUSINESS_REQUIREMENTS.md) | New to JOOLA Intel — start here |
+| [docs/CODE_ARCHITECTURE.md](docs/CODE_ARCHITECTURE.md) | Mapping a feature end-to-end |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Shipping or hardening prod |
+| [docs/SCRAPING_PIPELINE.md](docs/SCRAPING_PIPELINE.md) | Adding / debugging a scraper |
+| [docs/AI_ENRICHMENT.md](docs/AI_ENRICHMENT.md) | Tuning sentiment / crisis / NER |
+| [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Building a new dashboard page |
+| [docs/RUNBOOK.md](docs/RUNBOOK.md) | Pipeline broke at 2 AM |
+| [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md) | Schema rebuild from migrations |
+| [docs/RECOVERY_INDEX.md](docs/RECOVERY_INDEX.md) | Index of all recovery docs |
+| [CLAUDE.md](CLAUDE.md) | Per-session memory for Claude Code |
+
+## Live URLs
+
+- **Production**: https://saas-joola-intel.vercel.app
+- **GitHub**: https://github.com/gyanendurout/SaaS_Joola_Intel
+- **Supabase**: project `loecyghnkkxyymelgexz`
+
+## Husky pre-push (fresh clones)
+
+After cloning, one-time setup so the pre-push regression hook runs:
+
+```bash
+git config core.hooksPath .husky
+```
+
+The hook lives at `.husky/pre-push` and invokes `frontend/qa/regression.ps1`.

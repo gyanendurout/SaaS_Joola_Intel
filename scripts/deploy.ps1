@@ -42,8 +42,8 @@ try {
     Write-Host "WARN: -SkipQa set. Skipping regression suite." -ForegroundColor Yellow
     Write-Host "      Only use this for docs-only or trivial config changes." -ForegroundColor Yellow
   } else {
-    Write-Host "[1/3] QA gate (qa/regression.ps1 -SkipBuild -Continue)..." -ForegroundColor Cyan
-    & "$ProjectRoot\qa\regression.ps1" -SkipBuild -Continue
+    Write-Host "[1/3] QA gate (frontend/qa/regression.ps1 -SkipBuild -Continue)..." -ForegroundColor Cyan
+    & "$ProjectRoot\frontend\qa\regression.ps1" -SkipBuild -Continue
     if ($LASTEXITCODE -ne 0) {
       Write-Host ""
       Write-Host "DEPLOY BLOCKED: QA regression failed. Fix the issues and re-run." -ForegroundColor Red

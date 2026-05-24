@@ -234,10 +234,16 @@
       "PowerShell(python -c \"from pathlib import Path; p = Path\\('scripts/scraping/core/settings.py'\\).resolve\\(\\); print\\('file:', p\\); print\\('parents[3]:', p.parents[3]\\); print\\('parents[4]:', p.parents[4]\\)\")",
       "Bash(python -m scripts.scraping.run --module enrichment)",
       "Bash(python -m scripts.scraping.run --module facts --source mention_facts)",
-      "Bash(echo \"exit: $?\")"
+      "Bash(echo \"exit: $?\")",
+      "Bash(rm -f scripts/*.log scripts/browser_audit.mjs scripts/smoke_test_v2_results.json 2>&1; ls scripts/ 2>&1)",
+      "Bash(python -c \"from pathlib import Path; p = Path\\('backend/scraping/core/settings.py'\\).resolve\\(\\); print\\('file:', p\\); [print\\(f'parents[{i}]:', p.parents[i]\\) for i in range\\(5\\)]\")",
+      "Bash(sed -i 's|scripts/scraping/run.py|backend/scraping/run.py|g' analytics_backend/run.py)",
+      "Bash(grep -rn \"scripts\\\\.scraping\\\\|scripts/scraping\\\\|scripts\\\\.analytics_backend\\\\|scripts/analytics_backend\\\\|scripts/.env\\\\|scripts\\\\\\\\\\\\\\\\.env\\\\|scripts\\\\.pipeline\" analytics_backend backend scripts --include=\"*.py\")",
+      "Bash(python -m backend.scraping.run --module maintenance --source backfill_youtube_comments --dry-run)"
     ],
     "additionalDirectories": [
-      "\\tmp"
+      "\\tmp",
+      "C:\\Workspace\\joola-intel-nextjs\\scripts"
     ]
   },
   "hooks": {
