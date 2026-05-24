@@ -1,4 +1,9 @@
-"""X/Twitter influencer posts scraper."""
+"""X/Twitter influencer posts scraper.
+
+Handles are read exclusively from the `influencers.x_handle` DB column.
+Verification policy (migration 005): only empirically confirmed handles are
+non-NULL. Do NOT add a hardcoded fallback dict — the DB is the source of truth.
+"""
 
 from __future__ import annotations
 
@@ -10,50 +15,22 @@ from ...core.logger import get_logger
 
 log = get_logger("twitter.influencers")
 
-INFLUENCER_X_HANDLES: dict[str, str] = {
-    "alexneumann_pb":     "AlexNeumann",
-    "allycejones_pb":     "AllyceJones",
-    "andreidae_pb":       "AndreiDaescu",
-    "anna.leigh.waters":  "AnnaLeighWaters",
-    "annabright.pb":      "AnnaBright",
-    "aspenkern_pb":       "AspenKern",
-    "benjohns_pb":        "BenJohns_pb",
-    "blainehovenier":     "BlaineHovenier",
-    "bobbioshiro":        "BobbiOshiro",
-    "catherineparenteau": "CParenteau",
-    "connorgarnett_pb":   "ConnorGarnett",
-    "ericoncins_pb":      "EricOncins",
-    "gabejoseph_pb":      "GabeJoseph",
-    "jamesignatowich":    "JIgnatowich",
-    "jaydevilliers":      "JayDevilliers",
-    "jessie_irvine_pb":   "JessieIrvine",
-    "jorjajohnsonpb":     "JorjaJohnson",
-    "kyle_yates_pb":      "KyleYates_pb",
-    "leighwaters_pb":     "LeighWaters",
-    "patricksmithpb":     "PatrickSmithPB",
-    "rileynewmanpb":      "RileyNewmanPB",
-    "roscoebellamy":      "RoscoeBellamy",
-    "sarahansboury":      "SarahAnsboury",
-    "simonejardim_pb":    "SimoneJardim",
-    "tannertomassi":      "TannerTomassi",
-    "tysonmcguffin":      "TysonMcGuffin",
-    "zanenavratil":       "ZaneNavratil",
-}
-
 
 def run(ctx: dict[str, Any]) -> int:
     dry_run: bool = ctx.get("dry_run", False)
 
+    # DB is the single source of truth — handles verified via migration 005.
+    # Rows with x_handle = NULL are skipped (unconfirmed guesses).
     inf_rows = sb.get("influencers", "id,brand_id,instagram_handle,x_handle")
     inf_map: dict[str, dict] = {}
     for r in inf_rows:
-        x_handle = r.get("x_handle") or INFLUENCER_X_HANDLES.get(r.get("instagram_handle") or "")
+        x_handle = r.get("x_handle")
         if x_handle:
             inf_map[x_handle.lower()] = {"influencer_id": r["id"], "brand_id": r["brand_id"]}
 
-    handles = list({v: k for k, v in INFLUENCER_X_HANDLES.items()}.keys())
+    handles = list(inf_map.keys())
     if not handles:
-        log.info("No influencer X handles configured")
+        log.info("No influencer X handles in DB (influencers.x_handle)")
         return 0
 
     if dry_run:

@@ -1,4 +1,9 @@
-"""X/Twitter brand posts scraper."""
+"""X/Twitter brand posts scraper.
+
+Handles are read from the `x_accounts` DB table — the single source of truth.
+Verified brand handles seeded via migration 003. Brands without a confirmed X
+account (crbn, six-zero, engage) have no row in x_accounts and are skipped.
+"""
 
 from __future__ import annotations
 
@@ -11,14 +16,6 @@ from ...core.logger import get_logger
 
 log = get_logger("twitter.brands")
 
-X_HANDLES: dict[str, str] = {
-    "joola":     "joolapickleball",
-    "selkirk":   "SelkirkSport",
-    "franklin":  "FranklinSports",
-    "paddletek": "PaddletekLLC",
-    "onix":      "OnixPickleball",
-}
-
 
 def run(ctx: dict[str, Any]) -> int:
     dry_run: bool = ctx.get("dry_run", False)
@@ -26,13 +23,20 @@ def run(ctx: dict[str, Any]) -> int:
 
     brand_map = {r["slug"]: r["id"] for r in sb.get("brands", "id,slug")}
     x_accounts = sb.get("x_accounts", "id,handle,brand_id")
-    handle_map: dict[str, dict] = {r["handle"].lower(): {"account_id": r["id"], "brand_id": r["brand_id"]}
-                                    for r in x_accounts}
 
-    handles = list(X_HANDLES.values())
+    # Build handle map from DB — covers all brands seeded in x_accounts
+    handle_map: dict[str, dict] = {
+        r["handle"].lower(): {"account_id": r["id"], "brand_id": r["brand_id"]}
+        for r in x_accounts
+    }
+
+    # Apply brand filter using brand_ids derived from slugs
     if brand_filter:
-        handles = [h for slug, h in X_HANDLES.items() if slug in brand_filter]
+        allowed_ids = {brand_map[s] for s in brand_filter if s in brand_map}
+        handle_map = {h: info for h, info in handle_map.items()
+                      if info["brand_id"] in allowed_ids}
 
+    handles = list(handle_map.keys())
     if not handles:
         log.info("No X handles to scrape")
         return 0

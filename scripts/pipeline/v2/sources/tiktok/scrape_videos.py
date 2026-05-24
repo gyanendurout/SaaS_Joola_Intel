@@ -1,4 +1,9 @@
-"""TikTok brand videos scraper."""
+"""TikTok brand videos scraper.
+
+Handles are read from the `tiktok_accounts` DB table — the single source of truth.
+Seeded via migration 003. Add/remove brands by updating tiktok_accounts in Supabase,
+not by editing this file.
+"""
 
 from __future__ import annotations
 
@@ -11,18 +16,6 @@ from ...core.logger import get_logger
 
 log = get_logger("tiktok.videos")
 
-TIKTOK_HANDLES: dict[str, str] = {
-    "joola":     "joolapickleball",
-    "selkirk":   "selkirksport",
-    "crbn":      "crbnpickleball",
-    "franklin":  "franklinsportsofficial",
-    "engage":    "engage_pickleball",
-    "six-zero":  "sixzeropickleball",
-    "onix":      "onix_pickleball",
-    "wilson":    "wilsonsportinggoods",
-    "gamma":     "gammasports",
-}
-
 
 def run(ctx: dict[str, Any]) -> int:
     dry_run: bool = ctx.get("dry_run", False)
@@ -30,25 +23,34 @@ def run(ctx: dict[str, Any]) -> int:
 
     brand_map = {r["slug"]: r["id"] for r in sb.get("brands", "id,slug")}
     tiktok_accounts = sb.get("tiktok_accounts", "id,handle,brand_id")
+
+    # Build from DB — covers all brands seeded in tiktok_accounts
     handle_map: dict[str, dict] = {
         r["handle"].lower(): {"account_id": r["id"], "brand_id": r["brand_id"]}
         for r in tiktok_accounts
     }
 
-    handles_to_scrape = {
-        slug: h for slug, h in TIKTOK_HANDLES.items()
-        if not brand_filter or slug in brand_filter
-    }
+    # Apply brand filter using brand_ids
+    if brand_filter:
+        allowed_ids = {brand_map[s] for s in brand_filter if s in brand_map}
+        handle_map = {h: info for h, info in handle_map.items()
+                      if info["brand_id"] in allowed_ids}
+
+    handles = list(handle_map.keys())
 
     if dry_run:
-        log.info("[DRY-RUN] would scrape TikTok for: %s", list(handles_to_scrape.keys()))
+        log.info("[DRY-RUN] would scrape TikTok for %d handles: %s", len(handles), handles)
         return 0
 
     today = date.today()
     iso_year, iso_week, _ = today.isocalendar()
 
+    if not handles:
+        log.info("No TikTok handles in DB (tiktok_accounts)")
+        return 0
+
     items = apify.run_and_fetch("clockworks/tiktok-scraper", {
-        "profiles": list(handles_to_scrape.values()),
+        "profiles": handles,
         "resultsPerPage": 50,
     })
 

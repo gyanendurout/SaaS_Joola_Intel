@@ -40,6 +40,13 @@ create table if not exists x_posts (
 );
 
 -- Seed X accounts
+-- VERIFICATION POLICY (2026-05-24): Only handles confirmed to return scraped
+-- posts are seeded. Brands without confirmed X handles are intentionally
+-- omitted — DO NOT add guesses here. Verified absences (no X account exists):
+--   - crbn       (confirmed via crbnpickleball.com — IG/TikTok/FB only)
+--   - six-zero   (confirmed via sixzeropickleball.com — IG/FB only)
+--   - engage     (confirmed via engagepickleball.com — FB/YT/IG/TT only)
+--   - head       (no dedicated pickleball X; @head_tennis is parent acct, kept below)
 insert into x_accounts (brand_id, handle, profile_url)
 select b.id, v.handle, 'https://x.com/' || v.handle
 from brands b
@@ -47,11 +54,11 @@ join (values
   ('joola',     'joolapickleball'),
   ('selkirk',   'SelkirkSport'),
   ('franklin',  'FranklinSports'),
-  ('engage',    'engagepickleball'),
   ('paddletek', 'PaddletekLLC'),
   ('onix',      'OnixPickleball'),
   ('wilson',    'WilsonSportingG'),
-  ('gamma',     'gammasportsusa')
+  ('gamma',     'gammapickleball'),     -- verified via x.com/gammapickleball
+  ('head',      'head_tennis')          -- parent brand; pickleball posts mixed in
 ) as v(slug, handle) on b.slug = v.slug
 on conflict (brand_id) do update set handle = excluded.handle, profile_url = excluded.profile_url;
 

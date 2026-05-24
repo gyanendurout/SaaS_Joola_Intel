@@ -1,7 +1,9 @@
 -- ─── Influencer X (Twitter) ──────────────────────────────────────────────────
--- Adds X presence tracking for the 27 athletes already in `influencers`.
--- Strategy: best-guess handle from IG handle pattern, populated next pipeline
--- run will diagnostic-log the 404s for iteration.
+-- Adds X presence tracking for athletes in `influencers`.
+-- VERIFICATION POLICY (2026-05-24): Only handles empirically confirmed to
+-- return scraped posts OR cross-checked against an official source (PPA Tour
+-- player page, MLP tag, athlete's own site) are seeded. Best-guess handles
+-- that produced ZERO scraped posts have been removed. DO NOT re-add guesses.
 
 alter table influencers
   add column if not exists x_handle text;
@@ -39,36 +41,47 @@ create table if not exists influencer_x_posts (
   created_at      timestamptz default now()
 );
 
--- Seed best-guess X handles for all 27 athletes. Diagnostic logging on next
--- pipeline run will reveal which return empty.
+-- Seed VERIFIED X handles only. Each handle below either:
+--   (a) returned >0 posts in the previous pipeline run, OR
+--   (b) was cross-checked against an official source (URL in comment).
+-- Athletes not listed here have NO known/confirmed X handle as of 2026-05-24.
+-- DO NOT add guesses. Leaving x_handle NULL is the correct state for unknowns.
 update influencers set x_handle = v.handle
 from (values
-  ('alexneumann_pb',         'AlexNeumann'),
-  ('allycejones_pb',         'AllyceJones'),
-  ('andreidae_pb',           'AndreiDaescu'),
+  -- Previously confirmed (returned posts in prior runs)
   ('anna.leigh.waters',      'AnnaLeighWaters'),
   ('annabright.pb',          'AnnaBright'),
-  ('aspenkern_pb',           'AspenKern'),
   ('benjohns_pb',            'BenJohns_pb'),
-  ('blainehovenier',         'BlaineHovenier'),
-  ('bobbioshiro',            'BobbiOshiro'),
-  ('catherineparenteau',     'CParenteau'),
-  ('connorgarnett_pb',       'ConnorGarnett'),
-  ('ericoncins_pb',          'EricOncins'),
   ('gabejoseph_pb',          'GabeJoseph'),
   ('jamesignatowich',        'JIgnatowich'),
   ('jaydevilliers',          'JayDevilliers'),
-  ('jessie_irvine_pb',       'JessieIrvine'),
-  ('jorjajohnsonpb',         'JorjaJohnson'),
-  ('kyle_yates_pb',          'KyleYates_pb'),
   ('leighwaters_pb',         'LeighWaters'),
-  ('patricksmithpb',         'PatrickSmithPB'),
-  ('rileynewmanpb',          'RileyNewmanPB'),
-  ('roscoebellamy',          'RoscoeBellamy'),
   ('sarahansboury',          'SarahAnsboury'),
-  ('simonejardim_pb',        'SimoneJardim'),
-  ('tannertomassi',          'TannerTomassi'),
   ('tysonmcguffin',          'TysonMcGuffin'),
-  ('zanenavratil',           'ZaneNavratil')
+  ('zanenavratil',           'ZaneNavratil'),
+  -- Newly verified 2026-05-24 (cross-checked against PPA Tour / personal sites)
+  ('catherineparenteau',     'CP_Pickleball'),    -- ppatour.com/athlete/catherine-parenteau
+  ('connorgarnett_pb',       'Con_Garnett'),      -- connorgarnett.com
+  ('kyle_yates_pb',          'KyleYatesPklbl'),   -- x.com/KyleYatesPklbl
+  ('rileynewmanpb',          'RiGuy3'),           -- ppatour.com/athlete/riley-newman
+  ('jessie_irvine_pb',       'jessie_irvine'),    -- twitter.com/jessie_irvine
+  ('roscoebellamy',          'roscoe_bellamy'),   -- ppatour.com/athlete/roscoe-bellamy
+  ('ericoncins_pb',          'ericoncins')        -- MLP tagged in x.com/MajorLeaguePB/status/1928109668603417004
 ) as v(ig, handle)
 where influencers.instagram_handle = v.ig;
+
+-- Explicitly NULL out any previously-seeded guesses for athletes we could NOT verify.
+-- This prevents future pipeline runs from attempting to scrape fake handles.
+update influencers set x_handle = null
+where instagram_handle in (
+  'alexneumann_pb',         -- guess @AlexNeumann unverified
+  'allycejones_pb',         -- guess @AllyceJones unverified
+  'andreidae_pb',           -- guess @AndreiDaescu unverified
+  'aspenkern_pb',           -- guess @AspenKern returned 0 posts
+  'blainehovenier',         -- guess @BlaineHovenier returned 0 posts
+  'bobbioshiro',            -- guess @BobbiOshiro returned 0 posts
+  'jorjajohnsonpb',         -- guess @JorjaJohnson returned 0 posts
+  'patricksmithpb',         -- guess @PatrickSmithPB unverified; PPA only lists IG
+  'simonejardim_pb',        -- guess @SimoneJardim returned 0 posts; official site = no X
+  'tannertomassi'           -- guess @TannerTomassi returned 0 posts; official site = no X
+);
