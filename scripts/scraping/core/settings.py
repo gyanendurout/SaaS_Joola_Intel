@@ -8,7 +8,9 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
-    _root = Path(__file__).resolve().parents[4]
+    # Repo root = parents[3]:
+    # settings.py → core → scraping → scripts → joola-intel-nextjs (repo root)
+    _root = Path(__file__).resolve().parents[3]
     load_dotenv(_root / "scripts" / ".env")
     load_dotenv(_root / ".env.local")
 except ImportError:

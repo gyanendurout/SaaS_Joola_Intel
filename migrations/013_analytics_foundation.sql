@@ -162,7 +162,30 @@ COMMENT ON TABLE  availability_daily IS
 -- NOTE: `product_attention_daily.product_id` is aliased as
 -- `canonical_product_id` so dashboards / statistics modules match the
 -- vocabulary in the design spec.
-CREATE MATERIALIZED VIEW IF NOT EXISTS joola_timeseries_daily AS
+--
+-- DROP-then-CREATE (not IF NOT EXISTS) because a partial prior run could
+-- have left an MV with a stale schema; IF NOT EXISTS would silently skip
+-- recreating it and the downstream index would fail on the missing column.
+-- A prior run may also have created either object as a plain TABLE (not an
+-- MV). DROP MATERIALIZED VIEW errors on a table and vice-versa, so we
+-- inspect pg_class.relkind first and drop with the matching command.
+--   relkind = 'r' → ordinary table
+--   relkind = 'm' → materialized view
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'joola_timeseries_weekly' AND relkind = 'm') THEN
+        EXECUTE 'DROP MATERIALIZED VIEW joola_timeseries_weekly CASCADE';
+    ELSIF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'joola_timeseries_weekly' AND relkind = 'r') THEN
+        EXECUTE 'DROP TABLE joola_timeseries_weekly CASCADE';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'joola_timeseries_daily' AND relkind = 'm') THEN
+        EXECUTE 'DROP MATERIALIZED VIEW joola_timeseries_daily CASCADE';
+    ELSIF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'joola_timeseries_daily' AND relkind = 'r') THEN
+        EXECUTE 'DROP TABLE joola_timeseries_daily CASCADE';
+    END IF;
+END $$;
+CREATE MATERIALIZED VIEW joola_timeseries_daily AS
 SELECT
     cal.metric_date_brand_local                  AS metric_date,
     cal.brand_id,
@@ -231,7 +254,8 @@ CREATE INDEX IF NOT EXISTS ix_jts_daily_product
 
 -- joola_timeseries_weekly: weekly rollup (week starts Monday per
 -- date_trunc('week', ...) ISO convention).
-CREATE MATERIALIZED VIEW IF NOT EXISTS joola_timeseries_weekly AS
+-- Dropped by CASCADE above; recreate fresh to keep schemas in lockstep.
+CREATE MATERIALIZED VIEW joola_timeseries_weekly AS
 SELECT
     DATE_TRUNC('week', metric_date)::date AS week_start,
     brand_id,
