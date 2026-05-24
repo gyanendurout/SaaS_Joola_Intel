@@ -40,32 +40,13 @@ CATALOG_URLS: list[dict[str, str]] = [
 
 PAGE_FUNCTION = r"""
 async function pageFunction(context) {
-    const { page } = context;
+    const { page, request } = context;
 
-    // Phase 1: Full-page scroll to trigger lazy widgets + image lazy-loading
-    await page.evaluate(async () => {
-        const totalHeight = document.body.scrollHeight;
-        for (let y = 0; y < totalHeight; y += 500) {
-            window.scrollTo(0, y);
-            await new Promise(r => setTimeout(r, 250));
-        }
-        window.scrollTo(0, 0);
-        await new Promise(r => setTimeout(r, 500));
-    });
-
-    // Phase 2: Wait for ANY known review widget platform to render
-    // (Bazaarvoice / Judge.me / Okendo / SPR / Yotpo / Stamped)
-    await Promise.race([
-        page.waitForSelector('[data-bv-show="inline_rating"] .bv_text, [data-bv-show="inline_rating"] meta[itemprop="ratingValue"]', {timeout: 10000}).catch(() => null),
-        page.waitForSelector('.jdgm-prev-badge[data-average-rating]', {timeout: 10000}).catch(() => null),
-        page.waitForSelector('.oke-sr, [data-oke-reviews-product-id], .oke-stars', {timeout: 10000}).catch(() => null),
-        page.waitForSelector('.spr-badge[data-rating]', {timeout: 10000}).catch(() => null),
-        page.waitForSelector('.yotpo-stars [aria-label], .yotpo-bottomline', {timeout: 10000}).catch(() => null),
-        page.waitForSelector('.stamped-badge[data-rating]', {timeout: 10000}).catch(() => null),
-        new Promise(r => setTimeout(r, 8000)),
-    ]);
-    // Extra buffer for AJAX-late widgets (Bazaarvoice typically ~2s after first paint)
-    await page.waitForTimeout(2500);
+    // Wait for page JS to settle and lazy-loaded review widgets to render.
+    // page.waitForTimeout is available in the playwright-scraper Playwright build.
+    // Avoid page.evaluate(async () => {...}) — async evaluate is not reliably
+    // supported across all actor Playwright versions.
+    await page.waitForTimeout(5000);
 
     const items = await page.evaluate(() => {
         const results = [];
@@ -273,7 +254,7 @@ async function pageFunction(context) {
                 thumbnail,
                 inStock:      !soldOut,
             });
-        });
+        }
         return results;
     });
     return items;

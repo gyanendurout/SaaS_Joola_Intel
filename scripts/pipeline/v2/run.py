@@ -72,8 +72,9 @@ MODULE_STEPS = {
         ("scripts.pipeline.v2.sources.ads.scrape_google_ads",      "run"),
     ],
     "products": [
-        ("scripts.pipeline.v2.sources.products.scrape_catalog",    "run"),
-        ("scripts.pipeline.v2.sources.products.scrape_promotions", "run"),
+        ("scripts.pipeline.v2.sources.products.scrape_catalog",       "run"),
+        ("scripts.pipeline.v2.sources.products.scrape_catalog_local", "run"),
+        ("scripts.pipeline.v2.sources.products.scrape_promotions",    "run"),
     ],
     "news": [
         ("scripts.pipeline.v2.sources.news.scrape_news",           "run"),

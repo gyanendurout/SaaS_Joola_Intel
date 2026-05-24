@@ -17,10 +17,18 @@ def _token() -> str:
     return require_apify()
 
 
-def run_actor(actor_id: str, input_data: dict[str, Any]) -> str:
-    """Start an Apify actor run. Returns run_id."""
+def run_actor(actor_id: str, input_data: dict[str, Any],
+              timeout_secs: int | None = None, memory_mb: int | None = None) -> str:
+    """Start an Apify actor run. Returns run_id.
+
+    timeout_secs and memory_mb are sent as URL query params (Apify API spec).
+    """
     actor_url_id = actor_id.replace("/", "~")
     url = f"{APIFY_BASE}/acts/{actor_url_id}/runs?token={_token()}"
+    if timeout_secs:
+        url += f"&timeout={timeout_secs}"
+    if memory_mb:
+        url += f"&memory={memory_mb}"
     resp = http_request("POST", url, json=input_data, timeout=30)
     if resp.status_code >= 400:
         raise ActorStartError(f"Actor {actor_id!r} start failed ({resp.status_code}): {resp.text[:400]}")
@@ -63,9 +71,10 @@ def fetch_results(run_id: str) -> list[dict]:
     return resp.json()
 
 
-def run_and_fetch(actor_id: str, input_data: dict[str, Any]) -> list[dict]:
+def run_and_fetch(actor_id: str, input_data: dict[str, Any],
+                  timeout_secs: int | None = None, memory_mb: int | None = None) -> list[dict]:
     """Convenience: start actor, wait, fetch results. Raises on failure."""
-    run_id = run_actor(actor_id, input_data)
+    run_id = run_actor(actor_id, input_data, timeout_secs=timeout_secs, memory_mb=memory_mb)
     if not wait_for_run(run_id):
         raise ActorRunError(f"Actor {actor_id!r} run {run_id} failed")
     return fetch_results(run_id)
