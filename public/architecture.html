@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>JOOLA Intel — Technical Architecture</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --fg: #ffffff;
+    --fg-2: #cbd1dc;
+    --fg-3: #8a93a4;
+    --fg-4: #6b7280;
+    --line: rgba(255,255,255,0.08);
+    --card: rgba(255,255,255,0.04);
+    --yellow: #F5E625;
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #818cf8;
+    --cyan: #06b6d4;
+    --orange: #f97316;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 48px 96px;
+    background: var(--bg); color: var(--fg-2);
+    font: 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    max-width: 1240px; margin: 0 auto;
+  }
+  h1, h2, h3, h4 { color: var(--fg); margin-top: 0; }
+  h1 { font-size: 32px; font-weight: 900; letter-spacing: -0.02em; }
+  h1 .accent { color: var(--yellow); }
+  h2 {
+    font-size: 18px; letter-spacing: 0.04em; text-transform: uppercase;
+    margin: 48px 0 16px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--yellow);
+  }
+  h3 { font-size: 14px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--yellow); margin: 24px 0 12px; }
+  h4 { font-size: 13px; color: var(--fg); margin: 16px 0 8px; }
+  a { color: var(--yellow); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre {
+    font-family: "SF Mono",Monaco,Menlo,Consolas,"Courier New",monospace;
+    font-size: 12px;
+  }
+  code { background: rgba(245,230,37,0.08); color: var(--yellow); padding: 2px 6px; border-radius: 3px; }
+  pre {
+    background: #161b22; border: 1px solid var(--line); border-radius: 6px;
+    padding: 14px 16px; overflow-x: auto; color: var(--fg-2);
+  }
+  pre code { background: transparent; color: var(--fg-2); padding: 0; }
+  .sub { color: var(--fg-3); font-size: 13px; }
+  .pill {
+    display: inline-block; font-size: 10px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 3px 8px; border-radius: 3px; margin-right: 6px;
+  }
+  .pill-yellow { background: rgba(245,230,37,0.14); color: var(--yellow); border: 1px solid rgba(245,230,37,0.35); }
+  .pill-green  { background: rgba(34,197,94,0.14);  color: var(--green);  border: 1px solid rgba(34,197,94,0.35); }
+  .pill-red    { background: rgba(239,68,68,0.14);  color: var(--red);    border: 1px solid rgba(239,68,68,0.35); }
+  .pill-blue   { background: rgba(129,140,248,0.14);color: var(--blue);   border: 1px solid rgba(129,140,248,0.35); }
+  .pill-cyan   { background: rgba(6,182,212,0.14);  color: var(--cyan);   border: 1px solid rgba(6,182,212,0.35); }
+  .pill-orange { background: rgba(249,115,22,0.14); color: var(--orange); border: 1px solid rgba(249,115,22,0.35); }
+
+  .meta-strip {
+    display: flex; gap: 24px; margin: 8px 0 24px;
+    padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+    font-size: 12px; color: var(--fg-3);
+  }
+  .meta-strip .k { color: var(--fg-4); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; display:block; margin-bottom: 2px; }
+  .meta-strip .v { color: var(--fg); font-weight: 600; }
+
+  .toc {
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--card); padding: 16px 20px; margin-bottom: 32px;
+  }
+  .toc h3 { margin-top: 0; }
+  .toc ol { margin: 0; padding-left: 18px; columns: 2; column-gap: 32px; }
+  .toc li { margin: 4px 0; break-inside: avoid; }
+
+  .layer-diagram {
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 24px; margin: 16px 0;
+  }
+  .layer { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; align-items: stretch; }
+  .layer:last-child { margin-bottom: 0; }
+  .layer-label {
+    flex: 0 0 110px; align-self: center;
+    font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--fg-4); padding-right: 12px; border-right: 1px solid var(--line);
+  }
+  .nodes { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; }
+  .node {
+    flex: 1 1 180px; min-width: 160px;
+    background: #161b22; border: 1px solid var(--line);
+    border-radius: 6px; padding: 12px 14px; position: relative;
+  }
+  .node.user   { border-left: 3px solid var(--blue); }
+  .node.client { border-left: 3px solid var(--yellow); }
+  .node.api    { border-left: 3px solid var(--orange); }
+  .node.db     { border-left: 3px solid var(--green); }
+  .node.llm    { border-left: 3px solid var(--cyan); }
+  .node.scrape { border-left: 3px solid var(--red); }
+  .node.source { border-left: 3px solid var(--fg-3); }
+  .node .title { color: var(--fg); font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .node .title a { color: var(--fg); }
+  .node .title a:hover { color: var(--yellow); }
+  .node .sub   { font-size: 11px; color: var(--fg-3); }
+  .node .tag   { font-size: 10px; color: var(--fg-4); margin-top: 6px; display: block; }
+
+  .arrow {
+    text-align: center; color: var(--fg-4); font-size: 18px; line-height: 1;
+    margin: -6px 0 -6px;
+  }
+
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 12px 0 24px; background: var(--card);
+    border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  }
+  th, td {
+    padding: 10px 14px; text-align: left; vertical-align: top;
+    border-bottom: 1px solid var(--line); font-size: 12.5px;
+  }
+  th {
+    background: rgba(245,230,37,0.05); color: var(--yellow);
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover { background: rgba(255,255,255,0.02); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg); }
+  td code { font-size: 11.5px; }
+
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 900px) {
+    body { padding: 24px; }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .toc ol { columns: 1; }
+    .layer { flex-direction: column; }
+    .layer-label { border-right: none; border-bottom: 1px solid var(--line); padding-bottom: 8px; padding-right: 0; flex: none; }
+  }
+
+  .callout {
+    background: rgba(245,230,37,0.06); border: 1px solid rgba(245,230,37,0.25);
+    border-radius: 6px; padding: 14px 16px; margin: 16px 0;
+    font-size: 12.5px; color: var(--fg-2);
+  }
+  .callout.danger { background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.25); }
+  .callout strong { color: var(--fg); }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 16px 0; font-size: 11px; color: var(--fg-3); }
+  .legend .item { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  footer { color: var(--fg-4); font-size: 11px; margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--line); text-align: center; }
+</style>
+</head>
+<body>
+
+<h1>JOOLA Intel — <span class="accent">Technical Architecture</span></h1>
+<p class="sub">Pickleball competitive intelligence dashboard. Single Next.js 14 app + Python data pipeline + Supabase + OpenAI. This document maps every external system that's called, what it returns, and where the data lands.</p>
+
+<div class="meta-strip">
+  <div><span class="k">Snapshot</span><span class="v">2026-05-20</span></div>
+  <div><span class="k">Repo</span><span class="v">gyanendurout/SaaS_Joola_Intel</span></div>
+  <div><span class="k">Live URL</span><span class="v">saas-joola-intel.vercel.app</span></div>
+  <div><span class="k">Tracked brands</span><span class="v">11</span></div>
+  <div><span class="k">Tracked athletes</span><span class="v">27</span></div>
+  <div><span class="k">Cadence</span><span class="v">Weekly (Mon 07:00 IST)</span></div>
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li><a href="#birdseye">Bird's-eye architecture</a></li>
+    <li><a href="#frontend">Frontend: Next.js on Vercel</a></li>
+    <li><a href="#api-routes">Server endpoints (Next.js API)</a></li>
+    <li><a href="#supabase">Database: Supabase Postgres</a></li>
+    <li><a href="#pipeline">Python pipeline: Apify → Supabase</a></li>
+    <li><a href="#apify-actors">Apify actor catalog</a></li>
+    <li><a href="#enrichment">AI enrichment (OpenAI)</a></li>
+    <li><a href="#derived">Derived tables (facts + lifecycle)</a></li>
+    <li><a href="#sequences">Sequence diagrams</a></li>
+    <li><a href="#secrets">Secrets &amp; environment</a></li>
+  </ol>
+</div>
+
+<!-- ─── 1. Bird's-eye ─────────────────────────────────────────────────── -->
+<h2 id="birdseye">1. Bird's-eye architecture</h2>
+<p class="sub">Four layers. Read top-down for request flow, bottom-up for data flow.</p>
+
+<div class="layer-diagram">
+  <div class="layer">
+    <div class="layer-label">User</div>
+    <div class="nodes">
+      <div class="node user"><div class="title">Browser</div><div class="sub">Marketing &amp; intel team. Desktop primary.</div><span class="tag">12 dashboard routes · /v2/*</span></div>
+    </div>
+  </div>
+  <div class="arrow">↓ HTTPS</div>
+
+  <div class="layer">
+    <div class="layer-label">Hosting</div>
+    <div class="nodes">
+      <div class="node client"><div class="title">Vercel (CDN + Edge)</div><div class="sub">Auto-deploys from <code>main</code> branch on every push. ~90s cold.</div><span class="tag">Region: auto-routed</span></div>
+      <div class="node client"><div class="title">Next.js 14 App Router</div><div class="sub">All v2 pages are <code>'use client'</code>. Static shell + browser-side data fetching.</div><span class="tag">React 18, custom CSS (no Tailwind on v2)</span></div>
+      <div class="node api"><div class="title">Next.js API routes</div><div class="sub">4 serverless functions for content generation &amp; SEO tooling.</div><span class="tag">/api/* (POST)</span></div>
+    </div>
+  </div>
+  <div class="arrow">↓ HTTPS + anon/OpenAI keys</div>
+
+  <div class="layer">
+    <div class="layer-label">Backend services</div>
+    <div class="nodes">
+      <div class="node db"><div class="title">Supabase</div><div class="sub">Managed Postgres + auth + PostgREST. Project <code>loecyghnkkxyymelgexz</code>.</div><span class="tag">Browser reads via anon key (SELECT). Pipeline writes via service-role key.</span></div>
+      <div class="node llm"><div class="title">OpenAI API</div><div class="sub">GPT-4o-mini for enrichment (Python). GPT-4o-mini for content brief, SEO analyzer (Next.js).</div><span class="tag">~$0.50–$2 per weekly enrichment run</span></div>
+    </div>
+  </div>
+  <div class="arrow">↑ write-only (service-role)</div>
+
+  <div class="layer">
+    <div class="layer-label">Pipeline</div>
+    <div class="nodes">
+      <div class="node scrape"><div class="title">Python pipeline (local laptop / cron)</div><div class="sub">Orchestrator: <code>scripts/pipeline/run_resumable.py</code>. 13 steps. Checkpoints in <code>pipeline_state.json</code>.</div><span class="tag">~30–90 min full run. Not deployed with Next.js.</span></div>
+      <div class="node scrape"><div class="title">Enrichment chain</div><div class="sub"><code>enrich_with_ai.py</code> → <code>populate_mention_facts.py</code> → <code>populate_topic_lifecycle.py</code></div><span class="tag">Runs immediately after scrape</span></div>
+    </div>
+  </div>
+  <div class="arrow">↓ HTTPS to Apify Actor APIs</div>
+
+  <div class="layer">
+    <div class="layer-label">Scrape vendor</div>
+    <div class="nodes">
+      <div class="node source"><div class="title">Apify</div><div class="sub">10+ Actor runs per pipeline pass. Provides anti-bot infra + dataset retention (30 days).</div><span class="tag">~$5–$20 per full run</span></div>
+    </div>
+  </div>
+  <div class="arrow">↓ via Apify proxies</div>
+
+  <div class="layer">
+    <div class="layer-label">Source platforms</div>
+    <div class="nodes">
+      <div class="node source"><div class="title"><a href="https://www.instagram.com/" target="_blank" rel="noopener">Instagram ↗</a></div><div class="sub">11 brand accounts + 27 athletes. Profiles, posts, comments.</div><span class="tag">instagram.com</span></div>
+      <div class="node source"><div class="title"><a href="https://www.youtube.com/" target="_blank" rel="noopener">YouTube ↗</a></div><div class="sub">Brand channels + top videos + comments.</div><span class="tag">youtube.com</span></div>
+      <div class="node source"><div class="title"><a href="https://www.reddit.com/r/pickleball/" target="_blank" rel="noopener">Reddit ↗</a></div><div class="sub">r/pickleball + 4 related subs. OPs + comment trees.</div><span class="tag">reddit.com/r/pickleball</span></div>
+      <div class="node source"><div class="title"><a href="https://www.tiktok.com/" target="_blank" rel="noopener">TikTok ↗</a></div><div class="sub">10 brand handles. Profiles + videos.</div><span class="tag">tiktok.com</span></div>
+      <div class="node source"><div class="title"><a href="https://x.com/" target="_blank" rel="noopener">X / Twitter ↗</a></div><div class="sub">8 brand handles. Profiles + posts.</div><span class="tag">x.com</span></div>
+      <div class="node source"><div class="title"><a href="https://www.facebook.com/ads/library/?country=US" target="_blank" rel="noopener">Meta Ad Library ↗</a></div><div class="sub">Active brand ads on Facebook + Instagram. Public transparency tool.</div><span class="tag">facebook.com/ads/library</span></div>
+      <div class="node source"><div class="title"><a href="https://adstransparency.google.com/" target="_blank" rel="noopener">Google Ads Transparency ↗</a></div><div class="sub">Active search/display ads by brand. Public transparency tool.</div><span class="tag">adstransparency.google.com</span></div>
+      <div class="node source"><div class="title">Brand homepages</div><div class="sub">Promotional banners scraped via headless Chrome.</div><span class="tag">11 domains (joolausa.com, selkirk.com, …)</span></div>
+      <div class="node source"><div class="title">Brand product pages</div><div class="sub">Paddle catalogs + prices + stock status.</div><span class="tag">e.g. joolausa.com/pickleball-paddles/</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <span class="item"><span class="swatch" style="background:var(--blue)"></span>User</span>
+  <span class="item"><span class="swatch" style="background:var(--yellow)"></span>Client (Next.js)</span>
+  <span class="item"><span class="swatch" style="background:var(--orange)"></span>Server API</span>
+  <span class="item"><span class="swatch" style="background:var(--green)"></span>Database</span>
+  <span class="item"><span class="swatch" style="background:var(--cyan)"></span>LLM</span>
+  <span class="item"><span class="swatch" style="background:var(--red)"></span>Pipeline (Python)</span>
+  <span class="item"><span class="swatch" style="background:var(--fg-3)"></span>External source</span>
+</div>
+
+<!-- ─── 2. Frontend ───────────────────────────────────────────────────── -->
+<h2 id="frontend">2. Frontend: Next.js on Vercel</h2>
+<p class="sub">Twelve <code>'use client'</code> pages under <code>app/v2/*</code>. Each page calls <code>lib/v2/data.ts</code> fetchers, which hit Supabase directly via the anon key (no custom backend layer for reads). Brand filter state is global via <code>BrandFilterContext</code> with localStorage persistence.</p>
+
+<table>
+  <thead>
+    <tr><th>Route</th><th>Purpose</th><th>Data fetched (from Supabase)</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>/v2</code></td><td>Executive overview — KPIs, briefing cards, engagement matrix, opportunities</td><td><code>v2_overview</code> view (aggregates IG, ads, promos, reddit, products, influencers)</td></tr>
+    <tr><td><code>/v2/instagram</code></td><td>IG performance — engagement, top posts, cadence heatmap</td><td><code>ig_profiles_weekly</code>, <code>ig_posts</code>, <code>post_frequency</code></td></tr>
+    <tr><td><code>/v2/youtube</code></td><td>YouTube channels, top videos, subscriber trends</td><td><code>youtube_channels_weekly</code>, <code>youtube_videos</code></td></tr>
+    <tr><td><code>/v2/reddit</code></td><td>Reddit mention volume by brand + sentiment + subreddit breakdown</td><td><code>reddit_mentions</code>, <code>reddit_subreddits</code></td></tr>
+    <tr><td><code>/v2/comments</code></td><td>Top comments across IG + YT — fan voice + ambassador detection</td><td><code>ig_comments</code>, <code>youtube_comments</code></td></tr>
+    <tr><td><code>/v2/influencers</code></td><td>Athlete network bubble chart — followers × ER quadrants</td><td><code>influencers</code>, <code>influencer_posts</code> (limited to 2000)</td></tr>
+    <tr><td><code>/v2/ads</code></td><td>Meta + Google ad creatives with copy search + filters</td><td><code>marketing_ads</code></td></tr>
+    <tr><td><code>/v2/promotions</code></td><td>Active discounts by brand + cadence heatmap</td><td><code>promotions</code></td></tr>
+    <tr><td><code>/v2/products</code></td><td>Paddle catalog + price-tier breakdown + box plot</td><td><code>products</code>, <code>products_catalog</code></td></tr>
+    <tr><td><code>/v2/market</code></td><td>Cross-channel signals feed + reddit trends + competitor activity</td><td>aggregated from <code>reddit_mentions</code>, <code>ig_*</code>, <code>marketing_ads</code>, <code>promotions</code></td></tr>
+    <tr><td><code>/v2/twitter</code></td><td>X / Twitter profiles + posts</td><td><code>x_profiles_weekly</code>, <code>x_posts</code>, <code>x_accounts</code></td></tr>
+    <tr><td><code>/v2/tiktok</code></td><td>TikTok profiles + videos + handle map</td><td><code>tiktok_profiles_weekly</code>, <code>tiktok_videos</code>, <code>tiktok_accounts</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>Invariant:</strong> the global brand filter (rendered once in <code>app/v2/layout.tsx</code>) is the only filter UI. Every fetcher runs the result through <code>applyBrandFilter()</code>. KPIs like Share of Voice are recomputed from <code>displayXxx</code> arrays, never from the static DB <code>share</code> column when a filter is active.
+</div>
+
+<!-- ─── 3. API routes ─────────────────────────────────────────────────── -->
+<h2 id="api-routes">3. Server endpoints (Next.js API)</h2>
+<p class="sub">Four serverless POST endpoints. Each takes a JSON body, calls OpenAI, returns a structured response. No database writes — these are pure transformation/generation tools used inside the dashboard.</p>
+
+<table>
+  <thead>
+    <tr><th>Route</th><th>Purpose</th><th>External call</th><th>Returns</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>POST /api/generate-content</code></td>
+      <td>Generate marketing copy from a prompt + brand voice</td>
+      <td>OpenAI Chat Completions (gpt-4o-mini)</td>
+      <td><code>{ content: string, tokens_used: number }</code></td>
+    </tr>
+    <tr>
+      <td><code>POST /api/keyword-research</code></td>
+      <td>Suggest related search keywords for a seed term</td>
+      <td>OpenAI (gpt-4o-mini)</td>
+      <td><code>{ keywords: string[], clusters: object[] }</code></td>
+    </tr>
+    <tr>
+      <td><code>POST /api/content-brief</code></td>
+      <td>Produce a structured content brief (outline, headers, target audience) from a seed keyword + cluster</td>
+      <td>OpenAI (gpt-4o-mini) via <code>lib/shared/content-brief/</code></td>
+      <td><code>{ title, audience, sections, faq, target_word_count }</code></td>
+    </tr>
+    <tr>
+      <td><code>POST /api/seo-analyzer</code></td>
+      <td>On-page audit: fetch a URL, parse HTML, score it + recommend fixes</td>
+      <td><strong>cheerio</strong> (HTML parse) + OpenAI (recommendations)</td>
+      <td><code>{ score: 0–100, issues: [], recommendations: [] }</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout danger">
+  <strong>Hardening pending:</strong> <code>NEXT_PUBLIC_OPENAI_KEY</code> is currently exposed to the browser bundle (POC-acceptable). Rename to <code>OPENAI_API_KEY</code> and gate behind server-only access before going to prod.
+</div>
+
+<!-- ─── 4. Supabase ───────────────────────────────────────────────────── -->
+<h2 id="supabase">4. Database: Supabase Postgres</h2>
+<p class="sub">Single Supabase project (<code>loecyghnkkxyymelgexz</code>). Migrations 001 → 009 in <code>migrations/</code>. Anon key has SELECT-only access (RLS pending). Service-role key (used only by Python) has full write access.</p>
+
+<h3>Reference tables (lookup data)</h3>
+<table>
+  <thead><tr><th>Table</th><th>Rows</th><th>Contents</th></tr></thead>
+  <tbody>
+    <tr><td><code>brands</code></td><td>11</td><td>JOOLA, Selkirk, Paddletek, CRBN, Six Zero, Engage, Onix, Franklin Pickleball, Head, Wilson, Gamma</td></tr>
+    <tr><td><code>influencers</code></td><td>27</td><td>Tracked athletes (Ben Johns, Anna Leigh Waters, Catherine Parenteau, …)</td></tr>
+    <tr><td><code>products_catalog</code></td><td>25</td><td>Paddle SKUs — Perseus, Hyperion, Vanguard, CRBN-1/3/X, Bantam, etc.</td></tr>
+    <tr><td><code>x_accounts</code></td><td>8</td><td>Brand → X handle mapping</td></tr>
+    <tr><td><code>tiktok_accounts</code></td><td>10</td><td>Brand → TikTok handle mapping</td></tr>
+  </tbody>
+</table>
+
+<h3>Snapshot &amp; raw data tables (written by Python pipeline)</h3>
+<table>
+  <thead><tr><th>Channel</th><th>Tables</th><th>Cadence</th></tr></thead>
+  <tbody>
+    <tr><td>Instagram (brand)</td><td><code>ig_profiles_weekly</code>, <code>ig_posts</code>, <code>ig_comments</code></td><td>Weekly snapshot + post backfill</td></tr>
+    <tr><td>Instagram (athletes)</td><td><code>influencer_posts</code></td><td>Weekly</td></tr>
+    <tr><td>YouTube</td><td><code>youtube_channels_weekly</code>, <code>youtube_videos</code>, <code>youtube_comments</code></td><td>Weekly</td></tr>
+    <tr><td>Reddit</td><td><code>reddit_mentions</code> (OPs), <code>reddit_comments</code>, <code>reddit_subreddits</code></td><td>90-day rolling window</td></tr>
+    <tr><td>X / Twitter</td><td><code>x_profiles_weekly</code>, <code>x_posts</code></td><td>Weekly</td></tr>
+    <tr><td>TikTok</td><td><code>tiktok_profiles_weekly</code>, <code>tiktok_videos</code></td><td>Weekly</td></tr>
+    <tr><td>Paid media</td><td><code>marketing_ads</code> (Meta + Google)</td><td>Weekly</td></tr>
+    <tr><td>Promotions</td><td><code>promotions</code> (homepage banners)</td><td>Weekly</td></tr>
+    <tr><td>E-commerce</td><td><code>products</code>, <code>product_price_history</code></td><td>Weekly</td></tr>
+  </tbody>
+</table>
+
+<h3>Derived / fact tables (built post-enrichment)</h3>
+<table>
+  <thead><tr><th>Table</th><th>Built by</th><th>Contents</th></tr></thead>
+  <tbody>
+    <tr><td><code>mention_facts</code></td><td><code>populate_mention_facts.py</code></td><td>One row per (channel × source × entity) — denormalized for dashboard reads</td></tr>
+    <tr><td><code>topic_lifecycle</code></td><td><code>populate_topic_lifecycle.py</code></td><td>First-seen, peak, decay timeline per topic across 7 channels</td></tr>
+    <tr><td><code>competitor_switch_events</code></td><td><code>populate_mention_facts.py</code></td><td>Detected brand-switch signals from Reddit defection language</td></tr>
+  </tbody>
+</table>
+
+<!-- ─── 5. Python pipeline ────────────────────────────────────────────── -->
+<h2 id="pipeline">5. Python pipeline</h2>
+<p class="sub">Orchestrator: <code>scripts/pipeline/run_resumable.py</code> wraps <code>apify_to_supabase.py</code> with checkpoint/resume. Each step is a single function that calls one Apify actor, polls until success, then upserts results to Supabase via the PostgREST service-role client.</p>
+
+<table>
+  <thead><tr><th>#</th><th>Step</th><th>Actor</th><th>Source URL (Apify hits this for us)</th><th>Outputs to Supabase</th></tr></thead>
+  <tbody>
+    <tr><td class="num">1</td><td>Meta Ad Library</td><td><code>apify/facebook-ads-library-scraper</code></td><td><a href="https://www.facebook.com/ads/library/?country=US" target="_blank" rel="noopener">facebook.com/ads/library ↗</a></td><td><code>marketing_ads</code> (Meta rows)</td></tr>
+    <tr><td class="num">2</td><td>Google Ads Transparency</td><td><code>apify/google-ads-transparency-scraper</code></td><td><a href="https://adstransparency.google.com/" target="_blank" rel="noopener">adstransparency.google.com ↗</a></td><td><code>marketing_ads</code> (Google rows)</td></tr>
+    <tr><td class="num">3</td><td>Brand IG profiles + posts</td><td><code>apify/instagram-profile-scraper</code></td><td><a href="https://www.instagram.com/" target="_blank" rel="noopener">instagram.com/{handle} ↗</a></td><td><code>ig_profiles_weekly</code>, <code>ig_posts</code></td></tr>
+    <tr><td class="num">4</td><td>Product catalog scrape</td><td><code>apify/playwright-scraper</code> (custom)</td><td>11 brand <code>/paddles</code> URLs (e.g. <a href="https://www.joolausa.com/pickleball-paddles/" target="_blank" rel="noopener">joolausa.com ↗</a>)</td><td><code>products</code>, <code>product_price_history</code></td></tr>
+    <tr><td class="num">5</td><td>Influencer posts + snapshots</td><td><code>apify/instagram-profile-scraper</code></td><td><a href="https://www.instagram.com/" target="_blank" rel="noopener">instagram.com/{athlete_handle} ↗</a></td><td><code>influencer_posts</code>, <code>ig_profiles_weekly</code> (athlete rows)</td></tr>
+    <tr><td class="num">6</td><td>Homepage promo banners</td><td><code>apify/playwright-scraper</code> (custom)</td><td>11 brand homepages</td><td><code>promotions</code></td></tr>
+    <tr><td class="num">7</td><td>Reddit mentions (OPs)</td><td><code>trudax/reddit-scraper-lite</code></td><td><a href="https://www.reddit.com/r/pickleball/" target="_blank" rel="noopener">reddit.com/r/pickleball ↗</a> + 4 subs</td><td><code>reddit_mentions</code></td></tr>
+    <tr><td class="num">8</td><td>Reddit comments (replies)</td><td><code>trudax/reddit-scraper-lite</code></td><td>Reply trees under each OP</td><td><code>reddit_comments</code></td></tr>
+    <tr><td class="num">9</td><td>YouTube channels + videos</td><td><code>apify/youtube-scraper</code></td><td><a href="https://www.youtube.com/" target="_blank" rel="noopener">youtube.com/@{brand} ↗</a></td><td><code>youtube_channels_weekly</code>, <code>youtube_videos</code></td></tr>
+    <tr><td class="num">10</td><td>YouTube comments</td><td><code>apify/youtube-comments-scraper</code></td><td>Comment threads under each video</td><td><code>youtube_comments</code></td></tr>
+    <tr><td class="num">11</td><td>X / Twitter profiles + posts</td><td>Apify X actor</td><td><a href="https://x.com/" target="_blank" rel="noopener">x.com/{handle} ↗</a></td><td><code>x_profiles_weekly</code>, <code>x_posts</code></td></tr>
+    <tr><td class="num">12</td><td>TikTok profiles + videos</td><td><code>apify/tiktok-scraper</code></td><td><a href="https://www.tiktok.com/" target="_blank" rel="noopener">tiktok.com/@{handle} ↗</a></td><td><code>tiktok_profiles_weekly</code>, <code>tiktok_videos</code></td></tr>
+    <tr><td class="num">13</td><td>IG comments backfill</td><td><code>apify/instagram-comment-scraper</code></td><td>Comment threads under each post</td><td><code>ig_comments</code></td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>Important indirection:</strong> our Python code never hits Meta, Google, Instagram, etc. directly. Every "Source URL" above is the public page that an Apify actor scrapes <em>on our behalf</em> using Apify's residential proxies and managed browser pool. Our code talks to Apify; Apify talks to the platforms.
+</div>
+
+<p class="sub" style="margin-top:8px">Total runtime: 30–90 min. Cost: ~$5–$20 per pass (Apify), ~$0.50–$2 (OpenAI enrichment). Resumes from <code>pipeline_state.json</code> if interrupted. Each step has 80 retries on transient errors (ReadTimeout, 5xx).</p>
+
+<!-- ─── 6. Apify actors ───────────────────────────────────────────────── -->
+<h2 id="apify-actors">6. Apify actor catalog</h2>
+<p class="sub">All actors are public marketplace actors. None are custom-built — the pipeline drives them via the standard Apify API with input JSON and polls for completion.</p>
+
+<div class="grid-2">
+  <div>
+    <h4>Why Apify?</h4>
+    <ul style="padding-left:18px; margin-top:0;">
+      <li>Residential proxies built-in (Instagram, TikTok, X aggressively block datacenter IPs).</li>
+      <li>30-day dataset retention — easy to re-download a run if a write to Supabase fails.</li>
+      <li>Pay-per-run pricing — no monthly minimum.</li>
+      <li>Single auth token across all actors (<code>APIFY_TOKEN</code>).</li>
+    </ul>
+  </div>
+  <div>
+    <h4>How a step works</h4>
+    <ol style="padding-left:18px; margin-top:0;">
+      <li>Build input JSON (handles to scrape, time window, max items).</li>
+      <li><code>POST /v2/acts/{actor}/runs</code> → returns run ID.</li>
+      <li>Poll <code>GET /v2/actor-runs/{runId}</code> every 5–15s until <code>SUCCEEDED</code> or <code>FAILED</code>.</li>
+      <li>Fetch the run's dataset: <code>GET /v2/datasets/{datasetId}/items</code>.</li>
+      <li>Transform + upsert into Supabase via PostgREST.</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ─── 7. AI enrichment ──────────────────────────────────────────────── -->
+<h2 id="enrichment">7. AI enrichment (OpenAI)</h2>
+<p class="sub">After raw rows land, <code>scripts/pipeline/enrich_with_ai.py</code> walks every unenriched row across <code>ig_posts</code>, <code>ig_comments</code>, <code>youtube_videos</code>, <code>youtube_comments</code>, <code>reddit_mentions</code>, <code>reddit_comments</code>, <code>x_posts</code>, <code>tiktok_videos</code>, and <code>marketing_ads</code>. One GPT-4o-mini call per row; results written back as 12 enrichment columns.</p>
+
+<table>
+  <thead><tr><th>Enrichment column</th><th>Type</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td><code>sentiment</code></td><td>enum</td><td>positive / neutral / negative</td></tr>
+    <tr><td><code>sentiment_score</code></td><td>float [-1, 1]</td><td>Continuous sentiment magnitude</td></tr>
+    <tr><td><code>topic</code></td><td>string</td><td>Dominant topic (e.g. "paddle durability", "tournament result", "pro signing")</td></tr>
+    <tr><td><code>topic_category</code></td><td>enum</td><td>Bucketed: product, athlete, event, complaint, hype, …</td></tr>
+    <tr><td><code>brand_mentioned</code></td><td>string[]</td><td>NER — which of the 11 tracked brands the text references</td></tr>
+    <tr><td><code>player_mentioned</code></td><td>string[]</td><td>NER — which of the 27 tracked athletes</td></tr>
+    <tr><td><code>product_mentioned</code></td><td>string[]</td><td>NER — which paddle SKUs from <code>products_catalog</code></td></tr>
+    <tr><td><code>crisis_flag</code></td><td>bool</td><td>True if text suggests a brand crisis (defects, recalls, controversy)</td></tr>
+    <tr><td><code>purchase_intent</code></td><td>enum</td><td>none / considering / asking-for-recs / purchased</td></tr>
+    <tr><td><code>competitor_switch_from</code></td><td>string</td><td>(Reddit only) brand the author switched away from</td></tr>
+    <tr><td><code>competitor_switch_to</code></td><td>string</td><td>(Reddit only) brand the author switched to</td></tr>
+    <tr><td><code>confidence</code></td><td>float [0, 1]</td><td>Model self-reported confidence in the row's classifications</td></tr>
+  </tbody>
+</table>
+
+<!-- ─── 8. Derived tables ─────────────────────────────────────────────── -->
+<h2 id="derived">8. Derived tables — facts &amp; lifecycle</h2>
+
+<div class="grid-2">
+  <div>
+    <h4><code>mention_facts</code></h4>
+    <p class="sub">Built by <code>populate_mention_facts.py</code>. Walks every enriched row and emits one fact-table row per <em>(channel, source_url, entity)</em> triple. This denormalization is what makes the dashboard reads fast — no joins needed.</p>
+    <p class="sub">Channels: <code>ig_post</code>, <code>ig_comment</code>, <code>yt_video</code>, <code>yt_comment</code>, <code>reddit_op</code>, <code>reddit_comment</code>, <code>x_post</code>, <code>tiktok_video</code>, <code>ad</code>.</p>
+  </div>
+  <div>
+    <h4><code>topic_lifecycle</code></h4>
+    <p class="sub">Built by <code>populate_topic_lifecycle.py</code>. For each detected topic, computes: first-seen channel + timestamp, peak-week mention count, decay rate, current week share. ~621 topics tracked across 8,007 occurrences (last full run).</p>
+    <p class="sub">Used by Market Intel page to show emerging topics and which channel typically breaks a trend first (often Reddit comments or TikTok, ahead of IG posts).</p>
+  </div>
+</div>
+
+<!-- ─── 9. Sequences ──────────────────────────────────────────────────── -->
+<h2 id="sequences">9. Sequence diagrams</h2>
+
+<h3>9.1 Weekly data refresh (Monday 07:00 IST)</h3>
+<pre><code>operator              run_resumable.py        Apify              Supabase           OpenAI
+   │                       │                    │                    │                 │
+   ├── python run_…  ──────▶│                    │                    │                 │
+   │                       │── start actor[1] ──▶│                    │                 │
+   │                       │◀── run_id ──────────│                    │                 │
+   │                       │── poll status ─────▶│                    │                 │
+   │                       │◀── SUCCEEDED ───────│                    │                 │
+   │                       │── fetch dataset ───▶│                    │                 │
+   │                       │◀── rows[] ──────────│                    │                 │
+   │                       │── upsert rows ──────────────────────────▶│                 │
+   │                       │◀── ok ───────────────────────────────────│                 │
+   │                       │ (repeat for steps 2..13)                 │                 │
+   │                       │── enrich_with_ai.py ──── chat.completions ──────────────▶│
+   │                       │◀── classifications ─────────────────────────────────────│
+   │                       │── update enriched cols ─────────────────▶│                 │
+   │                       │── populate_mention_facts.py ─ insert ───▶│                 │
+   │                       │── populate_topic_lifecycle.py ─ insert ─▶│                 │
+   │◀── PIPELINE COMPLETE ─│                    │                    │                 │
+</code></pre>
+
+<h3>9.2 User loads /v2/instagram</h3>
+<pre><code>Browser            Vercel/Next.js        Supabase
+   │                    │                    │
+   ├── GET /v2/instagram ▶                    │
+   │◀── HTML shell ─────│                    │
+   │── hydrate ─────────▶                    │
+   │── fetchBrands() ──────────────────────▶ │
+   │◀── brands[11] ──────────────────────── │
+   │── fetchIG(brands) ────────────────────▶ │
+   │── fetchTopIGPosts(brands, 20) ────────▶ │
+   │── fetchPostFrequency(brands) ─────────▶ │
+   │◀── ig_profiles_weekly + ig_posts + freq │
+   │   (render charts, KPIs, tables)         │
+</code></pre>
+
+<h3>9.3 Content brief generation</h3>
+<pre><code>Browser           /api/content-brief        OpenAI
+   │                    │                      │
+   ├── POST { seed, cluster } ▶                │
+   │                    │── chat.completions ─▶│
+   │                    │◀── outline JSON ─────│
+   │◀── { title, sections, faq, ... }          │
+</code></pre>
+
+<!-- ─── 10. Secrets ───────────────────────────────────────────────────── -->
+<h2 id="secrets">10. Secrets &amp; environment</h2>
+
+<table>
+  <thead><tr><th>Variable</th><th>Where</th><th>Used by</th><th>Scope</th></tr></thead>
+  <tbody>
+    <tr><td><code>NEXT_PUBLIC_SUPABASE_URL</code></td><td>Vercel env + <code>.env.local</code></td><td>Browser client</td><td>Public (URL only)</td></tr>
+    <tr><td><code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code></td><td>Vercel env + <code>.env.local</code></td><td>Browser client</td><td>Public (SELECT-only)</td></tr>
+    <tr><td><code>NEXT_PUBLIC_OPENAI_KEY</code></td><td>Vercel env</td><td><code>/api/*</code> routes</td><td><span class="pill pill-red">Currently leaks to browser</span> — rename to <code>OPENAI_API_KEY</code> for prod</td></tr>
+    <tr><td><code>SUPABASE_URL</code></td><td><code>scripts/.env</code> (gitignored)</td><td>Python pipeline</td><td>Local laptop only</td></tr>
+    <tr><td><code>SUPABASE_SERVICE_ROLE_KEY</code></td><td><code>scripts/.env</code></td><td>Python pipeline</td><td><span class="pill pill-red">Full write access</span> — never commit</td></tr>
+    <tr><td><code>APIFY_TOKEN</code></td><td><code>scripts/.env</code></td><td>Python pipeline</td><td>Pays per actor run</td></tr>
+    <tr><td><code>OPENAI_API_KEY</code></td><td><code>scripts/.env</code></td><td>Python enrichment</td><td>Pays per token</td></tr>
+  </tbody>
+</table>
+
+<div class="callout danger">
+  <strong>Outstanding hardening (POC → prod):</strong> rotate the Supabase service-role key, Apify token, and OpenAI key (all three were exposed at some point during initial setup — see CLAUDE.md "Pending hardening"). Enable Supabase Row-Level Security with anon = SELECT-only policies on all tables.
+</div>
+
+<footer>
+  Generated 2026-05-20 · From <code>backup/code-architecture.md</code>, <code>CLAUDE.md</code>, and live source. ·
+  <a href="https://github.com/gyanendurout/SaaS_Joola_Intel">github.com/gyanendurout/SaaS_Joola_Intel</a>
+</footer>
+
+</body>
+</html>

@@ -4,7 +4,9 @@ import React, { useEffect, useState } from 'react'
 import { fetchBrands, fetchPromos, fetchPromoDetails, type V2Brand, type V2PromoRow, type V2PromoDetail } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
 import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { TableSearch } from '@/components/v2/TableSearch'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
+import { formatCalendarDate } from '@/lib/v2/format'
 
 export default function PromotionsPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -14,6 +16,7 @@ export default function PromotionsPage() {
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [error, setError] = useState<string | null>(null)
+  const [searchPromo, setSearchPromo] = useState('')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
@@ -51,7 +54,16 @@ export default function PromotionsPage() {
   const displayPromos = applyBrandFilter(promos, filteredBrands, isFiltered)
   const displayDetails = applyBrandFilter(details, filteredBrands, isFiltered)
 
-  const sortedDetails = sortKey ? [...displayDetails].sort((a, b) => {
+  const promoQuery = searchPromo.trim().toLowerCase()
+  const searchedDetails = promoQuery
+    ? displayDetails.filter(d => {
+        const banner = String(d.banner ?? '').toLowerCase()
+        const type = String(d.type ?? '').toLowerCase()
+        return banner.includes(promoQuery) || type.includes(promoQuery)
+      })
+    : displayDetails
+
+  const sortedDetails = sortKey ? [...searchedDetails].sort((a, b) => {
     const av = (a as Record<string, unknown>)[sortKey]
     const bv = (b as Record<string, unknown>)[sortKey]
     if (typeof av === 'number' && typeof bv === 'number')
@@ -59,7 +71,7 @@ export default function PromotionsPage() {
     return sortDir === 'asc'
       ? String(av ?? '').localeCompare(String(bv ?? ''))
       : String(bv ?? '').localeCompare(String(av ?? ''))
-  }) : displayDetails
+  }) : searchedDetails
 
   const name = (s: string) => pgName(s, brands)
   const totalPromos = displayPromos.reduce((s, p) => s + p.count, 0)
@@ -95,10 +107,6 @@ export default function PromotionsPage() {
         title="Pricing"
         accent="War Room"
         sub={`${promoLeader ? name(promoLeader.brand) : '—'} leads with ${promoLeader?.count || 0} active promotions. ${joolaPromos === 0 ? 'JOOLA has zero active promos.' : `JOOLA has ${joolaPromos} active promo${joolaPromos !== 1 ? 's' : ''}.`}`}
-        actions={<>
-          <select className="select"><option>All promo types</option></select>
-          <select className="select"><option>This quarter</option></select>
-        </>}
       />
       <FilterBanner />
 
@@ -225,7 +233,7 @@ export default function PromotionsPage() {
                 ))}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 14, fontSize: 11, color: 'var(--fg-4)' }}>
-                <span>13 weeks ago</span><span>This week →</span>
+                <span>Earlier weeks</span><span>This week →</span>
               </div>
             </div></div>
           </div>
@@ -246,6 +254,9 @@ export default function PromotionsPage() {
             <div className="sub">Pulled live from competitor homepages. Click column headers to sort.</div>
           </div></div>
           <div className="card">
+            <div style={{ padding: '10px 14px 0' }}>
+              <TableSearch value={searchPromo} onChange={setSearchPromo} placeholder="Search promo text or type…" width={280} />
+            </div>
             <div className="table-wrap">
               <table className="data">
                 <thead><tr>
@@ -274,9 +285,7 @@ export default function PromotionsPage() {
                       <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625' }}>
                         {d.discount != null && d.discount > 0 ? d.discount + '%' : '—'}
                       </td>
-                      <td className="cell-num">
-                        {d.detectedAt ? new Date(d.detectedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
-                      </td>
+                      <td className="cell-num">{formatCalendarDate(d.detectedAt)}</td>
                     </tr>
                   ))}
                 </tbody>

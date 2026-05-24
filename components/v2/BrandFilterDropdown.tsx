@@ -53,7 +53,7 @@ export function BrandFilterDropdown() {
 
   const buttonLabel = isFiltered
     ? `${activeCount} of ${allBrands.length} brands`
-    : 'All brands'
+    : `All ${allBrands.length} brands`
 
   return (
     <div className="bfd-wrap" ref={wrapRef}>

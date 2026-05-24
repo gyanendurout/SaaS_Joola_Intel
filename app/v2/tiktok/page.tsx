@@ -8,6 +8,13 @@ import {
 import { fmt } from '@/components/v2/charts'
 import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
+import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
+
+/** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
+function relativeLabel(days: number): string {
+  return days <= 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`
+}
 
 const TIKTOK_HANDLES: Record<string, string> = {
   joola:      'joolapickleball',
@@ -33,6 +40,7 @@ export default function TikTokPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [colFilter, setColFilter] = useState<Record<string, string>>({})
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
+  const { range, maxDays } = useDateRange()
 
   useEffect(() => { document.title = 'JOOLA INTEL — TikTok' }, [])
 
@@ -67,7 +75,8 @@ export default function TikTokPage() {
   }
 
   const displayTT = applyBrandFilter(ttData, filteredBrands, isFiltered)
-  const displayVideos = applyBrandFilter(videos, filteredBrands, isFiltered)
+  const displayVideosAll = applyBrandFilter(videos, filteredBrands, isFiltered)
+  const displayVideos = applyDateRange(displayVideosAll, maxDays)
   const displayTrend = applyBrandFilterRecord(trend, filteredBrands, isFiltered)
 
   const name = (s: string) => pgName(s, brands)
@@ -79,19 +88,6 @@ export default function TikTokPage() {
   const vpvSorted = [...displayTT].filter(d => d.videos > 0)
     .sort((a, b) => b.avgViews - a.avgViews)
   const maxVpv = vpvSorted[0]?.avgViews || 1
-
-  // Follower snapshot bars — one row per brand, latest non-zero value.
-  // Deduplicates by brand id using a Map (defensive against duplicate keys).
-  const snapshotMap = new Map<string, number>()
-  for (const [id, data] of Object.entries(displayTrend)) {
-    if (!data || data.length === 0) continue
-    const latest = [...data].reverse().find(v => v > 0) ?? data[data.length - 1] ?? 0
-    if (latest > 0) snapshotMap.set(id, latest)
-  }
-  const followerSnapshotBars = Array.from(snapshotMap.entries())
-    .map(([id, followers]) => ({ id, followers, color: pgColor(id) }))
-    .sort((a, b) => b.followers - a.followers)
-  const maxSnapshot = followerSnapshotBars[0]?.followers || 1
 
   // Apply per-column filters (case-insensitive substring match) before sorting.
   const filteredVideos = displayVideos.filter(v => {
@@ -122,10 +118,6 @@ export default function TikTokPage() {
         title="TikTok"
         accent="short-form"
         sub="JOOLA's TikTok (~20-30K followers) outpaces its X presence. Selkirk leads at ~13K. Short-form video is the fastest-growing channel for the pickleball category."
-        actions={<>
-          <select className="select"><option>All {displayTT.length} brands</option></select>
-          <select className="select"><option>Last 8 weeks</option></select>
-        </>}
       />
       <FilterBanner />
 
@@ -138,8 +130,8 @@ export default function TikTokPage() {
               </svg>
             </div>
             <div>
-              <h4>TIKTOK DATA NOT YET COLLECTED</h4>
-              <p>Run the Python pipeline to populate TikTok follower counts and videos. Execute <strong style={{ color: 'var(--fg)' }}>run_tiktok()</strong> in <code>scripts/pipeline/apify_to_supabase.py</code> once.</p>
+              <h4>TIKTOK DATA IS BEING REFRESHED</h4>
+              <p>Follower counts and videos for this channel will appear after the next weekly snapshot completes. Check back shortly.</p>
             </div>
           </div>
         </section>
@@ -176,36 +168,6 @@ export default function TikTokPage() {
           />
         </div>
       </section>
-
-      {followerSnapshotBars.length > 0 && (
-        <section>
-          <div className="section-head"><div>
-            <h2>
-              TikTok follower snapshots by brand
-              <SectionInfo
-                title="Latest Follower Snapshot per Brand"
-                description="Latest non-zero TikTok follower count for each tracked brand. One bar per brand — duplicate weekly rows are collapsed by keeping the most recent snapshot."
-                source="tiktok_profiles_weekly · scraped via clockworks/tiktok-scraper every Monday"
-              />
-            </h2>
-            <div className="sub">{followerSnapshotBars.length} brands · latest snapshot</div>
-          </div></div>
-          <div className="card"><div className="card-pad">
-            {followerSnapshotBars.map(d => (
-              <div key={d.id} className={'bar-row ' + (d.id === 'joola' ? 'joola' : '')}>
-                <div className="lbl">{name(d.id)}</div>
-                <div className="track">
-                  <div className="fill" style={{
-                    width: Math.max(2, d.followers / maxSnapshot * 100) + '%',
-                    background: d.id === 'joola' ? '#22c55e' : `linear-gradient(90deg, ${d.color}, ${d.color}99)`,
-                  }}>{fmt(d.followers)}</div>
-                </div>
-                <div className="spark-mini">followers</div>
-              </div>
-            ))}
-          </div></div>
-        </section>
-      )}
 
       <section>
         <div className="two-col">
@@ -263,8 +225,17 @@ export default function TikTokPage() {
             </div></div>
             <div className="card"><div className="card-pad">
               {vpvSorted.length > 0 ? vpvSorted.map(d => (
-                <div key={d.brand} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}>
-                  <div className="lbl">{name(d.brand)}</div>
+                <div
+                  key={d.brand}
+                  className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}
+                  style={{ cursor: 'pointer' }}
+                  title={`Click to filter the videos table below to ${name(d.brand)}`}
+                  onClick={() => {
+                    setColFilter(p => ({ ...p, brand: name(d.brand) }))
+                    document.getElementById('tiktok-videos-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                >
+                  <div className="lbl">{name(d.brand)} <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>↓ filter</span></div>
                   <div className="track">
                     <div className="fill" style={{
                       width: Math.max(2, d.avgViews / maxVpv * 100) + '%',
@@ -282,17 +253,20 @@ export default function TikTokPage() {
         </div>
       </section>
 
-      <section>
+      <section id="tiktok-videos-table">
         <div className="section-head"><div>
           <h2>
-            Top videos · by views
+            Top {sortedVideos.length} videos · by views
             <SectionInfo
               title="Top TikTok Videos"
-              description="Most-viewed TikTok videos across all tracked brands. Short-form tutorials and challenge content tend to dominate. High share counts indicate viral potential."
+              description="Up to the 20 most-viewed TikTok videos across the tracked brands, ranked by view count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Short-form tutorials and challenge content tend to dominate; high share counts indicate viral potential."
               source="tiktok_videos · scraped via clockworks/tiktok-scraper. Click column headers to sort."
             />
           </h2>
-          <div className="sub">Top TikTok videos across all brands. Click column headers to sort.</div>
+          <div className="sub">
+            Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 20 ·
+            {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+          </div>
         </div></div>
         <div className="card">
           {sortedVideos.length > 0 ? (
@@ -345,7 +319,7 @@ export default function TikTokPage() {
                       <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(v.likes)}</td>
                       <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(v.comments)}</td>
                       <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(v.shares)}</td>
-                      <td className="cell-num">{v.days}d ago</td>
+                      <td className="cell-num" title={relativeLabel(v.days)}>{formatCalendarDateFromDaysAgo(v.days)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -353,8 +327,10 @@ export default function TikTokPage() {
             </div>
           ) : (
             <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
-              <div style={{ fontSize: 13, marginBottom: 8 }}>No video data yet.</div>
-              <div style={{ fontSize: 11 }}>Run <code>python scripts/pipeline/apify_to_supabase.py</code> to populate TikTok videos.</div>
+              <div style={{ fontSize: 13, marginBottom: 8 }}>No videos match the current filters.</div>
+              <div style={{ fontSize: 11 }}>
+                Try widening the date range (top right){displayVideosAll.length > 0 ? `, expanding the brand filter, or clearing the column search.` : ' or check back after the next weekly refresh.'}
+              </div>
             </div>
           )}
         </div>

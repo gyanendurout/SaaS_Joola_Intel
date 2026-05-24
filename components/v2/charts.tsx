@@ -67,7 +67,7 @@ export function Sparkline({ data, w = 90, h = 30, color = '#22c55e', fill = true
 // ─── Line chart (multi-series) ───────────────────────────────────────
 export type LineSeries = { id: string; label: string; color: string; data: number[] }
 
-export function LineChart({ series, w = 760, h = 260, yLabel = '' }: { series: LineSeries[]; w?: number; h?: number; yLabel?: string }) {
+export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { series: LineSeries[]; w?: number; h?: number; yLabel?: string; xLabels?: string[] }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
 
@@ -132,7 +132,7 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '' }: { series: L
           </g>
         ))}
         {Array.from({ length: N }).map((_, i) => (
-          <text key={i} x={x(i)} y={h - 10} textAnchor="middle" className="scatter-axis">W{i + 1}</text>
+          <text key={i} x={x(i)} y={h - 10} textAnchor="middle" className="scatter-axis">{xLabels?.[i] ?? `W${i + 1}`}</text>
         ))}
         {/* crosshair at hovered week */}
         {tipIdx !== null && (
@@ -194,7 +194,7 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '' }: { series: L
           top: (padT / h) * 100 + '%',
           whiteSpace: 'nowrap', transform: 'translate(-50%, -110%)',
         }}>
-          <div className="t-name">Week {tipIdx + 1}</div>
+          <div className="t-name">{xLabels?.[tipIdx] ?? `Week ${tipIdx + 1}`}</div>
           {[...cleanSeries]
             .sort((a, b) => b.data[tipIdx] - a.data[tipIdx])
             .slice(0, 6)

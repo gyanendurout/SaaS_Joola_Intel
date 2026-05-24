@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import {
-  fetchBrands, fetchTopComments, fetchCommentCounts,
+  fetchBrands, fetchTopComments, fetchCommentCounts, fetchTopRedditComments,
   type V2Brand, type V2TopComment, type V2CommentCount,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
 import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, FilterBanner } from '@/components/v2/PageShell'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
+import { useDateRange, applyDateRange } from '@/lib/v2/DateRangeContext'
+import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 
 export default function CommentsPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -15,8 +17,10 @@ export default function CommentsPage() {
   const [counts, setCounts] = useState<V2CommentCount[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<'all' | 'ig' | 'yt' | 'joola'>('all')
+  const [filter, setFilter] = useState<'all' | 'ig' | 'yt' | 'reddit' | 'joola'>('all')
+  const [visibleCount, setVisibleCount] = useState(30)
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
+  const { maxDays } = useDateRange()
 
   useEffect(() => {
     document.title = 'JOOLA INTEL — Comments Intel'
@@ -25,8 +29,13 @@ export default function CommentsPage() {
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
-        const [c, cn] = await Promise.all([fetchTopComments(b, 30), fetchCommentCounts(b)])
-        setBrands(b); setAllBrands(b); setComments(c); setCounts(cn); setLoading(false)
+        const [c, cn, rc] = await Promise.all([
+          fetchTopComments(b, 30),
+          fetchCommentCounts(b),
+          fetchTopRedditComments(b, 20),
+        ])
+        const merged = [...c, ...rc].sort((a, z) => z.likes - a.likes)
+        setBrands(b); setAllBrands(b); setComments(merged); setCounts(cn); setLoading(false)
       } catch (err) {
         console.error('Data fetch failed', err)
         setError('Unable to load data. Please refresh.')
@@ -57,24 +66,31 @@ export default function CommentsPage() {
   const totalYT = displayCounts.reduce((s, c) => s + c.yt, 0)
   const maxTotal = displayCounts[0]?.total || 1
 
-  const filtered = displayComments.filter((c) => {
+  // Apply date-range filter first, then empty-text filter, then platform/brand filter
+  const dateFiltered = applyDateRange(displayComments, maxDays)
+  const nonEmpty = dateFiltered.filter(c => c.text && c.text.trim() !== '' && c.text.trim() !== '—')
+
+  const totalReddit = nonEmpty.filter(c => c.platform === 'reddit').length
+
+  const filtered = nonEmpty.filter((c) => {
     if (filter === 'ig') return c.platform === 'ig'
     if (filter === 'yt') return c.platform === 'yt'
+    if (filter === 'reddit') return c.platform === 'reddit'
     if (filter === 'joola') return c.brand === 'joola'
     return true
   })
 
+  const allNeutral = filtered.length > 0 && filtered.every(c => c.sentiment === 'neutral')
+
+  const visibleComments = filtered.slice(0, visibleCount)
+
   return (
     <>
       <PageHead
-        eyebrow={`COMMENTS INTEL · ${totalIG} IG · ${totalYT} YT`}
+        eyebrow={`COMMENTS INTEL · ${fmt(totalIG + totalYT + totalReddit)} comments analyzed`}
         title="Comments"
         accent="intelligence"
-        sub="Real fan voice across Instagram and YouTube. Surface ambassadors, catch product issues, learn what's resonating."
-        actions={<>
-          <select className="select"><option>IG + YT</option></select>
-          <select className="select"><option>All {displayCounts.length} brands</option></select>
-        </>}
+        sub="Real fan voice across Instagram, YouTube, and Reddit. Surface ambassadors, catch product issues, learn what's resonating."
       />
       <FilterBanner />
 
@@ -87,21 +103,21 @@ export default function CommentsPage() {
             spark={[...Array(8)].map((_, i) => Math.max(0, (joolaCount?.ig || 0) - i * 20))}
           />
           <MiniKpi
-            label="Most commented brand" src="Instagram comments"
+            label="Most commented brand" src="All platforms"
             value={displayCounts[0] ? name(displayCounts[0].brand) : '—'}
             color="#F5E625"
-            customVs={`${displayCounts[0]?.ig || 0} IG comments`}
+            customVs={`${displayCounts[0]?.total || 0} total comments`}
             flavor="warn"
           />
           <MiniKpi
             label="JOOLA YT comments" src="YouTube comments"
-            value={joolaCount ? fmt(joolaCount.yt) : '0'}
+            value={(!joolaCount || joolaCount.yt === 0) ? '—' : fmt(joolaCount.yt)}
             color="#22c55e" flavor="joola"
-            customVs={(!joolaCount || joolaCount.yt === 0) ? 'YouTube channel not yet fully tracked' : undefined}
+            customVs={(!joolaCount || joolaCount.yt === 0) ? 'No comments in this period' : undefined}
           />
           <MiniKpi
-            label="Total comments" src="ig + yt"
-            value={fmt(totalIG + totalYT)}
+            label="Total comments" src="All platforms"
+            value={fmt(totalIG + totalYT + totalReddit)}
             color="#818cf8"
             customVs={`across ${displayCounts.length} brands`}
           />
@@ -116,7 +132,7 @@ export default function CommentsPage() {
               <SectionInfo
                 title="Audience Engagement Volume"
                 description="How many comments each brand's content receives across Instagram and YouTube combined. High comment volume signals an active, engaged community — people don't just watch, they respond. Brands with proportionally more comments relative to followers have especially vocal fans."
-                source="Instagram comments + YouTube comments · scraped via apify/instagram-profile-scraper and streamers/youtube-scraper"
+                source="Instagram comments + YouTube comments via tracked post data"
               />
             </h2>
             <div className="sub">Instagram and YouTube combined. High per-follower comment rate signals audience resonance.</div>
@@ -165,8 +181,8 @@ export default function CommentsPage() {
               Top comments · all brands
               <SectionInfo
                 title="Highest-Liked Fan Comments"
-                description="The most-liked comments across all tracked Instagram and YouTube posts — real fan voice, surfaced by the community itself. High-like comments reveal shared opinions, pain points, praise, or product requests. Use this to find ambassadors, flag complaints, and copy what's working."
-                source="Instagram comments + YouTube comments · scraped via apify/instagram-profile-scraper and streamers/youtube-scraper. Sentiment tagged by keyword matching."
+                description="The most-liked comments across all tracked Instagram, YouTube, and Reddit posts — real fan voice, surfaced by the community itself. High-like comments reveal shared opinions, pain points, praise, or product requests. Use this to find ambassadors, flag complaints, and copy what's working."
+                source="Instagram comments + YouTube comments via tracked post data. Reddit comments via tracked subreddit mentions. Sentiment tagged by AI classifier."
               />
             </h2>
             <div className="sub">Sorted by likes. Tag ambassadors, flag complaints, copy what's working.</div>
@@ -176,53 +192,87 @@ export default function CommentsPage() {
               <button className={'chip ' + (filter === 'all' ? 'on' : '')} onClick={() => setFilter('all')}>All</button>
               <button className={'chip ' + (filter === 'ig' ? 'on' : '')} onClick={() => setFilter('ig')}>Instagram</button>
               <button className={'chip ' + (filter === 'yt' ? 'on' : '')} onClick={() => setFilter('yt')}>YouTube</button>
+              <button className={'chip ' + (filter === 'reddit' ? 'on' : '')} onClick={() => setFilter('reddit')}>Reddit</button>
               <button className={'chip ' + (filter === 'joola' ? 'on' : '')} onClick={() => setFilter('joola')}>JOOLA only</button>
             </div>
           </div>
         </div>
         <div className="card">
-          {filtered.map((c, i) => (
-            <div key={i} style={{
-              display: 'grid', gridTemplateColumns: 'auto auto 1fr auto auto',
-              gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--line-2)', alignItems: 'center',
-            }}>
-              <span className={'pill ' + (c.platform === 'ig' ? 'pill-info' : 'pill-red')} style={{ fontFamily: 'JetBrains Mono' }}>
-                {c.platform.toUpperCase()}
-              </span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span className="brand-dot" style={{ background: pgColor(c.brand) }} />
-                <span style={{ fontWeight: 700, color: c.brand === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 12 }}>
-                  {name(c.brand)}
-                </span>
-              </span>
-              <div>
-                <div style={{ fontSize: 13, color: 'var(--fg)', marginBottom: 2 }}>"{c.text?.slice(0, 120) || '—'}"</div>
-                <div style={{ fontSize: 10, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <a
-                    href={c.platform === 'ig'
-                      ? `https://www.instagram.com/${c.user.replace(/^@/, '')}/`
-                      : `https://www.youtube.com/@${c.user.replace(/^@/, '')}`}
-                    target="_blank" rel="noopener noreferrer"
-                    className="cta-link"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {c.user}
-                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                  </a>
-                  <span className={'pill ' + (c.platform === 'ig' ? 'pill-info' : 'pill-red')} style={{ fontFamily: 'JetBrains Mono', fontSize: 9, padding: '1px 5px' }}>
-                    {c.platform === 'ig' ? 'IG' : 'YT'}
-                  </span>
-                  · {c.days}d ago
-                </div>
-              </div>
-              <span className={'pill ' + (c.sentiment === 'positive' ? 'pill-green' : c.sentiment === 'negative' ? 'pill-red' : 'pill-ghost')}>
-                {c.sentiment}
-              </span>
-              <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--fg-3)', fontWeight: 600 }}>♥ {c.likes}</span>
+          {allNeutral && (
+            <div className="alert-banner amber" style={{ margin: '0 0 12px', padding: '10px 16px', borderRadius: 6, background: 'rgba(245,182,37,0.12)', border: '1px solid rgba(245,182,37,0.3)', color: '#F5E625', fontSize: 12 }}>
+              Sentiment classifier in calibration — all comments are showing as neutral until the classifier confidence improves.
             </div>
-          ))}
+          )}
+          <div style={{ fontSize: 12, color: 'var(--fg-4)', padding: '8px 18px 0' }}>
+            Showing {Math.min(visibleCount, filtered.length)} of {filtered.length} comments
+          </div>
+          {visibleComments.map((c, i) => {
+            const linkHref = c.postUrl || (c.platform === 'ig'
+              ? `https://www.instagram.com/${c.user.replace(/^@/, '')}/`
+              : c.platform === 'reddit'
+                ? `https://www.reddit.com/`
+                : `https://www.youtube.com/@${c.user.replace(/^@/, '')}`)
+            const isPostLink = !!c.postUrl
+            const sentimentClass = allNeutral
+              ? 'pill-ghost'
+              : c.sentiment === 'positive' ? 'pill-green' : c.sentiment === 'negative' ? 'pill-red' : 'pill-ghost'
+            const platformPillClass = c.platform === 'ig' ? 'pill-info' : c.platform === 'reddit' ? 'pill-amber' : 'pill-red'
+            const platformLabel = c.platform === 'ig' ? 'IG' : c.platform === 'reddit' ? 'Reddit' : 'YT'
+            return (
+              <div key={i} style={{
+                display: 'grid', gridTemplateColumns: 'auto auto 1fr auto auto',
+                gap: 12, padding: '14px 18px', borderBottom: '1px solid var(--line-2)', alignItems: 'center',
+              }}>
+                <span className={'pill ' + platformPillClass} style={{ fontFamily: 'JetBrains Mono' }}>
+                  {c.platform.toUpperCase()}
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span className="brand-dot" style={{ background: pgColor(c.brand) }} />
+                  <span style={{ fontWeight: 700, color: c.brand === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 12 }}>
+                    {name(c.brand)}
+                  </span>
+                </span>
+                <div>
+                  <div style={{ fontSize: 13, color: 'var(--fg)', marginBottom: 2 }}>"{c.text?.slice(0, 120) || '—'}"</div>
+                  <div style={{ fontSize: 10, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <a
+                      href={linkHref}
+                      target="_blank" rel="noopener noreferrer"
+                      className="cta-link"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {isPostLink ? 'View post →' : c.user}
+                      {!isPostLink && (
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                      )}
+                    </a>
+                    {isPostLink && (
+                      <span style={{ color: 'var(--fg-5)' }}>{c.user}</span>
+                    )}
+                    <span className={'pill ' + platformPillClass} style={{ fontFamily: 'JetBrains Mono', fontSize: 9, padding: '1px 5px' }}>
+                      {platformLabel}
+                    </span>
+                    <span title={c.days + 'd ago'}>{formatCalendarDateFromDaysAgo(c.days)}</span>
+                  </div>
+                </div>
+                <span className={'pill ' + sentimentClass}>
+                  {c.sentiment}
+                </span>
+                <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--fg-3)', fontWeight: 600 }}>♥ {c.likes}</span>
+              </div>
+            )
+          })}
           {filtered.length === 0 && (
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)' }}>No comments found for this filter.</div>
+          )}
+          {filtered.length > visibleCount && (
+            <button
+              className="btn btn-ghost"
+              onClick={() => setVisibleCount(v => v + 30)}
+              style={{ width: '100%', marginTop: 8 }}
+            >
+              Show {Math.min(30, filtered.length - visibleCount)} more
+            </button>
           )}
         </div>
       </section>

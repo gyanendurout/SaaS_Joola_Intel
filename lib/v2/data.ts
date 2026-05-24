@@ -239,14 +239,19 @@ export async function fetchReddit(brands: V2Brand[]): Promise<V2RedditRow[]> {
 
 // ─── Influencers ─────────────────────────────────────────────────────
 export type V2InfluencerRow = {
+  id: string;
   name: string; brand: string; followers: number; posts: number;
   avgLikes: number; engRate: number; init: string;
+  /** Instagram handle (no @ prefix) — present when the athlete row has one. */
+  igHandle?: string;
+  /** X / Twitter handle (no @ prefix) — present when the athlete row has one. */
+  xHandle?: string;
 }
 
 export async function fetchInfluencers(brands: V2Brand[]): Promise<V2InfluencerRow[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
   const [{ data: infs }, { data: posts }] = await Promise.all([
-    supabase.from('influencers').select('id,name,brand_id,follower_count_ig').order('follower_count_ig', { ascending: false }),
+    supabase.from('influencers').select('id,name,brand_id,follower_count_ig,instagram_handle,x_handle').order('follower_count_ig', { ascending: false }),
     supabase.from('influencer_posts').select('influencer_id,like_count,comment_count').limit(2000),
   ])
   const eng: Record<string, { likes: number; comments: number; n: number }> = {}
@@ -266,6 +271,7 @@ export async function fetchInfluencers(brands: V2Brand[]): Promise<V2InfluencerR
         : 0
       const init = (i.name || '?').split(' ').map((s: string) => s[0]).slice(0, 2).join('').toUpperCase()
       return {
+        id: i.id,
         name: i.name,
         brand: slugByBid[i.brand_id] || 'unknown',
         followers: i.follower_count_ig || 0,
@@ -273,6 +279,8 @@ export async function fetchInfluencers(brands: V2Brand[]): Promise<V2InfluencerR
         avgLikes: Math.round(avgLikes),
         engRate: Number(engRate.toFixed(2)),
         init,
+        igHandle: i.instagram_handle || undefined,
+        xHandle: i.x_handle || undefined,
       }
     })
     .filter((r) => r.followers > 0)
@@ -304,14 +312,14 @@ export async function fetchAdSample(brands: V2Brand[], limit = 12): Promise<V2Ad
 // ─── Top IG posts (engagement-sorted) ────────────────────────────────
 export type V2TopIGPost = {
   brand: string; handle: string; caption: string; likes: number; comments: number;
-  views: number; format: string; days: number; engRate: number
+  views: number; format: string; days: number; engRate: number; url: string
 }
 
 export async function fetchTopIGPosts(brands: V2Brand[], limit = 12): Promise<V2TopIGPost[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
   const { data } = await supabase
     .from('ig_posts')
-    .select('brand_id,handle,caption,like_count,comment_count,view_count,post_format,posted_at')
+    .select('brand_id,handle,caption,like_count,comment_count,view_count,post_format,posted_at,post_url,instagram_post_id')
     .order('like_count', { ascending: false })
     .limit(limit)
   const seen = new Set<string>()
@@ -324,6 +332,13 @@ export async function fetchTopIGPosts(brands: V2Brand[], limit = 12): Promise<V2
     })
     .map((p: any) => {
       const days = p.posted_at ? Math.max(0, Math.floor((Date.now() - new Date(p.posted_at).getTime()) / 86400000)) : 0
+      const url = p.post_url
+        ? p.post_url
+        : p.instagram_post_id
+          ? `https://www.instagram.com/p/${p.instagram_post_id}/`
+          : p.handle
+            ? `https://www.instagram.com/${p.handle}/`
+            : ''
       return {
         brand: slugByBid[p.brand_id] || 'unknown',
         handle: '@' + (p.handle || ''),
@@ -334,18 +349,19 @@ export async function fetchTopIGPosts(brands: V2Brand[], limit = 12): Promise<V2
         format: p.post_format || 'Image',
         days,
         engRate: 0,
+        url,
       }
     })
 }
 
 // ─── Top YT videos ───────────────────────────────────────────────────
-export type V2TopYTVideo = { brand: string; title: string; views: number; likes: number; comments: number; duration: string; days: number }
+export type V2TopYTVideo = { brand: string; title: string; views: number; likes: number; comments: number; duration: string; days: number; video_id: string; url: string }
 
 export async function fetchTopYTVideos(brands: V2Brand[], limit = 10): Promise<V2TopYTVideo[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
   const { data } = await supabase
     .from('yt_videos')
-    .select('brand_id,title,view_count,like_count,comment_count,duration_seconds,published_at')
+    .select('brand_id,video_id,title,view_count,like_count,comment_count,duration_seconds,published_at')
     .order('view_count', { ascending: false })
     .limit(limit)
   return (data || []).map((v: any) => {
@@ -353,6 +369,7 @@ export async function fetchTopYTVideos(brands: V2Brand[], limit = 10): Promise<V
     const mm = Math.floor(sec / 60).toString().padStart(2, '0')
     const ss = (sec % 60).toString().padStart(2, '0')
     const days = v.published_at ? Math.max(0, Math.floor((Date.now() - new Date(v.published_at).getTime()) / 86400000)) : 0
+    const vid = v.video_id || ''
     return {
       brand: slugByBid[v.brand_id] || 'unknown',
       title: v.title || '',
@@ -361,44 +378,144 @@ export async function fetchTopYTVideos(brands: V2Brand[], limit = 10): Promise<V
       comments: v.comment_count || 0,
       duration: `${mm}:${ss}`,
       days,
+      video_id: vid,
+      url: vid ? `https://www.youtube.com/watch?v=${vid}` : '',
     }
   })
 }
 
-// ─── Top comments (IG + YT combined, top by likes) ──────────────────
+// ─── Top comments (cross-platform, top by likes) ────────────────────
+//
+// Platform enum is broad on purpose: 'ig' / 'yt' have full per-comment data
+// in ig_comments / yt_comments; 'reddit' pulls from reddit_comments;
+// 'tiktok' / 'x' currently surface POST-level commentary because we don't
+// yet collect per-comment text for those sources. The page should reflect
+// that honestly rather than pretend the platforms don't exist.
 export type V2TopComment = {
-  user: string; text: string; platform: 'ig' | 'yt'; brand: string; likes: number;
-  sentiment: 'positive' | 'neutral' | 'negative'; days: number
+  user: string; text: string; platform: 'ig' | 'yt' | 'reddit' | 'tiktok' | 'x'; brand: string; likes: number;
+  sentiment: 'positive' | 'neutral' | 'negative'; days: number;
+  /** Direct link to the original post the comment is attached to (preferred over commenter profile). */
+  postUrl?: string;
+  /** Fallback link — typically the commenter's profile or the parent post permalink. */
+  profileUrl?: string;
+}
+
+const sentimentFromLabel = (label: unknown): 'positive' | 'neutral' | 'negative' => {
+  const s = String(label || '').toLowerCase()
+  if (s === 'positive' || s === 'pos') return 'positive'
+  if (s === 'negative' || s === 'neg') return 'negative'
+  return 'neutral'
 }
 
 export async function fetchTopComments(brands: V2Brand[], limit = 12): Promise<V2TopComment[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  // IG/YT comments include post FK so we can join up to the post URL.
+  // We pull post_id then resolve post_url / video_id in parallel.
   const [{ data: ig }, { data: yt }] = await Promise.all([
-    supabase.from('ig_comments').select('brand_id,commenter_username,comment_text,comment_likes,posted_at').order('comment_likes', { ascending: false }).limit(limit * 2),
-    supabase.from('yt_comments').select('brand_id,commenter_username,comment_text,comment_likes,posted_at').order('comment_likes', { ascending: false }).limit(limit * 2),
+    supabase.from('ig_comments').select('brand_id,post_id,commenter_username,comment_text,comment_likes,posted_at,sentiment_label').order('comment_likes', { ascending: false }).limit(limit * 4),
+    supabase.from('yt_comments').select('brand_id,video_id,commenter_username,comment_text,comment_likes,posted_at,sentiment_label').order('comment_likes', { ascending: false }).limit(limit * 4),
   ])
+
+  // Resolve IG post → post_url + shortcode; YT video → video_id (public string)
+  const igPostIds = Array.from(new Set((ig || []).map((c: any) => c.post_id).filter(Boolean)))
+  const ytVideoFkIds = Array.from(new Set((yt || []).map((c: any) => c.video_id).filter(Boolean)))
+
+  const [{ data: igPosts }, { data: ytVids }] = await Promise.all([
+    igPostIds.length
+      ? supabase.from('ig_posts').select('id,post_url,instagram_post_id,handle').in('id', igPostIds)
+      : Promise.resolve({ data: [] as any[] }),
+    ytVideoFkIds.length
+      ? supabase.from('yt_videos').select('id,youtube_video_id,video_url').in('id', ytVideoFkIds)
+      : Promise.resolve({ data: [] as any[] }),
+  ])
+
+  const igPostMap: Record<string, { post_url: string; shortcode: string; handle: string }> = {}
+  ;(igPosts || []).forEach((p: any) => {
+    igPostMap[p.id] = {
+      post_url: p.post_url || (p.instagram_post_id ? `https://www.instagram.com/p/${p.instagram_post_id}/` : ''),
+      shortcode: p.instagram_post_id || '',
+      handle: p.handle || '',
+    }
+  })
+  const ytVideoMap: Record<string, { url: string; vid: string }> = {}
+  ;(ytVids || []).forEach((v: any) => {
+    ytVideoMap[v.id] = {
+      url: v.video_url || (v.youtube_video_id ? `https://www.youtube.com/watch?v=${v.youtube_video_id}` : ''),
+      vid: v.youtube_video_id || '',
+    }
+  })
+
   const dayDiff = (ts: string | null) => ts ? Math.max(0, Math.floor((Date.now() - new Date(ts).getTime()) / 86400000)) : 0
   const merged: V2TopComment[] = [
-    ...(ig || []).map((c: any): V2TopComment => ({
-      user: '@' + (c.commenter_username || 'anon'),
-      text: c.comment_text || '',
-      platform: 'ig',
-      brand: slugByBid[c.brand_id] || 'unknown',
-      likes: c.comment_likes || 0,
-      sentiment: 'neutral',
-      days: dayDiff(c.posted_at),
-    })),
-    ...(yt || []).map((c: any): V2TopComment => ({
-      user: '@' + (c.commenter_username || 'anon'),
-      text: c.comment_text || '',
-      platform: 'yt',
-      brand: slugByBid[c.brand_id] || 'unknown',
-      likes: c.comment_likes || 0,
-      sentiment: 'neutral',
-      days: dayDiff(c.posted_at),
-    })),
+    ...(ig || []).map((c: any): V2TopComment => {
+      const post = igPostMap[c.post_id] || { post_url: '', shortcode: '', handle: '' }
+      const user = (c.commenter_username || 'anon')
+      return {
+        user: '@' + user,
+        text: c.comment_text || '',
+        platform: 'ig',
+        brand: slugByBid[c.brand_id] || 'unknown',
+        likes: c.comment_likes || 0,
+        sentiment: sentimentFromLabel(c.sentiment_label),
+        days: dayDiff(c.posted_at),
+        postUrl: post.post_url || undefined,
+        profileUrl: user && user !== 'anon' ? `https://www.instagram.com/${user.replace(/^@/, '')}/` : undefined,
+      }
+    }),
+    ...(yt || []).map((c: any): V2TopComment => {
+      const video = ytVideoMap[c.video_id] || { url: '', vid: '' }
+      const user = (c.commenter_username || 'anon')
+      return {
+        user: '@' + user,
+        text: c.comment_text || '',
+        platform: 'yt',
+        brand: slugByBid[c.brand_id] || 'unknown',
+        likes: c.comment_likes || 0,
+        sentiment: sentimentFromLabel(c.sentiment_label),
+        days: dayDiff(c.posted_at),
+        postUrl: video.url || undefined,
+        profileUrl: user && user !== 'anon' ? `https://www.youtube.com/@${user.replace(/^@/, '')}` : undefined,
+      }
+    }),
   ]
-  return merged.sort((a, b) => b.likes - a.likes).slice(0, limit)
+  return merged
+    .filter((c) => c.text && c.text.trim() !== '' && c.text.trim() !== '—')
+    .sort((a, b) => b.likes - a.likes)
+    .slice(0, limit)
+}
+
+/** Top Reddit comments (per-comment text from reddit_comments table). */
+export async function fetchTopRedditComments(brands: V2Brand[], limit = 30): Promise<V2TopComment[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  const { data } = await supabase
+    .from('reddit_comments')
+    .select('brand_id,parent_post_id,subreddit,author,comment_text,upvotes,posted_at,sentiment_label')
+    .order('upvotes', { ascending: false })
+    .limit(limit * 2)
+
+  // Resolve parent_post_id → url so we can link comments back to their thread.
+  const parentIds = Array.from(new Set((data || []).map((c: any) => c.parent_post_id).filter(Boolean)))
+  const { data: parents } = parentIds.length
+    ? await supabase.from('reddit_mentions').select('id,url,subreddit').in('id', parentIds)
+    : { data: [] as any[] }
+  const parentMap: Record<string, { url: string }> = {}
+  ;(parents || []).forEach((p: any) => { parentMap[p.id] = { url: p.url || '' } })
+
+  const dayDiff = (ts: string | null) => ts ? Math.max(0, Math.floor((Date.now() - new Date(ts).getTime()) / 86400000)) : 0
+  return (data || [])
+    .filter((c: any) => c.comment_text && String(c.comment_text).trim() !== '' && String(c.comment_text).trim() !== '—')
+    .map((c: any): V2TopComment => ({
+      user: c.author ? 'u/' + String(c.author).replace(/^u\//, '') : 'u/anon',
+      text: c.comment_text || '',
+      platform: 'reddit',
+      brand: slugByBid[c.brand_id] || 'unknown',
+      likes: c.upvotes || 0,
+      sentiment: sentimentFromLabel(c.sentiment_label),
+      days: dayDiff(c.posted_at),
+      postUrl: parentMap[c.parent_post_id]?.url || undefined,
+      profileUrl: c.author ? `https://www.reddit.com/user/${String(c.author).replace(/^u\//, '')}/` : undefined,
+    }))
+    .slice(0, limit)
 }
 
 // ─── Cached overview bundle ──────────────────────────────────────────
@@ -476,6 +593,33 @@ export async function fetchRedditSubreddits(brands: V2Brand[]): Promise<V2Subred
     }))
     .sort((a, b) => b.mentions - a.mentions)
     .slice(0, 6)
+}
+
+// ─── Top Reddit mentions (drill-down table) ──────────────────────────
+export type V2RedditMention = {
+  brand: string; subreddit: string; title: string; body: string;
+  score: number; comments: number; url: string; days: number
+}
+
+export async function fetchTopRedditMentions(brands: V2Brand[], limit = 20): Promise<V2RedditMention[]> {
+  const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  const { data } = await supabase
+    .from('reddit_mentions')
+    .select('brand_id,subreddit,title,body,score,num_comments,url,posted_at')
+    .order('score', { ascending: false })
+    .limit(limit)
+  return (data || []).map((m: any) => ({
+    brand: slugByBid[m.brand_id] || 'unknown',
+    subreddit: m.subreddit || '',
+    title: m.title || '',
+    body: m.body || '',
+    score: m.score || 0,
+    comments: m.num_comments || 0,
+    url: m.url || '',
+    days: m.posted_at
+      ? Math.max(0, Math.floor((Date.now() - new Date(m.posted_at).getTime()) / 86400000))
+      : 0,
+  }))
 }
 
 // ─── IG post frequency heatmap (4 weeks × 7 days, Mon-first) ─────────
@@ -918,6 +1062,81 @@ export async function fetchTopTikTokVideos(brands: V2Brand[], limit = 15): Promi
     shares: v.share_count || 0,
     days: v.posted_at ? Math.max(0, Math.floor((Date.now() - new Date(v.posted_at).getTime()) / 86400000)) : 0,
   }))
+}
+
+// ─── Top athlete posts (cross-platform; currently Instagram-only data) ─────
+// Pulls posts from influencer_posts (IG by platform column) and resolves
+// influencer_id → athlete name + brand. Keeps the shape close to V2TopIGPost
+// so the table can be styled identically to other top-post tables.
+export type V2TopInfluencerPost = {
+  athleteId: string
+  athleteName: string
+  athleteHandle: string
+  brand: string
+  platform: 'ig' | 'tiktok' | 'yt' | 'x'
+  caption: string
+  likes: number
+  comments: number
+  views: number
+  days: number
+  url: string
+}
+
+export async function fetchTopInfluencerPosts(
+  brands: V2Brand[],
+  limit = 50,
+): Promise<V2TopInfluencerPost[]> {
+  const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+
+  // Athlete roster lookup: id → name, handle, brand
+  const { data: infs } = await supabase
+    .from('influencers')
+    .select('id,name,brand_id,instagram_handle')
+  const athleteById: Record<string, { name: string; brand: string; handle: string }> = {}
+  ;(infs || []).forEach((i: any) => {
+    athleteById[i.id] = {
+      name: i.name || '',
+      brand: slugByBid[i.brand_id] || 'unknown',
+      handle: i.instagram_handle || '',
+    }
+  })
+
+  const { data: posts } = await supabase
+    .from('influencer_posts')
+    .select('influencer_id,platform,post_url,caption,like_count,comment_count,view_count,posted_at')
+    .order('like_count', { ascending: false })
+    .limit(limit)
+
+  return (posts || [])
+    .map((p: any): V2TopInfluencerPost | null => {
+      const ath = athleteById[p.influencer_id]
+      if (!ath) return null
+      const platformRaw = String(p.platform || 'instagram').toLowerCase()
+      const platform: V2TopInfluencerPost['platform'] =
+        platformRaw === 'tiktok' ? 'tiktok'
+          : platformRaw === 'youtube' || platformRaw === 'yt' ? 'yt'
+          : platformRaw === 'x' || platformRaw === 'twitter' ? 'x'
+          : 'ig'
+      const days = p.posted_at
+        ? Math.max(0, Math.floor((Date.now() - new Date(p.posted_at).getTime()) / 86400000))
+        : 0
+      const url = p.post_url
+        || (ath.handle ? `https://www.instagram.com/${ath.handle}/` : '')
+      return {
+        athleteId: p.influencer_id,
+        athleteName: ath.name,
+        athleteHandle: ath.handle,
+        brand: ath.brand,
+        platform,
+        caption: p.caption || '',
+        likes: p.like_count || 0,
+        comments: p.comment_count || 0,
+        views: p.view_count || 0,
+        days,
+        url,
+      }
+    })
+    .filter((r): r is V2TopInfluencerPost => r !== null)
 }
 
 export async function fetchOverview(): Promise<V2Overview> {

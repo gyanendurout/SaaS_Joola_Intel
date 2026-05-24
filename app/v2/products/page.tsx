@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { fetchBrands, fetchProductStats, fetchProductsList, type V2Brand, type V2ProductRow, type V2ProductItem } from '@/lib/v2/data'
 import { fmt, BoxPlot, ScatterChart } from '@/components/v2/charts'
 import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
+import { TableSearch } from '@/components/v2/TableSearch'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 export default function ProductsPage() {
@@ -11,9 +12,9 @@ export default function ProductsPage() {
   const [stats, setStats] = useState<V2ProductRow[]>([])
   const [products, setProducts] = useState<V2ProductItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [filterBrand, setFilterBrand] = useState('')
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [searchName, setSearchName] = useState('')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
 
   useEffect(() => {
@@ -47,11 +48,16 @@ export default function ProductsPage() {
     min: p.min, med: p.med, max: p.max, avg: p.avg, count: p.count,
   }))
 
-  const displayProducts = filterBrand
-    ? displayProductsAll.filter((p) => p.brand === filterBrand)
+  const productQuery = searchName.trim().toLowerCase()
+  const searchedProducts = productQuery
+    ? displayProductsAll.filter(p => {
+        const pname = String(p.name ?? '').toLowerCase()
+        const cat = String(p.category ?? '').toLowerCase()
+        return pname.includes(productQuery) || cat.includes(productQuery)
+      })
     : displayProductsAll
 
-  const sortedProducts = sortKey ? [...displayProducts].sort((a, b) => {
+  const sortedProducts = sortKey ? [...searchedProducts].sort((a, b) => {
     const av = (a as Record<string, unknown>)[sortKey]
     const bv = (b as Record<string, unknown>)[sortKey]
     if (typeof av === 'number' && typeof bv === 'number')
@@ -59,7 +65,7 @@ export default function ProductsPage() {
     return sortDir === 'asc'
       ? String(av ?? '').localeCompare(String(bv ?? ''))
       : String(bv ?? '').localeCompare(String(av ?? ''))
-  }) : displayProducts
+  }) : searchedProducts
 
   const BRAND_WEBSITES: Record<string, string> = {
     joola: 'https://www.joolausa.com/pickleball-paddles/',
@@ -82,13 +88,6 @@ export default function ProductsPage() {
         title="Catalog &"
         accent="pricing"
         sub={`JOOLA has ${joolaStat?.count || 0} paddles. ${premiumLeader ? name(premiumLeader.brand) + ' owns premium ($' + premiumLeader.avg + ' avg)' : ''}. ${valueLeader ? name(valueLeader.brand) + ' is in value territory ($' + valueLeader.avg + ' avg)' : ''}.`}
-        actions={<>
-          <select className="select" value={filterBrand} onChange={(e) => setFilterBrand(e.target.value)}>
-            <option value="">All brands</option>
-            {brands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-          <select className="select"><option>All categories</option></select>
-        </>}
       />
       <FilterBanner />
 
@@ -242,6 +241,9 @@ export default function ProductsPage() {
           <div className="sub">Click column headers to sort.</div>
         </div></div>
         <div className="card">
+          <div style={{ padding: '10px 14px 0' }}>
+            <TableSearch value={searchName} onChange={setSearchName} placeholder="Search product name or category…" width={280} />
+          </div>
           <div className="table-wrap">
             <table className="data">
               <thead><tr>

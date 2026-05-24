@@ -120,15 +120,6 @@ export default function AdsPage() {
         actions={<>
           <input className="select" style={{ width: 220 }} placeholder="Search ad copy, CTA…"
             value={searchCopy} onChange={e => setSearchCopy(e.target.value)} />
-          <select className="select" value={filterBrand} onChange={e => setFilterBrand(e.target.value)}>
-            <option value="all">All {displayAds.length} brands</option>
-            {uniqueBrands.map(b => <option key={b} value={b}>{name(b)}</option>)}
-          </select>
-          <select className="select" value={filterPlatform} onChange={e => setFilterPlatform(e.target.value)}>
-            <option value="all">All platforms</option>
-            <option value="Meta">Meta</option>
-            <option value="Google">Google</option>
-          </select>
         </>}
       />
       <FilterBanner />
@@ -166,7 +157,7 @@ export default function AdsPage() {
         <div className="section-head">
           <div>
             <h2>
-              Ad volume over 13 weeks · stacked by brand
+              Ad volume over time · stacked by brand
               <SectionInfo
                 title="Ad Volume Trend"
                 description="How many paid creatives each brand has been running per week, stacked together. A brand ramping up its stack height is investing more heavily in paid acquisition — a signal to watch."
@@ -294,7 +285,7 @@ export default function AdsPage() {
                     <td><span className={'pill ' + (a.platform === 'Meta' ? 'pill-info' : 'pill-amber')}>{a.platform}</span></td>
                     <td style={{ color: 'var(--fg)' }}>{a.copy?.slice(0, 90) || '—'}</td>
                     <td><span className="pill pill-ghost">{inferCta(a.cta, a.copy)}</span></td>
-                    <td className="cell-num">{a.started}</td>
+                    <td className="cell-num">{a.started || '—'}</td>
                     <td><span className={'pill ' + (a.active ? 'pill-green' : 'pill-ghost')}>{a.active ? 'ACTIVE' : 'ENDED'}</span></td>
                   </tr>
                 ))}
