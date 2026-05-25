@@ -1,169 +1,1117 @@
 'use client'
 
+/**
+ * Influencer Intel — sponsored-player intelligence dashboard.
+ *
+ * Route: /v2/influencers  (DO NOT create a new route)
+ *
+ * Sections (13 total — ordered top-to-bottom):
+ *  1.  Influencer Intel Summary (inline strip)
+ *  2.  Sponsored player roster by brand
+ *  3.  Player impact map (bubble chart)
+ *  4.  Cross-platform player attention
+ *  5.  Athlete roster performance
+ *  6.  Brand sponsored-player strength
+ *  7.  Top performing player content
+ *  8.  Player mentions in community conversation
+ *  9.  JOOLA sponsored player focus
+ * 10.  Player ↔ paddle connections
+ * 11.  Influencer data coverage
+ * 12.  Pending / Needs data pipeline
+ * 13.  Review required
+ *
+ * Data layer: lib/v2/influencerIntel.ts (single fetcher).
+ * Sponsored-player mapping: lib/v2/playerRoster.ts (config-driven).
+ */
+
 import { useEffect, useMemo, useState } from 'react'
 import {
-  fetchBrands, fetchInfluencers, fetchTopInfluencerPosts,
-  type V2Brand, type V2InfluencerRow, type V2TopInfluencerPost,
-} from '@/lib/v2/data'
+  PageHead, MiniKpi, SortTh, ColumnFilter, LoadingPage, SectionInfo,
+  FilterBanner, pgColor, pgName,
+} from '@/components/v2/PageShell'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner } from '@/components/v2/PageShell'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
-import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL, type DateRangeKey } from '@/lib/v2/DateRangeContext'
+import { fetchBrands, type V2Brand } from '@/lib/v2/data'
+import {
+  fetchInfluencerIntel,
+  platformLabel, platformShort,
+  type InfluencerIntelData,
+  type InfluencerRow,
+  type InfluencerPostRow,
+  type RosterRow,
+  type PlatformAttention,
+  type BrandPlayerStats,
+  type CommunityMention,
+  type JoolaPlayerFocus,
+  type PlayerProductConnection,
+  type IntelPlatform,
+  type IntelSentiment,
+} from '@/lib/v2/influencerIntel'
+import { formatCalendarDate } from '@/lib/v2/format'
 
-// Tier thresholds — used for the "Tier" column legend + per-row labels.
-// Keeping the names in sync with industry usage:
-//   Nano   < 10K
-//   Micro  10K – 100K
-//   Macro  100K – 500K
-//   Mega   500K +
-const TIERS = [
-  { key: 'mega',  label: 'Mega',  min: 500_000, max: Infinity, color: '#F5E625', desc: '500K+ followers' },
-  { key: 'macro', label: 'Macro', min: 100_000, max: 499_999,  color: '#22c55e', desc: '100K – 500K followers' },
-  { key: 'micro', label: 'Micro', min:  10_000, max:  99_999,  color: '#818cf8', desc: '10K – 100K followers' },
-  { key: 'nano',  label: 'Nano',  min:       0, max:   9_999,  color: '#94a3b8', desc: 'Under 10K followers' },
-] as const
+type PlatformKey = 'all' | IntelPlatform
+type SentimentKey = 'all' | IntelSentiment
+type ContentTypeKey = 'all' | 'image' | 'video' | 'reel' | 'short'
 
-function getTier(followers: number) {
-  return TIERS.find((t) => followers >= t.min) || TIERS[TIERS.length - 1]
+const PLATFORM_FILTER_LABEL: Record<PlatformKey, string> = {
+  all: 'All platforms',
+  ig: 'Instagram',
+  yt: 'YouTube',
+  tiktok: 'TikTok',
+  x: 'X / Twitter',
+  reddit: 'Reddit',
 }
 
-// Posts-per-week is intentionally capped for display so a single outlier
-// athlete (29+/wk = mixed feed + Reels + stories) does not visually skew
-// the column. Underlying number is preserved for sort + tooltip.
-const POSTS_PER_WEEK_CAP = 14
+const SENTIMENT_LABEL: Record<SentimentKey, string> = {
+  all: 'All sentiment',
+  positive: 'Positive',
+  neutral: 'Neutral',
+  negative: 'Negative',
+  unknown: 'Unknown',
+}
 
-// Athletes with ER scaled by very low follower counts are typically a
-// scraping artefact (private/locked account, handle mis-mapped). The icon
-// surfaces that doubt to the user; threshold is conservative.
-const LOW_FOLLOWERS_WARNING = 1000
+const SENT_PILL: Record<IntelSentiment, string> = {
+  positive: 'pill-green',
+  neutral: 'pill-ghost',
+  negative: 'pill-red',
+  unknown: 'pill-ghost',
+}
 
-export default function InfluencersPage() {
+const STATUS_COLOR: Record<RosterRow['status'], string> = {
+  'business-mapping': '#22c55e',
+  'confirmed-from-data': '#22c55e',
+  'needs-verification': '#F5E625',
+  'roster-not-confirmed': '#94a3b8',
+}
+
+const STATUS_LABEL: Record<RosterRow['status'], string> = {
+  'business-mapping': 'Business mapping',
+  'confirmed-from-data': 'Confirmed from data',
+  'needs-verification': 'Needs verification',
+  'roster-not-confirmed': 'Roster not confirmed',
+}
+
+function tierFromFollowers(n: number): { label: string; color: string } {
+  if (n >= 500_000) return { label: 'MEGA', color: '#F5E625' }
+  if (n >= 100_000) return { label: 'MACRO', color: '#22c55e' }
+  if (n >= 10_000) return { label: 'MICRO', color: '#818cf8' }
+  return { label: 'NANO', color: '#94a3b8' }
+}
+
+function sortBy<T>(rows: T[], key: keyof T | null, dir: 'asc' | 'desc'): T[] {
+  if (!key) return rows
+  return [...rows].sort((a, b) => {
+    const av = a[key] as unknown
+    const bv = b[key] as unknown
+    if (typeof av === 'number' && typeof bv === 'number') {
+      return dir === 'asc' ? av - bv : bv - av
+    }
+    const as = String(av ?? ''), bs = String(bv ?? '')
+    return dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
+  })
+}
+
+export default function InfluencerIntelPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
-  const [influencers, setInfluencers] = useState<V2InfluencerRow[]>([])
-  const [topPosts, setTopPosts] = useState<V2TopInfluencerPost[]>([])
+  const [data, setData] = useState<InfluencerIntelData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [sortKey, setSortKey] = useState<string | null>(null)
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [error, setError] = useState<string | null>(null)
-  const [hovBubble, setHovBubble] = useState<{ a: V2InfluencerRow; bx: number; by: number } | null>(null)
-  const [selectedAthleteId, setSelectedAthleteId] = useState<string | null>(null)
+
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
-  const { range, maxDays } = useDateRange()
+  const { range, setRange, mode, customFrom, customTo, setCustomFrom, setCustomTo, effectiveFrom, effectiveTo } = useDateRange()
+
+  // ── Filters ────────────────────────────────────────────────────────
+  const [playerQuery, setPlayerQuery] = useState('')
+  const [platformFilter, setPlatformFilter] = useState<PlatformKey>('all')
+  const [sentimentFilter, setSentimentFilter] = useState<SentimentKey>('all')
+  const [contentTypeFilter, setContentTypeFilter] = useState<ContentTypeKey>('all')
+
+  // ── Sort state per table ───────────────────────────────────────────
+  const [rosterSort, setRosterSort] = useState<{ key: keyof RosterRow | null; dir: 'asc' | 'desc' }>({ key: 'brandSlug', dir: 'asc' })
+  const [rosterColFilter, setRosterColFilter] = useState<Record<string, string>>({})
+  const [attentionSort, setAttentionSort] = useState<{ key: keyof PlatformAttention | null; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' })
+  const [attentionColFilter, setAttentionColFilter] = useState<Record<string, string>>({})
+  const [perfSort, setPerfSort] = useState<{ key: keyof InfluencerRow | null; dir: 'asc' | 'desc' }>({ key: 'engRate', dir: 'desc' })
+  const [perfColFilter, setPerfColFilter] = useState<Record<string, string>>({})
+  const [brandStatsSort, setBrandStatsSort] = useState<{ key: keyof BrandPlayerStats | null; dir: 'asc' | 'desc' }>({ key: 'totalEngagement', dir: 'desc' })
+  const [contentSort, setContentSort] = useState<{ key: keyof InfluencerPostRow | null; dir: 'asc' | 'desc' }>({ key: 'engagement', dir: 'desc' })
+  const [contentColFilter, setContentColFilter] = useState<Record<string, string>>({})
+  const [mentionSort, setMentionSort] = useState<{ key: keyof CommunityMention | null; dir: 'asc' | 'desc' }>({ key: 'days', dir: 'asc' })
+  const [mentionColFilter, setMentionColFilter] = useState<Record<string, string>>({})
+
+  useEffect(() => { document.title = 'JOOLA INTEL — Influencer Intel' }, [])
 
   useEffect(() => {
-    fetchBrands().then(async (b) => {
+    let cancelled = false
+    setLoading(true)
+    ;(async () => {
       try {
-        const [inf, posts] = await Promise.all([
-          fetchInfluencers(b),
-          fetchTopInfluencerPosts(b, 50),
-        ])
-        setBrands(b); setAllBrands(b); setInfluencers(inf); setTopPosts(posts); setLoading(false)
+        const b = await fetchBrands()
+        if (cancelled) return
+        setBrands(b)
+        setAllBrands(b)
+        const d = await fetchInfluencerIntel(b, { from: effectiveFrom, to: effectiveTo })
+        if (cancelled) return
+        setData(d)
       } catch (err) {
-        console.error('Influencer data fetch failed', err)
-        setError('Unable to load influencer data. Please refresh.')
-        setLoading(false)
+        // eslint-disable-next-line no-console
+        console.error('[influencer-intel] load failed', err)
+        if (!cancelled) setError('Unable to load Influencer Intel. Refresh the page to retry.')
+      } finally {
+        if (!cancelled) setLoading(false)
       }
-    }).catch(err => {
-      console.error('Brands fetch failed', err)
-      setError('Unable to load data. Please refresh.')
-      setLoading(false)
-    })
-  }, [setAllBrands])
-
-  useEffect(() => { document.title = 'JOOLA INTEL — Influencer Network' }, [])
-
-  // Weeks in the currently selected date range — used by posts/week math.
-  const weeksInWindow = useMemo(() => {
-    if (maxDays == null) return 4 // "All time" → treat as a 4-week rolling baseline
-    return Math.max(1, Math.round(maxDays / 7))
-  }, [maxDays])
-
-  if (loading) return <LoadingPage />
-  if (error) return (
-    <div style={{ padding: '80px 32px', textAlign: 'center' }}>
-      <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-      <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
-    </div>
-  )
-
-  function toggleSort(key: string) {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
-    else { setSortKey(key); setSortDir('desc') }
-  }
-
-  const displayInfluencers = applyBrandFilter(influencers, filteredBrands, isFiltered)
-  const displayTopPostsAll = applyBrandFilter(topPosts, filteredBrands, isFiltered)
-  const displayTopPosts = applyDateRange(displayTopPostsAll, maxDays)
+    })()
+    return () => { cancelled = true }
+  }, [effectiveFrom, effectiveTo, setAllBrands])
 
   const name = (s: string) => pgName(s, brands)
 
-  // Split active vs. inactive athletes so the all-N/A row at the bottom
-  // (Jay Devilliers, etc.) doesn't visually rank alongside athletes with posts.
-  const isActive = (r: V2InfluencerRow) => r.posts > 0 && r.engRate > 0
-  const activeOnly = displayInfluencers.filter(isActive)
-  const inactiveOnly = displayInfluencers.filter(r => !isActive(r))
-  const baseSort = [...activeOnly].sort((a, b) => b.engRate - a.engRate)
+  // ── Filter helpers ─────────────────────────────────────────────────
+  const playerQueryLc = playerQuery.trim().toLowerCase()
+  function passesPlayerSearch(player: string): boolean {
+    if (!playerQueryLc) return true
+    return player.toLowerCase().includes(playerQueryLc)
+  }
+  function passesPlatform(p: IntelPlatform): boolean {
+    if (platformFilter === 'all') return true
+    return p === platformFilter
+  }
+  function passesSentiment(s: IntelSentiment): boolean {
+    if (sentimentFilter === 'all') return true
+    return s === sentimentFilter
+  }
+  function passesContentType(t: string): boolean {
+    if (contentTypeFilter === 'all') return true
+    const lc = String(t || '').toLowerCase()
+    if (contentTypeFilter === 'image') return lc.includes('image') || lc === 'photo'
+    if (contentTypeFilter === 'video') return lc.includes('video')
+    if (contentTypeFilter === 'reel') return lc.includes('reel')
+    if (contentTypeFilter === 'short') return lc.includes('short')
+    return true
+  }
 
-  const sorted = sortKey ? [...baseSort, ...inactiveOnly].sort((a, b) => {
-    const av = (a as Record<string, unknown>)[sortKey]
-    const bv = (b as Record<string, unknown>)[sortKey]
-    if (typeof av === 'number' && typeof bv === 'number')
-      return sortDir === 'asc' ? av - bv : bv - av
-    return sortDir === 'asc'
-      ? String(av ?? '').localeCompare(String(bv ?? ''))
-      : String(bv ?? '').localeCompare(String(av ?? ''))
-  }) : [...baseSort, ...inactiveOnly]
+  // ── Derived rows (always called even when loading to keep hook order)
+  const filteredRoster: RosterRow[] = useMemo(() => {
+    if (!data) return []
+    return data.rosterRows.filter(r =>
+      applyBrandFilter([{ brand: r.brandSlug }], filteredBrands, isFiltered).length > 0
+      && passesPlayerSearch(r.player)
+      && Object.entries(rosterColFilter).every(([k, q]) =>
+        !q || String((r as unknown as Record<string, unknown>)[k] ?? '').toLowerCase().includes(q.toLowerCase()))
+    )
+  }, [data, filteredBrands, isFiltered, playerQueryLc, rosterColFilter])
 
-  const totalReach = displayInfluencers.reduce((s, i) => s + i.followers, 0)
-  const joolaReach = displayInfluencers.filter((i) => i.brand === 'joola').reduce((s, i) => s + i.followers, 0)
-  const joolaAvgER = (() => {
-    const j = activeOnly.filter((i) => i.brand === 'joola')
-    return j.length ? (j.reduce((s, i) => s + i.engRate, 0) / j.length).toFixed(2) : '0'
-  })()
-  const topER = baseSort[0]
-  const joolaAthletes = displayInfluencers.filter((i) => i.brand === 'joola').length
-  const totalTrackedPosts = displayInfluencers.reduce((s, i) => s + i.posts, 0)
+  const filteredInfluencers: InfluencerRow[] = useMemo(() => {
+    if (!data) return []
+    return applyBrandFilter(data.influencers.map(i => ({ ...i, brand: i.brandSlug })), filteredBrands, isFiltered)
+      .map(i => i as unknown as InfluencerRow)
+      .filter(i => passesPlayerSearch(i.name))
+      .filter(i => Object.entries(perfColFilter).every(([k, q]) =>
+        !q || String((i as unknown as Record<string, unknown>)[k] ?? '').toLowerCase().includes(q.toLowerCase())))
+  }, [data, filteredBrands, isFiltered, playerQueryLc, perfColFilter])
 
-  // Bubble chart only plots active athletes — inactive ones would collapse onto
-  // the y-axis at (0, 0) and add noise to the scatter.
-  const bubblePool = activeOnly
+  const filteredAttention: PlatformAttention[] = useMemo(() => {
+    if (!data) return []
+    return data.platformStats
+      .filter(r => applyBrandFilter([{ brand: r.brandSlug }], filteredBrands, isFiltered).length > 0)
+      .filter(r => passesPlayerSearch(r.player))
+      .filter(r => {
+        if (platformFilter === 'all') return true
+        return r[platformFilter] > 0
+      })
+      .filter(r => Object.entries(attentionColFilter).every(([k, q]) =>
+        !q || String((r as unknown as Record<string, unknown>)[k] ?? '').toLowerCase().includes(q.toLowerCase())))
+  }, [data, filteredBrands, isFiltered, playerQueryLc, platformFilter, attentionColFilter])
 
-  // Bubble chart dimensions
-  const bubW = 760, bubH = 360
-  const padL = 56, padR = 30, padT = 30, padB = 44
-  const innerW = bubW - padL - padR
-  const innerH = bubH - padT - padB
-  const xMax = Math.max(500000, ...bubblePool.map((a) => a.followers))
-  const yMax = Math.max(12, ...bubblePool.map((a) => a.engRate))
-  // sqrt scale: low-follower athletes spread across 50% of chart instead of clustering left
-  const xb = (v: number) => padL + Math.sqrt(v / xMax) * innerW
-  const yb = (v: number) => padT + innerH - (v / yMax) * innerH
+  const filteredContent: InfluencerPostRow[] = useMemo(() => {
+    if (!data) return []
+    const inRange = applyDateRangeCustom(data.topPlayerContent, effectiveFrom, effectiveTo)
+    return applyBrandFilter(inRange.map(p => ({ ...p, brand: p.brandSlug })), filteredBrands, isFiltered)
+      .map(p => p as unknown as InfluencerPostRow)
+      .filter(p => passesPlayerSearch(p.athleteName))
+      .filter(p => passesPlatform(p.platform))
+      .filter(p => passesSentiment(p.sentiment))
+      .filter(p => passesContentType(p.type))
+      .filter(p => Object.entries(contentColFilter).every(([k, q]) =>
+        !q || String((p as unknown as Record<string, unknown>)[k] ?? '').toLowerCase().includes(q.toLowerCase())))
+  }, [data, effectiveFrom, effectiveTo, filteredBrands, isFiltered, playerQueryLc, platformFilter, sentimentFilter, contentTypeFilter, contentColFilter])
 
-  // VIZ-05: collision-resolved positions for bubbles
-  type Placed = { a: V2InfluencerRow; cx: number; cy: number; r: number }
-  const placed: Placed[] = bubblePool.map((a) => ({
-    a, cx: xb(a.followers), cy: yb(a.engRate), r: 6 + a.posts / 4,
+  const filteredMentions: CommunityMention[] = useMemo(() => {
+    if (!data) return []
+    const inRange = applyDateRangeCustom(data.communityMentions, effectiveFrom, effectiveTo)
+    return applyBrandFilter(inRange.map(m => ({ ...m, brand: m.brandSlug })), filteredBrands, isFiltered)
+      .map(m => m as unknown as CommunityMention)
+      .filter(m => passesPlayerSearch(m.player))
+      .filter(m => passesSentiment(m.sentiment))
+      .filter(m => Object.entries(mentionColFilter).every(([k, q]) =>
+        !q || String((m as unknown as Record<string, unknown>)[k] ?? '').toLowerCase().includes(q.toLowerCase())))
+  }, [data, effectiveFrom, effectiveTo, filteredBrands, isFiltered, playerQueryLc, sentimentFilter, mentionColFilter])
+
+  const filteredBrandStats: BrandPlayerStats[] = useMemo(() => {
+    if (!data) return []
+    return data.brandPlayerStats
+      .filter(s => applyBrandFilter([{ brand: s.brandSlug }], filteredBrands, isFiltered).length > 0)
+  }, [data, filteredBrands, isFiltered])
+
+  // ── Summary numbers ────────────────────────────────────────────────
+  const summary = useMemo(() => {
+    if (!data) return null
+    const top = data.platformStats[0]
+    const sumEr = filteredInfluencers.reduce((s, i) => s + i.engRate, 0)
+    const avgEr = filteredInfluencers.length > 0 ? sumEr / filteredInfluencers.length : 0
+    return {
+      sponsoredPlayers: data.dataStatus.sponsoredPlayers,
+      activeBrands: data.dataStatus.activeBrands,
+      platformsWithData: data.dataStatus.platformsWithData.length,
+      playerSignals: data.platformStats.reduce((s, p) => s + p.total, 0),
+      joolaPlayers: data.sponsoredPlayerMap.filter(r => r.brandSlug === 'joola').length,
+      topPlayer: top?.player || null,
+      topPlayerSignals: top?.total || 0,
+      avgER: avgEr,
+    }
+  }, [data, filteredInfluencers])
+
+  // ── Bubble chart (player impact map) ───────────────────────────────
+  const bubblePool = useMemo(() => {
+    if (!data) return []
+    return data.platformStats
+      .filter(p => applyBrandFilter([{ brand: p.brandSlug }], filteredBrands, isFiltered).length > 0)
+      .map(p => {
+        const inf = data.influencers.find(i => i.name === p.player && i.brandSlug === p.brandSlug)
+          || data.influencers.find(i => i.name === p.player)
+        const reach = inf?.followers || 0
+        const er = inf?.engRate || 0
+        return {
+          name: p.player,
+          brandSlug: p.brandSlug,
+          reach,
+          er,
+          total: p.total,
+        }
+      })
+      .filter(p => p.reach > 0 && p.er > 0)
+  }, [data, filteredBrands, isFiltered])
+
+  if (loading) return <LoadingPage />
+  if (error || !data) {
+    return (
+      <div style={{ padding: '80px 32px', textAlign: 'center' }}>
+        <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error || 'No data'}</div>
+        <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <PageHead title="INFLUENCER INTEL" />
+      <FilterBanner />
+
+      {/* ── Global filter bar ──────────────────────────────────── */}
+      <section style={{ marginBottom: 16 }}>
+        <div style={{
+          display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
+          padding: '12px 14px', borderRadius: 10,
+          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+        }}>
+          <input
+            type="text"
+            placeholder="Search player…"
+            value={playerQuery}
+            onChange={e => setPlayerQuery(e.target.value)}
+            style={{
+              padding: '6px 10px', borderRadius: 6, fontSize: 12,
+              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
+              color: 'var(--fg)', minWidth: 180,
+            }}
+          />
+          <select
+            value={platformFilter}
+            onChange={e => setPlatformFilter(e.target.value as PlatformKey)}
+            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
+          >
+            {(Object.keys(PLATFORM_FILTER_LABEL) as PlatformKey[]).map(k => (
+              <option key={k} value={k}>{PLATFORM_FILTER_LABEL[k]}</option>
+            ))}
+          </select>
+          <select
+            value={range}
+            onChange={e => setRange(e.target.value as DateRangeKey)}
+            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
+          >
+            {(Object.keys(DATE_RANGE_LABEL) as DateRangeKey[]).map(k => (
+              <option key={k} value={k}>{DATE_RANGE_LABEL[k]}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            value={customFrom.toISOString().slice(0, 10)}
+            onChange={e => setCustomFrom(new Date(e.target.value))}
+            title="Custom from"
+            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
+          />
+          <input
+            type="date"
+            value={customTo.toISOString().slice(0, 10)}
+            onChange={e => setCustomTo(new Date(e.target.value))}
+            title="Custom to"
+            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
+          />
+          <select
+            value={sentimentFilter}
+            onChange={e => setSentimentFilter(e.target.value as SentimentKey)}
+            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
+          >
+            {(Object.keys(SENTIMENT_LABEL) as SentimentKey[]).map(k => (
+              <option key={k} value={k}>{SENTIMENT_LABEL[k]}</option>
+            ))}
+          </select>
+          <select
+            value={contentTypeFilter}
+            onChange={e => setContentTypeFilter(e.target.value as ContentTypeKey)}
+            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
+          >
+            <option value="all">All content types</option>
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="reel">Reel</option>
+            <option value="short">Short</option>
+          </select>
+          <span style={{ fontSize: 11, color: 'var(--fg-4)', marginLeft: 'auto' }}>
+            {mode === 'custom'
+              ? `${formatCalendarDate(effectiveFrom)} → ${formatCalendarDate(effectiveTo)}`
+              : DATE_RANGE_LABEL[range]}
+          </span>
+        </div>
+      </section>
+
+      {/* ── Section 1 — Summary strip ─────────────────────────── */}
+      {summary && (
+        <section style={{ marginBottom: 16 }}>
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: 22, alignItems: 'center',
+            padding: '12px 16px', borderRadius: 10,
+            background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.20)',
+            fontSize: 12, color: 'var(--fg-2)',
+          }}>
+            <SummaryStat label="Sponsored players" value={summary.sponsoredPlayers} accent="#22c55e" />
+            <SummaryStat label="Brands" value={summary.activeBrands} />
+            <SummaryStat label="Platforms with data" value={summary.platformsWithData} />
+            <SummaryStat label="Player signals" value={fmt(summary.playerSignals)} />
+            <SummaryStat label="JOOLA players" value={summary.joolaPlayers} accent="#22c55e" />
+            <SummaryStat label="Top player" value={summary.topPlayer || '—'} sub={summary.topPlayer ? `${fmt(summary.topPlayerSignals)} signals` : ''} />
+            <SummaryStat label="Avg ER" value={summary.avgER.toFixed(2) + '%'} />
+          </div>
+        </section>
+      )}
+
+      {/* ── Section 2 — Sponsored player roster by brand ──────── */}
+      <Section id="roster"
+        title="Sponsored player roster by brand"
+        info="Single source of truth for which player is sponsored by which brand. Verification status reflects whether the scraped influencer roster confirms the business mapping. Players appearing under multiple brands are flagged Needs verification."
+        source="lib/v2/playerRoster.ts (business mapping) + influencers (scraped)"
+        sub={`${filteredRoster.length} rows · ${data.dataStatus.activeBrands} brands`}
+      >
+        <ScrollTable>
+          <table className="data">
+            <thead>
+              <tr>
+                <SortTh col="brandSlug" label="Brand" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="player" label="Player" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="status" label="Status" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <th>IG</th>
+                <th>YT</th>
+                <th>TikTok</th>
+                <th>X</th>
+                <th>Reddit</th>
+                <SortTh col="verification" label="Verification" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="lastSeenDays" label="Last seen" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+              </tr>
+              <tr className="col-filter-row">
+                <th><ColumnFilter col="brandSlug" value={rosterColFilter.brandSlug} onChange={v => setRosterColFilter(p => ({ ...p, brandSlug: v }))} /></th>
+                <th><ColumnFilter col="player" value={rosterColFilter.player} onChange={v => setRosterColFilter(p => ({ ...p, player: v }))} /></th>
+                <th colSpan={8} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortBy(filteredRoster, rosterSort.key, rosterSort.dir).map((r, i) => (
+                <tr key={`${r.brandSlug}-${r.player}-${i}`} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                  <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
+                  <td style={{ fontWeight: 700 }}>{r.player}</td>
+                  <td>
+                    <span className="pill" style={{ background: STATUS_COLOR[r.status] + '22', color: STATUS_COLOR[r.status], border: `1px solid ${STATUS_COLOR[r.status]}55`, fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}>
+                      {STATUS_LABEL[r.status]}
+                    </span>
+                  </td>
+                  <td>{r.igHandle ? <a className="ext-link" href={`https://instagram.com/${r.igHandle}`} target="_blank" rel="noreferrer">@{r.igHandle}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
+                  <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
+                  <td>{r.xHandle ? <a className="ext-link" href={`https://x.com/${r.xHandle}`} target="_blank" rel="noreferrer">@{r.xHandle}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
+                  <td>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, color: r.verification === 'verified' ? '#22c55e' : r.verification === 'matched' ? '#F5E625' : '#94a3b8',
+                    }}>{r.verification}</span>
+                  </td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>
+                    {r.lastSeenDays !== null
+                      ? formatCalendarDate(new Date(Date.now() - r.lastSeenDays * 86_400_000))
+                      : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+              {filteredRoster.length === 0 && (
+                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No roster rows match current filters.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </ScrollTable>
+      </Section>
+
+      {/* ── Section 3 — Player impact map ─────────────────────── */}
+      <Section id="impact-map"
+        title="Player impact map"
+        info="Each bubble is one athlete. X-axis: reach (Instagram followers). Y-axis: engagement rate. Bubble size: total signals (posts + mentions). JOOLA athletes outlined in white. Athletes with no engagement data are omitted."
+        source="influencers + influencer_posts + mention_facts"
+        sub="X = reach, Y = engagement rate, size = signals"
+      >
+        <div className="card"><div className="card-pad-lg">
+          <ImpactBubbleMap bubbles={bubblePool} brands={brands} />
+        </div></div>
+      </Section>
+
+      {/* ── Section 4 — Cross-platform player attention ───────── */}
+      <Section id="attention"
+        title="Cross-platform player attention"
+        info="Ranked roll-up of every player by total signals across all five platforms. Empty platforms display as N/A and are never invented. Sort by any column to find leaders per platform."
+        source="influencer_posts + mention_facts"
+        sub={`${filteredAttention.length} players · sorted by total`}
+      >
+        <ScrollTable maxHeight={520}>
+          <table className="data">
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <tr>
+                <th>#</th>
+                <SortTh col="player" label="Player" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="brandSlug" label="Brand" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="total" label="Total" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="ig" label="IG" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="yt" label="YT" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="tiktok" label="TikTok" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="x" label="X" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="reddit" label="Reddit" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="engagement" label="Engagement" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <th>Sentiment</th>
+                <th>Trend</th>
+              </tr>
+              <tr className="col-filter-row">
+                <th />
+                <th><ColumnFilter col="player" value={attentionColFilter.player} onChange={v => setAttentionColFilter(p => ({ ...p, player: v }))} /></th>
+                <th><ColumnFilter col="brandSlug" value={attentionColFilter.brandSlug} onChange={v => setAttentionColFilter(p => ({ ...p, brandSlug: v }))} /></th>
+                <th colSpan={9} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortBy(filteredAttention, attentionSort.key, attentionSort.dir).slice(0, 200).map((r, i) => (
+                <tr key={`${r.player}-${r.brandSlug}`} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                  <td className="cell-num">{i + 1}</td>
+                  <td style={{ fontWeight: 700 }}>{r.player}</td>
+                  <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
+                  <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625', fontWeight: 700 }}>{fmt(r.total)}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.ig > 0 ? fmt(r.ig) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.yt > 0 ? fmt(r.yt) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.tiktok > 0 ? fmt(r.tiktok) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.x > 0 ? fmt(r.x) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.reddit > 0 ? fmt(r.reddit) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.engagement)}</td>
+                  <td>
+                    <SentimentMix positive={r.positive} negative={r.negative} total={r.total} />
+                  </td>
+                  <td><span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span></td>
+                </tr>
+              ))}
+              {filteredAttention.length === 0 && (
+                <tr><td colSpan={12} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No player attention rows match current filters.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </ScrollTable>
+      </Section>
+
+      {/* ── Section 5 — Athlete roster performance ────────────── */}
+      <Section id="performance"
+        title="Athlete roster performance"
+        info="Every scraped athlete with rolled-up post stats. Engagement rate above 8% (highlighted in yellow) is exceptional. Athletes with no posts in the current window are sorted to the bottom."
+        source="influencers + influencer_posts"
+        sub={`${filteredInfluencers.length} athletes`}
+      >
+        <ScrollTable maxHeight={520}>
+          <table className="data">
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <tr>
+                <th>#</th>
+                <SortTh col="name" label="Athlete" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="brandSlug" label="Brand" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <th>Platforms</th>
+                <SortTh col="followers" label="Followers" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="posts" label="Posts" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="avgLikes" label="Avg likes" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="avgComments" label="Avg comments" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="engRate" label="ER" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <th>Tier</th>
+                <th>Status</th>
+              </tr>
+              <tr className="col-filter-row">
+                <th />
+                <th><ColumnFilter col="name" value={perfColFilter.name} onChange={v => setPerfColFilter(p => ({ ...p, name: v }))} /></th>
+                <th><ColumnFilter col="brandSlug" value={perfColFilter.brandSlug} onChange={v => setPerfColFilter(p => ({ ...p, brandSlug: v }))} /></th>
+                <th colSpan={8} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortBy(filteredInfluencers, perfSort.key, perfSort.dir).map((r, i) => {
+                const t = tierFromFollowers(r.followers)
+                const active = r.posts > 0
+                return (
+                  <tr key={r.id} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                    <td className="cell-num">{i + 1}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 22, height: 22, borderRadius: 6, background: pgColor(r.brandSlug) + '33', color: pgColor(r.brandSlug), border: `1px solid ${pgColor(r.brandSlug)}55`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800 }}>{r.init}</span>
+                        <span style={{ fontWeight: 700 }}>{r.name}</span>
+                      </div>
+                    </td>
+                    <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
+                    <td>
+                      <div style={{ display: 'inline-flex', gap: 3 }}>
+                        {r.igHandle && <PlatformPill p="ig" />}
+                        {r.xHandle && <PlatformPill p="x" />}
+                        {!r.igHandle && !r.xHandle && <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span>}
+                      </div>
+                    </td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.followers)}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{r.posts || <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{r.avgLikes > 0 ? fmt(r.avgLikes) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{r.avgComments > 0 ? fmt(r.avgComments) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right', color: r.engRate > 8 ? '#F5E625' : r.engRate === 0 ? 'var(--fg-4)' : 'var(--fg)' }}>
+                      {r.engRate > 0 ? r.engRate.toFixed(2) + '%' : '—'}
+                    </td>
+                    <td><span style={{ fontSize: 10, fontWeight: 800, color: t.color, letterSpacing: '0.06em' }}>{t.label}</span></td>
+                    <td>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700,
+                        color: active ? '#22c55e' : '#94a3b8',
+                        padding: '2px 8px', borderRadius: 99,
+                        background: active ? 'rgba(34,197,94,0.10)' : 'rgba(148,163,184,0.10)',
+                        border: `1px solid ${active ? 'rgba(34,197,94,0.30)' : 'rgba(148,163,184,0.30)'}`,
+                      }}>{active ? 'Active' : 'Inactive'}</span>
+                    </td>
+                  </tr>
+                )
+              })}
+              {filteredInfluencers.length === 0 && (
+                <tr><td colSpan={11} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No athletes match current filters.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </ScrollTable>
+      </Section>
+
+      {/* ── Section 6 — Brand sponsored-player strength ──────── */}
+      <Section id="brand-strength"
+        title="Brand sponsored-player strength"
+        info="Per-brand roll-up: total players sponsored, how many are actively producing data, total reach and engagement, plus the per-platform mention breakdown. Sort by Engagement to see which brand's athletes are driving the most attention."
+        source="playerRoster.ts + influencers + influencer_posts + mention_facts"
+        sub={`${filteredBrandStats.length} brands`}
+      >
+        <ScrollTable>
+          <table className="data">
+            <thead>
+              <tr>
+                <SortTh col="brandSlug" label="Brand" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="playersTracked" label="Players" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="playersActive" label="Active" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="totalMentions" label="Mentions" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="totalReach" label="Reach" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="avgEngRate" label="Avg ER" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="totalEngagement" label="Engagement" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="ig" label="IG" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="yt" label="YT" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="tiktok" label="TikTok" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="x" label="X" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="reddit" label="Reddit" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="negativePct" label="Negative %" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortBy(filteredBrandStats, brandStatsSort.key, brandStatsSort.dir).map(r => (
+                <tr key={r.brandSlug} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                  <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.playersTracked}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.playersActive}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.totalMentions)}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.totalReach)}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.avgEngRate > 0 ? r.avgEngRate.toFixed(2) + '%' : '—'}</td>
+                  <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625', fontWeight: 700 }}>{fmt(r.totalEngagement)}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.ig > 0 ? fmt(r.ig) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.yt > 0 ? fmt(r.yt) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.tiktok > 0 ? fmt(r.tiktok) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.x > 0 ? fmt(r.x) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.reddit > 0 ? fmt(r.reddit) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right', color: r.negativePct > 20 ? '#ef4444' : 'var(--fg)' }}>{r.negativePct > 0 ? r.negativePct.toFixed(1) + '%' : '—'}</td>
+                </tr>
+              ))}
+              {filteredBrandStats.length === 0 && (
+                <tr><td colSpan={13} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No brand stats match current filters.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </ScrollTable>
+      </Section>
+
+      {/* ── Section 7 — Top performing player content ────────── */}
+      <Section id="top-content"
+        title="Top performing player content"
+        info="Highest-engagement posts from tracked athletes in the selected window. Sourced from influencer_posts; today this is Instagram only. Add platform-specific scrapers and the table fills automatically."
+        source="influencer_posts"
+        sub={`${filteredContent.length} posts`}
+      >
+        <ScrollTable maxHeight={520}>
+          <table className="data">
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <tr>
+                <th>Platform</th>
+                <SortTh col="athleteName" label="Player" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="brandSlug" label="Brand" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <th style={{ width: '24%' }}>Caption</th>
+                <th>Type</th>
+                <SortTh col="views" label="Views" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="likes" label="Likes" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="comments" label="Comments" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="shares" label="Shares" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="engagement" label="Engagement" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="engRate" label="ER" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <th>Sentiment</th>
+                <SortTh col="days" label="Posted" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <th>Link</th>
+              </tr>
+              <tr className="col-filter-row">
+                <th />
+                <th><ColumnFilter col="athleteName" value={contentColFilter.athleteName} onChange={v => setContentColFilter(p => ({ ...p, athleteName: v }))} /></th>
+                <th><ColumnFilter col="brandSlug" value={contentColFilter.brandSlug} onChange={v => setContentColFilter(p => ({ ...p, brandSlug: v }))} /></th>
+                <th><ColumnFilter col="caption" value={contentColFilter.caption} onChange={v => setContentColFilter(p => ({ ...p, caption: v }))} /></th>
+                <th colSpan={9} />
+              </tr>
+            </thead>
+            <tbody>
+              {sortBy(filteredContent, contentSort.key, contentSort.dir).slice(0, 200).map((p) => (
+                <tr key={p.id} className={p.brandSlug === 'joola' ? 'joola' : ''}>
+                  <td><PlatformPill p={p.platform} /></td>
+                  <td style={{ fontWeight: 700 }}>{p.athleteName}</td>
+                  <td><BrandCell slug={p.brandSlug} brands={brands} /></td>
+                  <td title={p.caption} style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.caption || '—'}</td>
+                  <td><span style={{ fontSize: 10, color: 'var(--fg-3)' }}>{p.type || '—'}</span></td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{p.views > 0 ? fmt(p.views) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(p.likes)}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(p.comments)}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{p.shares > 0 ? fmt(p.shares) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625' }}>{fmt(p.engagement)}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{p.engRate > 0 ? p.engRate.toFixed(2) + '%' : '—'}</td>
+                  <td>
+                    <span className={'pill ' + SENT_PILL[p.sentiment]} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}>{p.sentiment}</span>
+                  </td>
+                  <td className="cell-num">{p.postedAt ? formatCalendarDate(p.postedAt) : '—'}</td>
+                  <td>{p.url ? <a className="ext-link" href={p.url} target="_blank" rel="noreferrer">View</a> : '—'}</td>
+                </tr>
+              ))}
+              {filteredContent.length === 0 && (
+                <tr><td colSpan={14} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No content matches current filters (try widening the date range).</td></tr>
+              )}
+            </tbody>
+          </table>
+        </ScrollTable>
+      </Section>
+
+      {/* ── Section 8 — Player mentions in community ──────────── */}
+      <Section id="community-mentions"
+        title="Player mentions in community conversation"
+        info="Cross-channel mention_facts rows where athlete_id is set. Today this is dominated by ig_comments; YouTube / TikTok / X / Reddit player extraction is pending — see Section 12."
+        source="mention_facts (athlete_id not null)"
+        sub={`${filteredMentions.length} mentions`}
+      >
+        {filteredMentions.length === 0 ? (
+          <div className="card"><div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)' }}>
+            <div style={{ fontSize: 13, marginBottom: 6 }}>No player mentions in mention_facts for the current window.</div>
+            <div style={{ fontSize: 11 }}>Pending: extend enrichment to populate athlete_id from yt_comments, reddit_mentions, tiktok_videos, x_posts.</div>
+          </div></div>
+        ) : (
+          <ScrollTable maxHeight={520}>
+            <table className="data">
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+                <tr>
+                  <SortTh col="player" label="Player" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                  <SortTh col="brandSlug" label="Brand" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                  <SortTh col="channelLabel" label="Channel" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                  <th style={{ width: '34%' }}>Mention</th>
+                  <th>Sentiment</th>
+                  <th>Product</th>
+                  <SortTh col="engagement" label="Eng." sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                  <SortTh col="days" label="Date" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                  <th>Link</th>
+                </tr>
+                <tr className="col-filter-row">
+                  <th><ColumnFilter col="player" value={mentionColFilter.player} onChange={v => setMentionColFilter(p => ({ ...p, player: v }))} /></th>
+                  <th><ColumnFilter col="brandSlug" value={mentionColFilter.brandSlug} onChange={v => setMentionColFilter(p => ({ ...p, brandSlug: v }))} /></th>
+                  <th colSpan={7} />
+                </tr>
+              </thead>
+              <tbody>
+                {sortBy(filteredMentions, mentionSort.key, mentionSort.dir).slice(0, 200).map(m => (
+                  <tr key={m.id} className={m.brandSlug === 'joola' ? 'joola' : ''}>
+                    <td style={{ fontWeight: 700 }}>{m.player}</td>
+                    <td><BrandCell slug={m.brandSlug} brands={brands} /></td>
+                    <td><span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{m.channelLabel}</span></td>
+                    <td title={m.mentionText} style={{ maxWidth: 380, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.mentionText || '—'}</td>
+                    <td>
+                      <span className={'pill ' + SENT_PILL[m.sentiment]} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}>{m.sentiment}</span>
+                    </td>
+                    <td>{m.productName ? <span style={{ fontSize: 11 }}>{m.productName}</span> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{m.engagement > 0 ? fmt(m.engagement) : '—'}</td>
+                    <td className="cell-num">{m.postedAt ? formatCalendarDate(m.postedAt) : '—'}</td>
+                    <td>{m.link ? <a className="ext-link" href={m.link} target="_blank" rel="noreferrer">View</a> : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollTable>
+        )}
+      </Section>
+
+      {/* ── Section 9 — JOOLA focus ───────────────────────────── */}
+      <Section id="joola-focus"
+        title="JOOLA sponsored player focus"
+        info="At-a-glance comparison of the six JOOLA-sponsored players. Reach is current Instagram followers; ER is the engagement-weighted average across tracked posts; Related paddle reflects any product NER hit from mention_facts."
+        source="influencers + influencer_posts + mention_facts + playerRoster.ts"
+        sub="6 athletes"
+      >
+        <div className="card">
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th style={{ textAlign: 'right' }}>Signals</th>
+                  <th style={{ textAlign: 'right' }}>IG</th>
+                  <th style={{ textAlign: 'right' }}>YT</th>
+                  <th style={{ textAlign: 'right' }}>TikTok</th>
+                  <th style={{ textAlign: 'right' }}>X</th>
+                  <th style={{ textAlign: 'right' }}>Reddit</th>
+                  <th style={{ textAlign: 'right' }}>Reach</th>
+                  <th style={{ textAlign: 'right' }}>ER</th>
+                  <th>Top content</th>
+                  <th>Sentiment</th>
+                  <th>Related paddle</th>
+                  <th>Trend</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.joolaPlayerStats.map(j => (
+                  <tr key={j.player} className="joola">
+                    <td style={{ fontWeight: 700, color: '#22c55e' }}>{j.player}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.signals > 0 ? fmt(j.signals) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.ig > 0 ? fmt(j.ig) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.yt > 0 ? fmt(j.yt) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.tiktok > 0 ? fmt(j.tiktok) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.x > 0 ? fmt(j.x) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.reddit > 0 ? fmt(j.reddit) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.reach > 0 ? fmt(j.reach) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.engRate > 0 ? j.engRate.toFixed(2) + '%' : '—'}</td>
+                    <td title={j.topContent || ''} style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {j.topContent
+                        ? (j.topContentUrl ? <a className="ext-link" href={j.topContentUrl} target="_blank" rel="noreferrer">{j.topContent}</a> : j.topContent)
+                        : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                    </td>
+                    <td><span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{j.sentiment}</span></td>
+                    <td>{j.relatedPaddle ? <span style={{ fontSize: 11 }}>{j.relatedPaddle}</span> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td><span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Section>
+
+      {/* ── Section 10 — Player ↔ paddle connections ──────────── */}
+      <Section id="player-paddle"
+        title="Player and paddle connections"
+        info="Rows where mention_facts links an athlete AND a product in the same enriched message. Empty state expected until the enrichment prompt is tightened — see Section 12."
+        source="mention_facts (athlete_id AND product_id non-null)"
+        sub={`${data.playerProductConnections.length} connections`}
+      >
+        {data.playerProductConnections.length === 0 ? (
+          <div className="card"><div style={{ padding: 24, color: 'var(--fg-4)' }}>
+            <div style={{ fontSize: 13, marginBottom: 6 }}>No player ↔ paddle connections in mention_facts yet.</div>
+            <div style={{ fontSize: 11 }}>This section becomes useful once enrichment extracts both athlete_id AND product_id from the same comment / mention. Recommended fix: see Section 12.</div>
+          </div></div>
+        ) : (
+          <ScrollTable maxHeight={420}>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>Brand</th>
+                  <th>Paddle</th>
+                  <th style={{ textAlign: 'right' }}>Mentions</th>
+                  <th>Channel</th>
+                  <th>Sentiment</th>
+                  <th style={{ textAlign: 'right' }}>Attention</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.playerProductConnections.slice(0, 200).map((r, i) => (
+                  <tr key={i} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                    <td style={{ fontWeight: 700 }}>{r.player}</td>
+                    <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
+                    <td><span style={{ fontSize: 12 }}>{r.productName}</span></td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.mentions)}</td>
+                    <td><span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{r.channelLabel}</span></td>
+                    <td><SentimentMix positive={r.positive} negative={r.negative} total={r.mentions} /></td>
+                    <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625' }}>{r.attentionScore.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollTable>
+        )}
+      </Section>
+
+      {/* ── Section 11 — Data coverage diagnostic ─────────────── */}
+      <Section id="coverage"
+        title="Influencer data coverage"
+        info="What's currently flowing into Influencer Intel. Items marked No are not bugs — they tell you which pipeline pieces to wire up next."
+        source="Derived from fetched data"
+      >
+        <div className="card"><div className="card-pad-lg" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+          <CoveragePill label="IG roster"           value={data.dataCoverage.igRoster ? 'Yes' : 'No'}     ok={data.dataCoverage.igRoster} />
+          <CoveragePill label="IG posts"            value={String(data.dataCoverage.igPosts)}             ok={data.dataCoverage.igPosts > 0} />
+          <CoveragePill label="YT mentions"         value={String(data.dataCoverage.ytMentions)}          ok={data.dataCoverage.ytMentions > 0} />
+          <CoveragePill label="TikTok mentions"     value={String(data.dataCoverage.tiktokMentions)}      ok={data.dataCoverage.tiktokMentions > 0} />
+          <CoveragePill label="X mentions"          value={String(data.dataCoverage.xMentions)}           ok={data.dataCoverage.xMentions > 0} />
+          <CoveragePill label="Reddit mentions"     value={String(data.dataCoverage.redditMentions)}      ok={data.dataCoverage.redditMentions > 0} />
+          <CoveragePill label="Comment-level mentions" value={data.dataCoverage.commentLevelMentions ? 'Yes' : 'No'} ok={data.dataCoverage.commentLevelMentions} />
+          <CoveragePill label="Alias matching"      value={data.dataCoverage.aliasMatching ? 'Yes' : 'No'} ok={data.dataCoverage.aliasMatching} />
+          <CoveragePill label="Sponsorship verification" value={data.dataCoverage.sponsorshipVerification ? 'Yes' : 'No'} ok={data.dataCoverage.sponsorshipVerification} />
+        </div></div>
+      </Section>
+
+      {/* ── Section 12 — Pending pipeline work ────────────────── */}
+      <Section id="pending"
+        title="Pending / Needs data pipeline"
+        info="Sections that intentionally show empty or partial data because the upstream pipeline does not yet populate the required fields."
+        source="Derived from data coverage"
+      >
+        {data.pending.length === 0 ? (
+          <div className="card"><div style={{ padding: 20, color: 'var(--fg-4)' }}>All sections currently have data — nothing pending.</div></div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {data.pending.map((p, i) => (
+              <div key={i} className="card"><div className="card-pad-lg">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                  <span style={{ fontWeight: 700, color: '#F5E625', fontSize: 13 }}>{p.section}</span>
+                  <span style={{ fontSize: 10, color: 'var(--fg-4)', fontWeight: 700, letterSpacing: '0.08em' }}>PENDING</span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 6 }}><strong>Why:</strong> {p.why}</div>
+                <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 6 }}><strong>Required source:</strong> <code style={{ fontSize: 11, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4 }}>{p.requiredSource}</code></div>
+                <div style={{ fontSize: 12, color: 'var(--fg-2)' }}><strong>Recommendation:</strong> {p.recommendation}</div>
+              </div></div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      {/* ── Section 13 — Review required ──────────────────────── */}
+      {data.reviewRequired.length > 0 && (
+        <Section id="review"
+          title="Review required"
+          info="Items that need a human verdict — typically because the source data is ambiguous (multi-brand player) or the roster mapping disagrees with scraped data."
+          source="Derived from roster vs. scraped data"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {data.reviewRequired.map((r, i) => (
+              <div key={i} className="card"><div className="card-pad-lg">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700, color: '#fb923c', fontSize: 13 }}>{r.section}</span>
+                  <span style={{ fontSize: 10, color: 'var(--fg-4)', fontWeight: 700, letterSpacing: '0.08em' }}>REVIEW</span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>{r.detail}</div>
+              </div></div>
+            ))}
+          </div>
+        </Section>
+      )}
+    </>
+  )
+}
+
+// ─── Small inline components ─────────────────────────────────────────
+
+function Section({ id, title, info, source, sub, children }: {
+  id: string; title: string; info: string; source: string; sub?: string; children: React.ReactNode
+}) {
+  return (
+    <section id={id} style={{ marginTop: 24 }}>
+      <div className="section-head">
+        <div>
+          <h2>
+            {title}
+            <SectionInfo title={title} description={info} source={source} />
+          </h2>
+          {sub && <div className="sub">{sub}</div>}
+        </div>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function ScrollTable({ children, maxHeight }: { children: React.ReactNode; maxHeight?: number }) {
+  return (
+    <div className="card">
+      <div className="table-wrap" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function SummaryStat({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 100 }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
+      <span style={{ fontSize: 16, fontWeight: 800, color: accent || 'var(--fg)' }}>{value}</span>
+      {sub && <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{sub}</span>}
+    </div>
+  )
+}
+
+function BrandCell({ slug, brands }: { slug: string; brands: V2Brand[] }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <span className="brand-dot" style={{ background: pgColor(slug) }} />
+      <span style={{ fontWeight: 700, color: slug === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 12 }}>
+        {pgName(slug, brands)}
+      </span>
+    </span>
+  )
+}
+
+function PlatformPill({ p }: { p: IntelPlatform }) {
+  const colorMap: Record<IntelPlatform, { bg: string; bd: string; fg: string }> = {
+    ig:     { bg: 'rgba(236,72,153,0.14)', bd: 'rgba(236,72,153,0.35)', fg: '#ec4899' },
+    yt:     { bg: 'rgba(239,68,68,0.14)',  bd: 'rgba(239,68,68,0.35)',  fg: '#ef4444' },
+    tiktok: { bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
+    x:      { bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
+    reddit: { bg: 'rgba(251,146,60,0.14)', bd: 'rgba(251,146,60,0.35)', fg: '#fb923c' },
+  }
+  const c = colorMap[p]
+  return (
+    <span title={platformLabel(p)} style={{
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      minWidth: 28, height: 18, padding: '0 6px', borderRadius: 4,
+      background: c.bg, border: `1px solid ${c.bd}`, color: c.fg,
+      fontSize: 9, fontWeight: 800, letterSpacing: '0.04em',
+    }}>{platformShort(p)}</span>
+  )
+}
+
+function SentimentMix({ positive, negative, total }: { positive: number; negative: number; total: number }) {
+  if (total === 0) return <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span>
+  const pos = (positive / total) * 100
+  const neg = (negative / total) * 100
+  return (
+    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, minWidth: 70 }}>
+      <div style={{ display: 'flex', height: 6, borderRadius: 99, overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
+        <div style={{ width: pos + '%', background: '#22c55e' }} />
+        <div style={{ width: (100 - pos - neg) + '%', background: '#94a3b8' }} />
+        <div style={{ width: neg + '%', background: '#ef4444' }} />
+      </div>
+      <div style={{ fontSize: 9, color: 'var(--fg-4)' }}>
+        +{positive} / −{negative}
+      </div>
+    </div>
+  )
+}
+
+function CoveragePill({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+  return (
+    <div style={{
+      padding: '10px 14px', borderRadius: 8,
+      background: ok ? 'rgba(34,197,94,0.08)' : 'rgba(148,163,184,0.06)',
+      border: `1px solid ${ok ? 'rgba(34,197,94,0.30)' : 'rgba(148,163,184,0.20)'}`,
+      minWidth: 140,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: ok ? '#22c55e' : 'var(--fg-2)' }}>{value}</div>
+    </div>
+  )
+}
+
+// ─── Impact bubble map ─────────────────────────────────────────────────
+
+interface Bubble { name: string; brandSlug: string; reach: number; er: number; total: number }
+
+function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Brand[] }) {
+  const [hov, setHov] = useState<{ b: Bubble; cx: number; cy: number } | null>(null)
+  const w = 760, h = 380
+  const padL = 64, padR = 30, padT = 30, padB = 46
+  const innerW = w - padL - padR
+  const innerH = h - padT - padB
+
+  if (bubbles.length === 0) {
+    return (
+      <div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)' }}>
+        <div style={{ fontSize: 13 }}>No athletes with both reach and engagement data in the current window.</div>
+      </div>
+    )
+  }
+
+  const maxReach = Math.max(500_000, ...bubbles.map(b => b.reach))
+  const maxEr = Math.max(12, ...bubbles.map(b => b.er))
+  const useLog = maxReach / Math.max(1, Math.min(...bubbles.map(b => b.reach || 1))) > 100
+
+  const xScale = (v: number): number => {
+    if (useLog) {
+      const lv = Math.log10(Math.max(1, v))
+      const lmax = Math.log10(Math.max(2, maxReach))
+      return padL + (lv / lmax) * innerW
+    }
+    return padL + Math.sqrt(v / maxReach) * innerW
+  }
+  const yScale = (v: number): number => padT + innerH - (v / maxEr) * innerH
+
+  type Placed = { b: Bubble; cx: number; cy: number; r: number }
+  const placed: Placed[] = bubbles.map(b => ({
+    b, cx: xScale(b.reach), cy: yScale(b.er),
+    r: Math.max(5, Math.min(22, 5 + Math.sqrt(b.total) * 2)),
   }))
-  // simple iterative repulsion
-  const gap = 3
-  for (let iter = 0; iter < 60; iter++) {
+
+  // simple collision avoidance
+  const gap = 2
+  for (let iter = 0; iter < 40; iter++) {
     let moved = false
     for (let i = 0; i < placed.length; i++) {
       for (let j = i + 1; j < placed.length; j++) {
         const A = placed[i], B = placed[j]
         const dx = B.cx - A.cx, dy = B.cy - A.cy
         const dist = Math.hypot(dx, dy) || 0.001
-        const minDist = A.r + B.r + gap
-        if (dist < minDist) {
-          const overlap = (minDist - dist) / 2
+        const min = A.r + B.r + gap
+        if (dist < min) {
+          const ov = (min - dist) / 2
           const ux = dx / dist, uy = dy / dist
-          A.cx -= ux * overlap; A.cy -= uy * overlap
-          B.cx += ux * overlap; B.cy += uy * overlap
-          // clamp into chart area
-          A.cx = Math.min(Math.max(A.cx, padL + A.r), padL + innerW - A.r)
-          A.cy = Math.min(Math.max(A.cy, padT + A.r), padT + innerH - A.r)
-          B.cx = Math.min(Math.max(B.cx, padL + B.r), padL + innerW - B.r)
-          B.cy = Math.min(Math.max(B.cy, padT + B.r), padT + innerH - B.r)
+          A.cx -= ux * ov; A.cy -= uy * ov
+          B.cx += ux * ov; B.cy += uy * ov
           moved = true
         }
       }
@@ -171,561 +1119,46 @@ export default function InfluencersPage() {
     if (!moved) break
   }
 
-  // VIZ-20: label deconflict — show all labels, push overlapping ones vertically
-  const labels = placed.map((p) => ({ id: p.a.name, x: p.cx, y: p.cy - p.r - 6 }))
-  const minGap = 11
-  labels.sort((a, b) => a.y - b.y)
-  for (let i = 1; i < labels.length; i++) {
-    // only adjust if x positions are close enough to overlap horizontally
-    for (let j = 0; j < i; j++) {
-      if (Math.abs(labels[i].x - labels[j].x) < 60 && labels[i].y - labels[j].y < minGap) {
-        labels[i].y = labels[j].y + minGap
-      }
-    }
-  }
-  const labelByName = new Map(labels.map(l => [l.id, l]))
-
-  // Filter top posts to the selected athlete if one is pinned.
-  const selectedAthlete = selectedAthleteId
-    ? displayInfluencers.find(a => a.id === selectedAthleteId)
-    : null
-  const visibleTopPosts = selectedAthleteId
-    ? displayTopPosts.filter(p => p.athleteId === selectedAthleteId)
-    : displayTopPosts
-
-  // Posted-cell helpers
-  function postedLabel(days: number): { date: string; relative: string } {
-    const d = new Date(Date.now() - Math.max(0, days) * 86400000)
-    const date = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    const relative = days <= 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`
-    return { date, relative }
-  }
-  function platformLabel(p: V2TopInfluencerPost['platform']): string {
-    if (p === 'ig') return 'Instagram'
-    if (p === 'tiktok') return 'TikTok'
-    if (p === 'yt') return 'YouTube'
-    return 'X'
-  }
-  function platformShort(p: V2TopInfluencerPost['platform']): string {
-    if (p === 'ig') return 'IG'
-    if (p === 'tiktok') return 'TT'
-    if (p === 'yt') return 'YT'
-    return 'X'
-  }
-
-  function jumpToTopPosts(athleteId: string) {
-    setSelectedAthleteId(athleteId)
-    document.getElementById('influencer-top-posts')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
   return (
-    <>
-      <PageHead
-        eyebrow={`INFLUENCER NETWORK · ${displayInfluencers.length} ATHLETES · ${totalTrackedPosts} POSTS`}
-        title="Influencer"
-        accent="ROI"
-        sub={`JOOLA's ${joolaAthletes} tracked athletes deliver ${fmt(joolaReach)} reach — ${Math.round(joolaReach / Math.max(1, totalReach) * 100)}% of the tracked influencer audience. Platform scope: Instagram. TikTok and YouTube athlete coverage rolling out next.`}
-      />
-      <FilterBanner />
-
-      <section>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>
-            Platform scope
-          </span>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '4px 10px', borderRadius: 99,
-            background: 'rgba(34,197,94,0.10)', border: '1px solid rgba(34,197,94,0.35)',
-            color: '#22c55e', fontSize: 11, fontWeight: 700,
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: 99, background: '#22c55e' }} />
-            Instagram
-          </span>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '4px 10px', borderRadius: 99,
-            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)',
-            color: 'var(--fg-4)', fontSize: 11, fontWeight: 600,
-          }}>
-            TikTok — coming soon
-          </span>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '4px 10px', borderRadius: 99,
-            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)',
-            color: 'var(--fg-4)', fontSize: 11, fontWeight: 600,
-          }}>
-            YouTube — coming soon
-          </span>
-          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--fg-4)' }}>
-            Window: <strong style={{ color: 'var(--fg)' }}>{DATE_RANGE_LABEL[range]}</strong>
-          </span>
-        </div>
-
-        <div className="kpi-grid">
-          <MiniKpi
-            label="JOOLA reach (Instagram)" src="Athlete roster" flavor="joola"
-            value={fmt(joolaReach)}
-            color="#22c55e"
-            customVs={`${Math.round(joolaReach / Math.max(1, totalReach) * 100)}% of tracked total`}
-          />
-          <MiniKpi
-            label="JOOLA athletes" value={joolaAthletes} color="#22c55e" flavor="joola"
-            src="Roster summary"
-            customVs="tracked on Instagram"
-          />
-          <MiniKpi
-            label="Avg eng. rate (JOOLA)" src="Engagement metrics"
-            value={joolaAvgER + '%'}
-            color="#818cf8"
-            customVs={`Across ${totalTrackedPosts} tracked posts`}
-            flavor="warn"
-          />
-          <MiniKpi
-            label="Top ER (market)" src="Engagement metrics"
-            value={topER ? topER.engRate.toFixed(2) + '%' : '—'}
-            color="#F5E625"
-            customVs={topER ? topER.name + ' · ' + name(topER.brand) : ''}
-            flavor="warn"
-          />
-        </div>
-      </section>
-
-      <section>
-        <div className="section-head">
-          <div>
-            <h2>
-              Reach &times; engagement bubble map
-              <SectionInfo
-                title="Influencer ROI Bubble Map"
-                description="Each bubble is one athlete. X-axis: Instagram followers (reach). Y-axis: engagement rate (audience reactiveness). Bubble size: number of posts tracked. Top-right Superstar Zone equals maximum ROI. JOOLA athletes are outlined in white. Athletes with no posts in the current window are omitted from this view."
-                source="Influencer roster snapshots + post-level engagement"
-              />
-            </h2>
-            <div className="sub">Bubble size = posts tracked. Top-right = high-volume, high-engagement. JOOLA athletes outlined in white. {DATE_RANGE_LABEL[range].toLowerCase()}.</div>
-          </div>
-        </div>
-        <div className="card"><div className="card-pad-lg">
-          <div className="scatter-wrap">
-          <svg viewBox={`0 0 ${bubW} ${bubH}`} width="100%" height={bubH}>
-            {/* Quadrant backgrounds */}
-            <rect x={padL} y={padT} width={xb(xMax * 0.3) - padL} height={yb(7) - padT} fill="rgba(129,140,248,0.05)" />
-            <rect x={xb(xMax * 0.3)} y={padT} width={padL + innerW - xb(xMax * 0.3)} height={yb(7) - padT} fill="rgba(34,197,94,0.06)" />
-            <rect x={padL} y={yb(7)} width={xb(xMax * 0.3) - padL} height={padT + innerH - yb(7)} fill="rgba(100,116,139,0.03)" />
-            <rect x={xb(xMax * 0.3)} y={yb(7)} width={padL + innerW - xb(xMax * 0.3)} height={padT + innerH - yb(7)} fill="rgba(245,158,11,0.04)" />
-            <g className="scatter-grid">
-              {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-                <line key={'x' + i} x1={xb(t * xMax)} x2={xb(t * xMax)} y1={padT} y2={padT + innerH} />
-              ))}
-              {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-                <line key={'y' + i} x1={padL} x2={padL + innerW} y1={padT + t * innerH} y2={padT + t * innerH} />
-              ))}
-            </g>
-            <line x1={xb(xMax * 0.3)} x2={xb(xMax * 0.3)} y1={padT} y2={padT + innerH} stroke="rgba(245,230,37,0.35)" strokeDasharray="3 3" strokeWidth="1.5" />
-            <line x1={padL} x2={padL + innerW} y1={yb(7)} y2={yb(7)} stroke="rgba(245,230,37,0.35)" strokeDasharray="3 3" strokeWidth="1.5" />
-            {/* VIZ-06: quadrant labels with backing rect to ensure readability over bubbles */}
-            {[
-              { x: padL + 10, y: padT + 8, w: 162, label: 'High ER · Smaller audience', anchor: 'start' as const, color: '#94a3b8' },
-              { x: padL + innerW - 10, y: padT + 8, w: 122, label: 'SUPERSTAR ZONE', anchor: 'end' as const, color: '#22c55e' },
-              { x: padL + 10, y: padT + innerH - 22, w: 156, label: 'Low ER · Smaller audience', anchor: 'start' as const, color: '#94a3b8' },
-              { x: padL + innerW - 10, y: padT + innerH - 22, w: 178, label: 'Big reach · Low engagement', anchor: 'end' as const, color: '#94a3b8' },
-            ].map((q, i) => (
-              <g key={'q' + i}>
-                <rect
-                  x={q.anchor === 'end' ? q.x - q.w : q.x - 4}
-                  y={q.y}
-                  width={q.w + 4} height={16} rx={4}
-                  fill="rgba(7,9,14,0.78)" stroke="rgba(255,255,255,0.06)" strokeWidth="0.5"
-                />
-                <text x={q.x} y={q.y + 11} textAnchor={q.anchor} className="scatter-quadrant"
-                  style={{ fontSize: 10, fontWeight: 700, fill: q.color, opacity: 1 }}>
-                  {q.label}
-                </text>
-              </g>
-            ))}
-            {[xMax * 0.0625, xMax * 0.25, xMax * 0.5625, xMax].map((v, i) => (
-              <text key={i} x={xb(v)} y={bubH - 22} textAnchor="middle" className="scatter-axis">{fmt(v)}</text>
-            ))}
-            <text x={padL + innerW / 2} y={bubH - 6} textAnchor="middle" className="scatter-axis" style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>INSTAGRAM FOLLOWERS →</text>
-            {[0, 3, 6, 9, 12].map((v, i) => (
-              <text key={i} x={padL - 8} y={yb(v) + 3} textAnchor="end" className="scatter-axis">{v}%</text>
-            ))}
-            <text transform={`translate(14 ${padT + innerH / 2}) rotate(-90)`} textAnchor="middle" className="scatter-axis" style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>INSTAGRAM ENGAGEMENT RATE ↑</text>
-            {placed.map((p, i) => {
-              const { a, cx, cy, r: bR } = p
-              const isJ = a.brand === 'joola'
-              const isHov = hovBubble?.a === a
-              const lbl = labelByName.get(a.name)
-              const labelY = lbl ? lbl.y : cy - bR - 6
-              return (
-                <g key={i} style={{ cursor: 'pointer' }}
-                  onMouseEnter={() => setHovBubble({ a, bx: cx, by: cy })}
-                  onMouseLeave={() => setHovBubble(null)}
-                  onClick={() => jumpToTopPosts(a.id)}>
-                  {/* halo */}
-                  <circle cx={cx} cy={cy} r={bR + (isHov ? 10 : 5)} fill={pgColor(a.brand)}
-                    opacity={isHov ? 0.22 : 0.10}
-                    style={{ transition: 'r 200ms, opacity 200ms' }} />
-                  {/* main dot */}
-                  <circle cx={cx} cy={cy} r={isHov ? bR + 3 : bR} fill={pgColor(a.brand)}
-                    opacity={isJ ? 1 : 0.85}
-                    stroke={isJ ? '#fff' : isHov ? '#fff' : 'rgba(0,0,0,0.4)'}
-                    strokeWidth={isJ ? 2.5 : isHov ? 2 : 1}
-                    style={{ transition: 'r 200ms', filter: isHov ? `drop-shadow(0 0 10px ${pgColor(a.brand)}cc)` : 'none' }} />
-                  {/* connector when label is displaced */}
-                  {Math.abs(labelY - (cy - bR - 6)) > 1 && (
-                    <line x1={cx} y1={cy - bR} x2={cx} y2={labelY + 4}
-                      stroke={pgColor(a.brand)} strokeOpacity="0.35" strokeWidth="0.6" />
-                  )}
-                  {/* VIZ-20: every athlete gets a label */}
-                  <text x={cx} y={labelY} textAnchor="middle" className="scatter-label"
-                    style={{
-                      fontSize: isHov ? 12 : isJ ? 11 : 10,
-                      fontWeight: isJ || isHov ? 800 : 600,
-                      fill: isJ ? '#22c55e' : isHov ? '#fff' : '#cbd1dc',
-                      pointerEvents: 'none',
-                      paintOrder: 'stroke',
-                      stroke: 'rgba(7,9,14,0.85)', strokeWidth: 2.5, strokeLinejoin: 'round',
-                    }}>
-                    {a.name.split(' ')[0]}
-                  </text>
-                </g>
-              )
-            })}
-          </svg>
-          {hovBubble && (
-            <div className="tip" style={{ left: (hovBubble.bx / bubW) * 100 + '%', top: (hovBubble.by / bubH) * 100 + '%' }}>
-              <div className="t-name">{hovBubble.a.name}</div>
-              {fmt(hovBubble.a.followers)} followers · {hovBubble.a.engRate.toFixed(2)}% ER · click to view posts
-            </div>
-          )}
-          </div>
-        </div></div>
-      </section>
-
-      <section>
-        <div className="section-head">
-          <div>
-            <h2>
-              Full athlete roster · ranked by engagement
-              <SectionInfo
-                title="Athlete Roster"
-                description="Every tracked athlete across all brands, ranked by how engaged their Instagram audience is. Engagement rate above 8% (highlighted in yellow) is exceptional. Click an athlete name to see their top posts below. Athletes with no post data in the current window are sorted to the bottom and marked Inactive. Posts/wk is the post count in the selected window divided by the number of weeks in that window."
-                source="Athlete roster + Instagram post engagement"
-              />
-            </h2>
-            <div className="sub">
-              Ranked by engagement rate · {DATE_RANGE_LABEL[range].toLowerCase()} · {weeksInWindow} {weeksInWindow === 1 ? 'week' : 'weeks'} in window
-            </div>
-          </div>
-        </div>
-
-        {/* Tier legend (M1: NANO / MICRO / MACRO / MEGA glossary) */}
-        <div style={{
-          display: 'flex', gap: 14, flexWrap: 'wrap',
-          padding: '10px 14px', marginBottom: 12,
-          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8,
-          fontSize: 11, color: 'var(--fg-3)',
-        }}>
-          <span style={{ fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-2)' }}>
-            Tiers
-          </span>
-          {TIERS.map((t) => (
-            <span key={t.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} title={`${t.label}: ${t.desc}`}>
-              <span style={{ width: 8, height: 8, borderRadius: 99, background: t.color }} />
-              <strong style={{ color: t.color }}>{t.label.toUpperCase()}</strong> {t.desc}
-            </span>
+    <div className="scatter-wrap" style={{ position: 'relative' }}>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
+        <g className="scatter-grid">
+          {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
+            <line key={'gx' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} stroke="rgba(255,255,255,0.06)" />
           ))}
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#f59e0b', marginLeft: 'auto' }}>
-            <span>⚠</span>
-            = follower count anomaly — verify athlete account
-          </span>
-        </div>
-
-        <div className="card">
-          <div className="table-wrap">
-            <table className="data">
-              <thead><tr>
-                <th>#</th>
-                <SortTh col="name" label="Athlete" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                <th title="Platforms the athlete account is currently tracked on">Platforms</th>
-                <SortTh col="followers" label="Followers (IG)" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                <SortTh
-                  col="posts"
-                  label="Posts/wk"
-                  sortKey={sortKey} sortDir={sortDir} toggle={toggleSort}
-                  style={{ textAlign: 'right' }}
-                />
-                <SortTh col="avgLikes" label="Avg likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                <SortTh col="engRate" label="Eng. rate" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                <th style={{ width: 160 }}>Tier</th>
-              </tr></thead>
-              <tbody>
-                {sorted.map((a, i) => {
-                  const isJ = a.brand === 'joola'
-                  const active = isActive(a)
-                  const igHandle = a.igHandle || a.name.toLowerCase().replace(/ /g, '')
-                  const postsPerWeek = a.posts / weeksInWindow
-                  const cappedPpw = postsPerWeek > POSTS_PER_WEEK_CAP
-                  const tier = getTier(a.followers)
-                  const lowFollowers = a.followers > 0 && a.followers < LOW_FOLLOWERS_WARNING
-                  const isSelected = selectedAthleteId === a.id
-                  return (
-                    <tr
-                      key={a.id || i}
-                      className={isJ ? 'joola' : ''}
-                      style={isSelected ? { background: 'rgba(245,230,37,0.10)' } : undefined}
-                    >
-                      <td className="cell-num">{active ? i + 1 : '—'}</td>
-                      <td>
-                        <div className="athlete-row">
-                          <div className="athlete-avatar" style={{ background: pgColor(a.brand) + '33', color: pgColor(a.brand), borderColor: pgColor(a.brand) + '44' }}>{a.init}</div>
-                          <div>
-                            <button
-                              type="button"
-                              onClick={() => jumpToTopPosts(a.id)}
-                              title="View this athlete's top posts below"
-                              style={{
-                                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                                fontWeight: 700, color: isSelected ? '#F5E625' : 'var(--fg)', fontSize: 13,
-                                textAlign: 'left',
-                              }}
-                            >
-                              {a.name}
-                              <span style={{ fontSize: 10, color: 'var(--fg-4)', marginLeft: 6 }}>↓ posts</span>
-                            </button>
-                            <a
-                              href={`https://www.instagram.com/${igHandle}`}
-                              target="_blank" rel="noopener noreferrer"
-                              className="cta-link"
-                              style={{ display: 'block' }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              @{igHandle}
-                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{flexShrink:0}}><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                            </a>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <span className="brand-dot" style={{ background: pgColor(a.brand) }} />
-                          {name(a.brand)}
-                        </span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
-                          {a.igHandle && (
-                            <span title={`Instagram: @${a.igHandle}`} style={{
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              width: 22, height: 18, borderRadius: 4,
-                              background: 'rgba(236,72,153,0.14)', border: '1px solid rgba(236,72,153,0.35)',
-                              color: '#ec4899', fontSize: 9, fontWeight: 800, letterSpacing: '0.04em',
-                            }}>IG</span>
-                          )}
-                          {a.xHandle && (
-                            <span title={`X / Twitter: @${a.xHandle}`} style={{
-                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                              width: 22, height: 18, borderRadius: 4,
-                              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.18)',
-                              color: 'var(--fg-2)', fontSize: 9, fontWeight: 800, letterSpacing: '0.04em',
-                            }}>X</span>
-                          )}
-                          {!a.igHandle && !a.xHandle && (
-                            <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="cell-num" style={{ textAlign: 'right' }}>
-                        <span title={`Instagram followers: ${a.followers.toLocaleString()}`}>
-                          <span style={{ fontSize: 9, color: 'var(--fg-4)', marginRight: 4 }}>IG</span>
-                          {fmt(a.followers)}
-                        </span>
-                        {lowFollowers && (
-                          <span
-                            title="Follower count below typical threshold — may indicate a tracking gap or a private/recently-created athlete account. Verify the handle is mapped correctly."
-                            style={{ color: '#f59e0b', marginLeft: 5, fontSize: 11, cursor: 'help' }}
-                          >⚠</span>
-                        )}
-                      </td>
-                      <td
-                        className="cell-num"
-                        style={{ textAlign: 'right' }}
-                        title={`${postsPerWeek.toFixed(2)} posts per week (feed + Reels + video) over ${weeksInWindow} ${weeksInWindow === 1 ? 'week' : 'weeks'} · ${a.posts} total posts in window`}
-                      >
-                        {a.posts > 0
-                          ? (cappedPpw
-                              ? <>{POSTS_PER_WEEK_CAP.toFixed(1)}+ <span style={{ color: 'var(--fg-4)', fontSize: 10 }}>ⓘ</span></>
-                              : postsPerWeek.toFixed(1))
-                          : <span style={{ color: 'var(--fg-4)' }}>—</span>}
-                      </td>
-                      <td className="cell-num" style={{ textAlign: 'right' }}>
-                        {a.avgLikes > 0 ? fmt(a.avgLikes) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
-                      </td>
-                      <td className="cell-num" style={{ textAlign: 'right', color: a.engRate > 8 ? '#F5E625' : a.engRate === 0 ? 'var(--fg-4)' : 'var(--fg)' }}>
-                        {a.engRate > 0
-                          ? a.engRate.toFixed(2) + '%'
-                          : <span style={{ color: 'var(--fg-4)' }}>No posts in this period</span>}
-                      </td>
-                      <td>
-                        {active ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            <span
-                              title={`${tier.label}: ${tier.desc}`}
-                              style={{ fontSize: 10, fontWeight: 800, color: tier.color, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'help' }}
-                            >
-                              {tier.label}
-                            </span>
-                            <div style={{ height: 3, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', width: 44 }}>
-                              <div style={{ width: (Math.min(a.engRate, 12) / 12 * 100) + '%', height: '100%', background: tier.color }} />
-                            </div>
-                          </div>
-                        ) : (
-                          <span style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '2px 8px', borderRadius: 99,
-                            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)',
-                            color: 'var(--fg-4)', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-                          }}>
-                            Inactive
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section id="influencer-top-posts">
-        <div className="section-head">
-          <div>
-            <h2>
-              Top performing posts by athlete
-              <SectionInfo
-                title="Top Athlete Posts"
-                description="Highest-engagement posts from tracked athletes in the selected window. Click an athlete in the roster above to narrow this table to just that athlete; use the clear button to reset. Currently sourced from Instagram only — TikTok and YouTube athlete-level posts will join here as that data lands."
-                source="Athlete post engagement (Instagram)"
-              />
-            </h2>
-            <div className="sub">
-              {selectedAthlete
-                ? <>Showing <strong style={{ color: '#F5E625' }}>{selectedAthlete.name}</strong> only · {visibleTopPosts.length} {visibleTopPosts.length === 1 ? 'post' : 'posts'} · {DATE_RANGE_LABEL[range].toLowerCase()}</>
-                : <>Showing top <strong style={{ color: 'var(--fg)' }}>{visibleTopPosts.length}</strong> {visibleTopPosts.length === 1 ? 'post' : 'posts'} · {DATE_RANGE_LABEL[range].toLowerCase()} · click an athlete in the roster to filter</>}
-              {selectedAthlete && (
-                <>
-                  {' '}·{' '}
-                  <button
-                    onClick={() => setSelectedAthleteId(null)}
-                    style={{
-                      background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
-                      borderRadius: 4, color: 'var(--fg-2)', fontSize: 10,
-                      padding: '2px 8px', cursor: 'pointer',
-                    }}
-                  >
-                    × clear athlete
-                  </button>
-                </>
+          {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
+            <line key={'gy' + i} y1={padT + t * innerH} y2={padT + t * innerH} x1={padL} x2={padL + innerW} stroke="rgba(255,255,255,0.06)" />
+          ))}
+        </g>
+        <text x={padL + innerW / 2} y={h - 8} textAnchor="middle" style={{ fontSize: 10, fill: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>REACH (followers) {useLog ? '· log scale' : ''} →</text>
+        <text transform={`translate(14 ${padT + innerH / 2}) rotate(-90)`} textAnchor="middle" style={{ fontSize: 10, fill: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>ENGAGEMENT RATE ↑</text>
+        {placed.map((p, i) => {
+          const isJ = p.b.brandSlug === 'joola'
+          const isHov = hov?.b === p.b
+          return (
+            <g key={i} onMouseEnter={() => setHov({ b: p.b, cx: p.cx, cy: p.cy })} onMouseLeave={() => setHov(null)}>
+              <circle cx={p.cx} cy={p.cy} r={p.r + 5} fill={pgColor(p.b.brandSlug)} opacity={isHov ? 0.25 : 0.08} />
+              <circle cx={p.cx} cy={p.cy} r={p.r} fill={pgColor(p.b.brandSlug)}
+                opacity={isJ ? 1 : 0.85}
+                stroke={isJ ? '#fff' : isHov ? '#fff' : 'rgba(0,0,0,0.4)'}
+                strokeWidth={isJ ? 2 : 1} />
+              {(isJ || isHov) && (
+                <text x={p.cx} y={p.cy - p.r - 6} textAnchor="middle" style={{
+                  fontSize: isJ ? 11 : 10, fontWeight: 700,
+                  fill: isJ ? '#22c55e' : '#fff',
+                  paintOrder: 'stroke', stroke: 'rgba(7,9,14,0.85)', strokeWidth: 2.5, strokeLinejoin: 'round',
+                }}>{p.b.name.split(' ')[0]}</text>
               )}
-            </div>
-          </div>
+            </g>
+          )
+        })}
+      </svg>
+      {hov && (
+        <div className="tip" style={{ left: (hov.cx / w) * 100 + '%', top: (hov.cy / h) * 100 + '%' }}>
+          <div className="t-name">{hov.b.name}</div>
+          {pgName(hov.b.brandSlug, brands)} · {fmt(hov.b.reach)} reach · {hov.b.er.toFixed(2)}% ER · {hov.b.total} signals
         </div>
-        <div className="card">
-          {visibleTopPosts.length > 0 ? (
-            <div className="table-wrap">
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th>Athlete</th>
-                    <th>Brand</th>
-                    <th>Platform</th>
-                    <th style={{ width: '36%' }}>Caption</th>
-                    <th style={{ textAlign: 'right' }}>Likes</th>
-                    <th style={{ textAlign: 'right' }}>Comments</th>
-                    <th style={{ textAlign: 'right' }}>Engagement</th>
-                    <th>Posted</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleTopPosts.slice(0, 20).map((p, i) => {
-                    const engagement = p.likes + p.comments
-                    const posted = postedLabel(p.days)
-                    return (
-                      <tr key={i} className={p.brand === 'joola' ? 'joola' : ''}>
-                        <td>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedAthleteId(p.athleteId)}
-                            style={{
-                              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                              fontWeight: 700, color: 'var(--fg)', fontSize: 12, textAlign: 'left',
-                            }}
-                            title="Filter to this athlete"
-                          >
-                            {p.athleteName}
-                          </button>
-                          {p.athleteHandle && (
-                            <div style={{ fontSize: 10, color: 'var(--fg-4)' }}>@{p.athleteHandle}</div>
-                          )}
-                        </td>
-                        <td>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <span className="brand-dot" style={{ background: pgColor(p.brand) }} />
-                            {name(p.brand)}
-                          </span>
-                        </td>
-                        <td>
-                          <span title={platformLabel(p.platform)} style={{
-                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                            minWidth: 28, height: 18, padding: '0 6px', borderRadius: 4,
-                            background: p.platform === 'ig' ? 'rgba(236,72,153,0.14)' : 'rgba(255,255,255,0.06)',
-                            border: '1px solid ' + (p.platform === 'ig' ? 'rgba(236,72,153,0.35)' : 'rgba(255,255,255,0.18)'),
-                            color: p.platform === 'ig' ? '#ec4899' : 'var(--fg-2)',
-                            fontSize: 9, fontWeight: 800, letterSpacing: '0.04em',
-                          }}>
-                            {platformShort(p.platform)}
-                          </span>
-                        </td>
-                        <td style={{ color: 'var(--fg)' }}>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                            <span style={{ fontSize: 12 }}>{p.caption ? p.caption.slice(0, 90) + (p.caption.length > 90 ? '…' : '') : '—'}</span>
-                            {p.url && (
-                              <a href={p.url} target="_blank" rel="noopener noreferrer" className="ext-link" style={{ marginTop: 1, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-                                View
-                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                              </a>
-                            )}
-                          </div>
-                        </td>
-                        <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(p.likes)}</td>
-                        <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(p.comments)}</td>
-                        <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625' }}>{fmt(engagement)}</td>
-                        <td className="cell-num" title={posted.relative}>{posted.date}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
-              <div style={{ fontSize: 13, marginBottom: 8 }}>
-                {selectedAthlete
-                  ? `${selectedAthlete.name} has no posts in this window.`
-                  : 'No athlete posts in the current window.'}
-              </div>
-              <div style={{ fontSize: 11 }}>
-                Try widening the date range (top right){selectedAthlete ? ' or clear the athlete filter above' : ''}.
-              </div>
-            </div>
-          )}
-        </div>
-      </section>
-    </>
+      )}
+    </div>
   )
 }

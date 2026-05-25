@@ -61,40 +61,80 @@ def run(ctx: dict[str, Any]) -> int:
         "maxResults": 100,
         "maxResultsShorts": 50,
     })
+    log.info("Apify returned %d items for %d input URLs", len(items), len(yt_map))
+    if items:
+        sample = items[0]
+        log.info("First item keys: %s", sorted(sample.keys())[:30])
+        log.info("First item inputUrl=%r channelUrl=%r channelName=%r channelHandle=%r",
+                 sample.get("inputUrl"), sample.get("channelUrl"),
+                 sample.get("channelName"), sample.get("channelHandle"))
 
-    # Build name-based fallback lookup
+    # Build name-based fallback lookup (URL tail like "selkirksport" → row).
+    # Also build a "compact" form (alphanumerics only, lowercase) so that an
+    # Apify channelName like "Selkirk Sport" reduces to "selkirksport" and
+    # still matches the URL tail.
+    import re as _re
+    def _compact(s: str) -> str:
+        return _re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
     name_to_info: dict[str, tuple[str, dict]] = {}
+    compact_to_info: dict[str, tuple[str, dict]] = {}
     for stored_url, info in yt_map.items():
         tail = stored_url.rstrip("/").rsplit("/", 1)[-1].lstrip("@").lower()
         if tail:
             name_to_info[tail] = (stored_url, info)
+            compact_to_info[_compact(tail)] = (stored_url, info)
 
     channel_snapshots: dict[str, dict] = {}
     videos: list[dict] = []
     unmatched: set[str] = set()
 
     for item in items:
-        input_url = (item.get("inputUrl") or "").rstrip("/")
-        ch_url    = (item.get("channelUrl") or "").rstrip("/")
-        ch_name   = (item.get("channelName") or item.get("channelHandle") or "").lstrip("@").lower()
+        input_url   = (item.get("inputUrl") or item.get("inputChannelUrl") or "").rstrip("/")
+        ch_url      = (item.get("channelUrl") or "").rstrip("/")
+        ch_name     = (item.get("channelName") or "").lstrip("@").lower()
+        ch_handle   = (item.get("channelHandle") or "").lstrip("@").lower()
+        ch_username = (item.get("channelUsername") or "").lstrip("@").lower()
 
         info = yt_map.get(input_url) or yt_map.get(ch_url)
         matched_url = input_url if yt_map.get(input_url) else (ch_url if yt_map.get(ch_url) else None)
 
         if not info:
             for stored_url, stored_info in yt_map.items():
-                if stored_url.lower() in ch_url.lower() or stored_url.lower() in input_url.lower():
+                lo = stored_url.lower()
+                if (ch_url and lo in ch_url.lower()) or (input_url and lo in input_url.lower()):
                     info = stored_info
                     matched_url = stored_url
                     break
 
+        # channelUsername is the @handle without the @ (e.g. "SelkirkSport").
+        # This is the most reliable identifier the Apify actor exposes.
+        if not info and ch_username and ch_username in name_to_info:
+            matched_url, info = name_to_info[ch_username]
+        if not info and ch_username:
+            compact_user = _compact(ch_username)
+            if compact_user and compact_user in compact_to_info:
+                matched_url, info = compact_to_info[compact_user]
+
+        if not info and ch_handle and ch_handle in name_to_info:
+            matched_url, info = name_to_info[ch_handle]
+
         if not info and ch_name and ch_name in name_to_info:
             matched_url, info = name_to_info[ch_name]
+
+        # Final lenient pass: collapse channelName to alphanumerics and try
+        # compact match (handles "Selkirk Sport - We Are Pickleball" → no
+        # match, but channelUsername path above should already have caught it).
+        if not info:
+            compact_name = _compact(ch_name) or _compact(ch_handle)
+            if compact_name and compact_name in compact_to_info:
+                matched_url, info = compact_to_info[compact_name]
 
         if not info:
             key = ch_url or input_url or ch_name
             if key not in unmatched:
-                log.warning("No yt_channels record for: %r", key)
+                log.warning("No yt_channels record for: %r (channelName=%r channelUsername=%r channelHandle=%r)",
+                            key, item.get("channelName"), item.get("channelUsername"), item.get("channelHandle"))
                 unmatched.add(key)
             continue
 

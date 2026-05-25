@@ -42,20 +42,26 @@ export function BrandPill({ slug, brands }: { slug: string; brands: V2Brand[] })
   )
 }
 
-export function PageHead({
-  eyebrow, title, accent, sub, actions,
-}: {
-  eyebrow: string; title: string; accent: string; sub: string; actions?: React.ReactNode
-}) {
+interface PageHeadProps {
+  title: string
+  eyebrow?: string
+  accent?: string
+  sub?: string
+  actions?: React.ReactNode
+}
+
+export function PageHead({ eyebrow, title, accent, sub, actions }: PageHeadProps) {
   return (
     <header className="page-head">
       <div>
-        <div className="eyebrow">
-          <span style={{ width: 6, height: 6, borderRadius: 99, background: '#F5E625', boxShadow: '0 0 0 4px rgba(245,230,37,0.18)', display: 'inline-block' }} />
-          {eyebrow}
-        </div>
-        <h1>{title} <em>{accent}</em></h1>
-        <div className="sub">{sub}</div>
+        {eyebrow && (
+          <div className="eyebrow">
+            <span style={{ width: 6, height: 6, borderRadius: 99, background: '#F5E625', boxShadow: '0 0 0 4px rgba(245,230,37,0.18)', display: 'inline-block' }} />
+            {eyebrow}
+          </div>
+        )}
+        <h1>{title}{accent && <> <em>{accent}</em></>}</h1>
+        {sub && <div className="sub">{sub}</div>}
       </div>
       {actions && <div className="head-actions">{actions}</div>}
     </header>
@@ -230,10 +236,10 @@ export function ColumnFilter({
 
 // ─── Sort-aware <th> ─────────────────────────────────────────────────
 export function SortTh({
-  col, label, sortKey, sortDir, toggle, style,
+  col, label, sortKey, sortDir, toggle, style, title,
 }: {
   col: string; label: string; sortKey: string | null; sortDir: 'asc' | 'desc';
-  toggle: (k: string) => void; style?: CSSProperties
+  toggle: (k: string) => void; style?: CSSProperties; title?: string
 }) {
   const active = sortKey === col
   const ariaSort = active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'
@@ -243,6 +249,7 @@ export function SortTh({
       onClick={() => toggle(col)}
       style={style}
       aria-sort={ariaSort}
+      title={title}
     >
       <span className="sort-ic">
         {label}

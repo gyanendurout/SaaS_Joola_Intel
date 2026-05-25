@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { PageHead, MiniKpi, SectionInfo, LoadingPage } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, SectionInfo, LoadingPage, SortTh, ColumnFilter } from '@/components/v2/PageShell'
 import { fmt } from '@/components/v2/charts'
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -82,22 +82,13 @@ function statusBorderColor(status: string): string {
 }
 
 function StatusPill({ status }: { status: string }) {
-  if (status === 'in_stock') {
-    return <span className="pill pill-green">in stock</span>
-  }
-  const c = STATUS_COLORS[status] ?? '#94a3b8'
-  return (
-    <span
-      className="pill"
-      style={{
-        background: `${c}1a`,
-        color: c,
-        border: `1px solid ${c}55`,
-      }}
-    >
-      {status.replace(/_/g, ' ')}
-    </span>
-  )
+  // Standard pill classes: in-stock → pill-green, out-of-stock → pill-red,
+  // limited/low → pill-amber, unknown/other → pill-ghost.
+  const label = status.replace(/_/g, ' ')
+  if (status === 'in_stock') return <span className="pill pill-green">{label}</span>
+  if (status === 'out_of_stock') return <span className="pill pill-red">{label}</span>
+  if (status === 'limited' || status === 'low') return <span className="pill pill-amber">{label}</span>
+  return <span className="pill pill-ghost">{label}</span>
 }
 
 function ConfidenceBadge({ level }: { level: 'high' | 'low' }) {
@@ -121,6 +112,32 @@ export default function SalesIntelPage() {
   const [variants, setVariants] = useState<ProductVariant[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Per-table sort + per-column filter state (standardization)
+  const [stockSortKey, setStockSortKey] = useState<string | null>(null)
+  const [stockSortDir, setStockSortDir] = useState<'asc' | 'desc'>('desc')
+  const [stockColFilter, setStockColFilter] = useState<Record<string, string>>({})
+
+  const [priceSortKey, setPriceSortKey] = useState<string | null>(null)
+  const [priceSortDir, setPriceSortDir] = useState<'asc' | 'desc'>('desc')
+  const [priceColFilter, setPriceColFilter] = useState<Record<string, string>>({})
+
+  const [revSortKey, setRevSortKey] = useState<string | null>(null)
+  const [revSortDir, setRevSortDir] = useState<'asc' | 'desc'>('desc')
+  const [revColFilter, setRevColFilter] = useState<Record<string, string>>({})
+
+  function toggleStock(k: string) {
+    if (stockSortKey === k) setStockSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setStockSortKey(k); setStockSortDir('desc') }
+  }
+  function togglePrice(k: string) {
+    if (priceSortKey === k) setPriceSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setPriceSortKey(k); setPriceSortDir('desc') }
+  }
+  function toggleRev(k: string) {
+    if (revSortKey === k) setRevSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setRevSortKey(k); setRevSortDir('desc') }
+  }
 
   useEffect(() => {
     document.title = 'JOOLA INTEL — Sales Intelligence'
@@ -258,8 +275,43 @@ export default function SalesIntelPage() {
     return cards
   }, [brands, latestSnapshots, snapshots])
 
-  // Stock events timeline — latest 50 with availability_status changes
-  const stockEvents = useMemo(() => snapshots.slice(0, 50), [snapshots])
+  // Stock events timeline — latest 200 snapshots (bumped from 50 for standardization)
+  const stockEvents = useMemo(() => {
+    return snapshots.slice(0, 200).map((s) => {
+      const brand = brandById.get(s.brand_id)
+      const product = s.product_id ? productById.get(s.product_id) : null
+      return {
+        snap: s,
+        brandName: brand?.name ?? s.brand_id,
+        brandSlug: brand?.slug ?? '',
+        productName: product?.display_name ?? '—',
+        status: s.availability_status,
+        priceVal: s.price ?? 0,
+        signal: s.inventory_signal_type ?? 'unknown',
+        confidence: s.inventory_confidence,
+        time: s.snapshot_time,
+      }
+    })
+  }, [snapshots, brandById, productById])
+
+  const displayStockEvents = useMemo(() => {
+    const filtered = stockEvents.filter(r => {
+      return Object.entries(stockColFilter).every(([col, q]) => {
+        if (!q) return true
+        const rec = r as unknown as Record<string, unknown>
+        return String(rec[col] ?? '').toLowerCase().includes(q.toLowerCase())
+      })
+    })
+    if (!stockSortKey) return filtered
+    return [...filtered].sort((a, b) => {
+      const rec = (x: typeof a) => x as unknown as Record<string, unknown>
+      const av = rec(a)[stockSortKey], bv = rec(b)[stockSortKey]
+      if (typeof av === 'number' && typeof bv === 'number') return stockSortDir === 'asc' ? av - bv : bv - av
+      return stockSortDir === 'asc'
+        ? String(av ?? '').localeCompare(String(bv ?? ''))
+        : String(bv ?? '').localeCompare(String(av ?? ''))
+    })
+  }, [stockEvents, stockColFilter, stockSortKey, stockSortDir])
 
   // Price landscape — latest price per product
   const priceRows = useMemo(() => {
@@ -291,6 +343,25 @@ export default function SalesIntelPage() {
 
   const maxPrice = priceRows[0]?.price ?? 1
 
+  const displayPriceRows = useMemo(() => {
+    const filtered = priceRows.filter(r => {
+      return Object.entries(priceColFilter).every(([col, q]) => {
+        if (!q) return true
+        const rec = r as unknown as Record<string, unknown>
+        return String(rec[col] ?? '').toLowerCase().includes(q.toLowerCase())
+      })
+    })
+    if (!priceSortKey) return filtered
+    return [...filtered].sort((a, b) => {
+      const av = (a as Record<string, unknown>)[priceSortKey]
+      const bv = (b as Record<string, unknown>)[priceSortKey]
+      if (typeof av === 'number' && typeof bv === 'number') return priceSortDir === 'asc' ? av - bv : bv - av
+      return priceSortDir === 'asc'
+        ? String(av ?? '').localeCompare(String(bv ?? ''))
+        : String(bv ?? '').localeCompare(String(av ?? ''))
+    })
+  }, [priceRows, priceColFilter, priceSortKey, priceSortDir])
+
   // Revenue signal ranking
   const revenueRows = useMemo(() => {
     type Row = {
@@ -315,6 +386,28 @@ export default function SalesIntelPage() {
     rows.sort((a, b) => b.avgPrice - a.avgPrice)
     return rows
   }, [brands, latestSnapshots])
+
+  const displayRevenueRows = useMemo(() => {
+    const filtered = revenueRows.filter(r => {
+      return Object.entries(revColFilter).every(([col, q]) => {
+        if (!q) return true
+        const cell = col === 'brand' ? r.brand.name : ''
+        return cell.toLowerCase().includes(q.toLowerCase())
+      })
+    })
+    if (!revSortKey) return filtered
+    return [...filtered].sort((a, b) => {
+      if (revSortKey === 'brand') {
+        return revSortDir === 'asc' ? a.brand.name.localeCompare(b.brand.name) : b.brand.name.localeCompare(a.brand.name)
+      }
+      const av = (a as unknown as Record<string, unknown>)[revSortKey]
+      const bv = (b as unknown as Record<string, unknown>)[revSortKey]
+      if (typeof av === 'number' && typeof bv === 'number') return revSortDir === 'asc' ? av - bv : bv - av
+      return revSortDir === 'asc'
+        ? String(av ?? '').localeCompare(String(bv ?? ''))
+        : String(bv ?? '').localeCompare(String(av ?? ''))
+    })
+  }, [revenueRows, revColFilter, revSortKey, revSortDir])
 
   // ─── Render ────────────────────────────────────────────────────────
   if (loading) return <LoadingPage />
@@ -507,106 +600,72 @@ export default function SalesIntelPage() {
         <div className="section-head">
           <div>
             <h2>
-              Stock events · latest 50
+              Stock events · latest 200
               <SectionInfo
                 title="Stock Events Timeline"
                 description="Chronological feed of the most recent product snapshots. Each row represents one observation: when we checked, what brand and product, what status we saw, and how confident the signal is. Out-of-stock rows are flagged in red as immediate competitive opportunities."
-                source="product_snapshots · ordered by snapshot_time DESC, limit 50"
+                source="product_snapshots · ordered by snapshot_time DESC, limit 200"
               />
             </h2>
             <div className="sub">
-              Newest first. Color stripe on each row encodes availability.
+              Showing <strong style={{ color: 'var(--fg)' }}>{displayStockEvents.length}</strong> of up to 200 ·
+              {' '}click column headers to sort. Color stripe encodes availability.
             </div>
           </div>
         </div>
 
-        {stockEvents.length === 0 ? (
-          <div
-            className="card"
-            style={{
-              textAlign: 'center',
-              padding: '36px 24px',
-              color: '#6b7280',
-              fontSize: 13,
-            }}
-          >
-            No stock events recorded yet.
-          </div>
-        ) : (
-          <div className="card">
-            <div className="table-wrap" style={{ overflowX: 'auto' }}>
+        <div className="card">
+          {displayStockEvents.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>No rows found for the selected filters.</div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
               <table className="data">
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                   <tr>
-                    <th style={{ width: 130 }}>Time</th>
-                    <th>Brand</th>
-                    <th>Product</th>
-                    <th>Status</th>
-                    <th>Price</th>
-                    <th>Signal</th>
-                    <th>Confidence</th>
+                    <SortTh col="time" label="Time" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} style={{ width: 130 }} />
+                    <SortTh col="brandName" label="Brand" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
+                    <SortTh col="productName" label="Product" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
+                    <SortTh col="status" label="Status" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
+                    <SortTh col="priceVal" label="Price" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} style={{ textAlign: 'right' }} />
+                    <SortTh col="signal" label="Signal" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
+                    <SortTh col="confidence" label="Confidence" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
+                  </tr>
+                  <tr className="col-filter-row">
+                    <th />
+                    <th><ColumnFilter col="brandName" value={stockColFilter.brandName} onChange={v => setStockColFilter(p => ({ ...p, brandName: v }))} placeholder="brand…" /></th>
+                    <th><ColumnFilter col="productName" value={stockColFilter.productName} onChange={v => setStockColFilter(p => ({ ...p, productName: v }))} placeholder="product…" /></th>
+                    <th><ColumnFilter col="status" value={stockColFilter.status} onChange={v => setStockColFilter(p => ({ ...p, status: v }))} placeholder="status…" /></th>
+                    <th colSpan={3} />
                   </tr>
                 </thead>
                 <tbody>
-                  {stockEvents.map((s, i) => {
-                    const brand = brandById.get(s.brand_id)
-                    const product = s.product_id ? productById.get(s.product_id) : null
-                    const stripe = statusBorderColor(s.availability_status)
-                    const color = brand ? brandColor(brand.slug) : '#94a3b8'
+                  {displayStockEvents.map((r, i) => {
+                    const stripe = statusBorderColor(r.status)
+                    const color = brandColor(r.brandSlug)
                     return (
                       <tr key={i} style={{ borderLeft: `2px solid ${stripe}` }}>
                         <td style={{ whiteSpace: 'nowrap', fontSize: 11, color: '#9ca3af' }}>
-                          {formatSnapshotTime(s.snapshot_time)}
+                          {formatSnapshotTime(r.time)}
                         </td>
                         <td>
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                          >
-                            <span
-                              className="brand-dot"
-                              style={{ background: color }}
-                            />
-                            <span
-                              style={{
-                                fontWeight: 700,
-                                color: brand?.slug === 'joola' ? '#22c55e' : 'var(--fg)',
-                              }}
-                            >
-                              {brand?.name ?? s.brand_id}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="brand-dot" style={{ background: color }} />
+                            <span style={{ fontWeight: 700, color: r.brandSlug === 'joola' ? '#22c55e' : 'var(--fg)' }}>
+                              {r.brandName}
                             </span>
                           </span>
                         </td>
-                        <td style={{ color: 'var(--fg)' }}>
-                          {product?.display_name ?? '—'}
+                        <td style={{ color: 'var(--fg)' }}>{r.productName}</td>
+                        <td><StatusPill status={r.status} /></td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          {r.priceVal > 0 ? '$' + r.priceVal.toFixed(2) : '—'}
                         </td>
                         <td>
-                          <StatusPill status={s.availability_status} />
-                        </td>
-                        <td className="cell-num" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                          {s.price != null && s.price > 0 ? '$' + s.price.toFixed(2) : '—'}
+                          <span className="pill pill-ghost" style={{ fontSize: 10 }}>{r.signal}</span>
                         </td>
                         <td>
-                          <span className="pill pill-ghost" style={{ fontSize: 10 }}>
-                            {s.inventory_signal_type ?? 'unknown'}
-                          </span>
-                        </td>
-                        <td>
-                          <span
-                            className={
-                              'pill ' +
-                              (s.inventory_confidence === 'high'
-                                ? 'pill-green'
-                                : s.inventory_confidence === 'medium'
-                                  ? 'pill-amber'
-                                  : 'pill-ghost')
-                            }
-                            style={{ fontSize: 10 }}
-                          >
-                            {s.inventory_confidence}
+                          <span className={'pill ' + (r.confidence === 'high' ? 'pill-green' : r.confidence === 'medium' ? 'pill-amber' : 'pill-ghost')} style={{ fontSize: 10 }}>
+                            {r.confidence}
                           </span>
                         </td>
                       </tr>
@@ -615,8 +674,8 @@ export default function SalesIntelPage() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </section>
 
       {/* ─── Section 3: Price Landscape ───────────────────────────── */}
@@ -631,94 +690,53 @@ export default function SalesIntelPage() {
                 source="product_snapshots · latest price per product, joined to products_catalog"
               />
             </h2>
-            <div className="sub">Latest observed price per SKU. Sorted high to low.</div>
+            <div className="sub">
+              Showing <strong style={{ color: 'var(--fg)' }}>{displayPriceRows.slice(0, 200).length}</strong> of up to 200 ·
+              {' '}click column headers to sort.
+            </div>
           </div>
         </div>
 
-        {priceRows.length === 0 ? (
-          <div
-            className="card"
-            style={{
-              textAlign: 'center',
-              padding: '36px 24px',
-              color: '#6b7280',
-              fontSize: 13,
-            }}
-          >
-            No price data captured yet.
-          </div>
-        ) : (
-          <div className="card">
-            <div className="table-wrap" style={{ overflowX: 'auto' }}>
+        <div className="card">
+          {displayPriceRows.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>No rows found for the selected filters.</div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
               <table className="data">
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                   <tr>
-                    <th>Product</th>
-                    <th style={{ width: 140 }}>Brand</th>
+                    <SortTh col="productName" label="Product" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} />
+                    <SortTh col="brandName" label="Brand" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} style={{ width: 140 }} />
                     <th style={{ width: '40%' }}>Relative price</th>
-                    <th style={{ width: 90, textAlign: 'right' }}>Price</th>
+                    <SortTh col="price" label="Price" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} style={{ width: 90, textAlign: 'right' }} />
+                  </tr>
+                  <tr className="col-filter-row">
+                    <th><ColumnFilter col="productName" value={priceColFilter.productName} onChange={v => setPriceColFilter(p => ({ ...p, productName: v }))} placeholder="product…" /></th>
+                    <th><ColumnFilter col="brandName" value={priceColFilter.brandName} onChange={v => setPriceColFilter(p => ({ ...p, brandName: v }))} placeholder="brand…" /></th>
+                    <th colSpan={2} />
                   </tr>
                 </thead>
                 <tbody>
-                  {priceRows.slice(0, 60).map((r) => {
+                  {displayPriceRows.slice(0, 200).map((r) => {
                     const color = brandColor(r.slug)
                     const pct = (r.price / maxPrice) * 100
                     return (
-                      <tr
-                        key={r.productId}
-                        className={r.slug === 'joola' ? 'joola' : ''}
-                      >
+                      <tr key={r.productId} className={r.slug === 'joola' ? 'joola' : ''}>
                         <td style={{ color: 'var(--fg)' }}>{r.productName}</td>
                         <td>
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                          >
-                            <span
-                              className="brand-dot"
-                              style={{ background: color }}
-                            />
-                            <span
-                              style={{
-                                fontWeight: 700,
-                                color: r.slug === 'joola' ? '#22c55e' : 'var(--fg)',
-                                fontSize: 12,
-                              }}
-                            >
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="brand-dot" style={{ background: color }} />
+                            <span style={{ fontWeight: 700, color: r.slug === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 12 }}>
                               {r.brandName}
                             </span>
                           </span>
                         </td>
                         <td>
-                          <div
-                            style={{
-                              background: 'rgba(255,255,255,0.04)',
-                              borderRadius: 4,
-                              height: 8,
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <div
-                              style={{
-                                background: `linear-gradient(90deg, ${color}66, ${color}1a)`,
-                                borderRadius: 4,
-                                height: 8,
-                                width: `${Math.max(2, pct)}%`,
-                              }}
-                            />
+                          <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                            <div style={{ background: `linear-gradient(90deg, ${color}66, ${color}1a)`, borderRadius: 4, height: 8, width: `${Math.max(2, pct)}%` }} />
                           </div>
                         </td>
-                        <td
-                          className="cell-num"
-                          style={{
-                            textAlign: 'right',
-                            fontVariantNumeric: 'tabular-nums',
-                            fontWeight: 700,
-                          }}
-                        >
+                        <td className="cell-num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700 }}>
                           ${r.price.toFixed(2)}
                         </td>
                       </tr>
@@ -727,8 +745,8 @@ export default function SalesIntelPage() {
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </section>
 
       {/* ─── Section 4: Revenue Estimate ──────────────────────────── */}
@@ -766,108 +784,65 @@ export default function SalesIntelPage() {
           data when available.
         </div>
 
-        {revenueRows.length === 0 ? (
-          <div
-            className="card"
-            style={{
-              textAlign: 'center',
-              padding: '36px 24px',
-              color: '#6b7280',
-              fontSize: 13,
-            }}
-          >
-            No revenue signals yet — waiting on price data.
-          </div>
-        ) : (
-          <div className="card">
-            <div className="table-wrap" style={{ overflowX: 'auto' }}>
-              <table className="data">
-                <thead>
-                  <tr>
-                    <th style={{ width: 40 }}>#</th>
-                    <th>Brand</th>
-                    <th style={{ textAlign: 'right' }}>Avg price</th>
-                    <th style={{ textAlign: 'right' }}>Products</th>
-                    <th>Revenue signal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {revenueRows.map((r, i) => {
-                    const color = brandColor(r.brand.slug)
-                    const isJoola = r.brand.slug === 'joola'
-                    const pillClass =
-                      r.signal === 'high'
-                        ? 'pill-green'
-                        : r.signal === 'medium'
-                          ? 'pill-amber'
-                          : 'pill-ghost'
-                    return (
-                      <tr
-                        key={r.brand.id}
-                        className={isJoola ? 'joola' : ''}
-                      >
-                        <td style={{ color: '#6b7280', fontWeight: 700 }}>{i + 1}</td>
-                        <td>
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 6,
-                            }}
-                          >
-                            <span
-                              className="brand-dot"
-                              style={{ background: color }}
-                            />
-                            <span
-                              style={{
-                                fontWeight: 700,
-                                color: isJoola ? '#22c55e' : 'var(--fg)',
-                              }}
-                            >
-                              {r.brand.name}
+        <div className="card">
+          {displayRevenueRows.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>No rows found for the selected filters.</div>
+          ) : (
+            <>
+              <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
+                <table className="data">
+                  <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                    <tr>
+                      <th style={{ width: 40 }}>#</th>
+                      <SortTh col="brand" label="Brand" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} />
+                      <SortTh col="avgPrice" label="Avg price" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} style={{ textAlign: 'right' }} />
+                      <SortTh col="products" label="Products" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} style={{ textAlign: 'right' }} />
+                      <SortTh col="signal" label="Revenue signal" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} />
+                    </tr>
+                    <tr className="col-filter-row">
+                      <th />
+                      <th><ColumnFilter col="brand" value={revColFilter.brand} onChange={v => setRevColFilter(p => ({ ...p, brand: v }))} placeholder="brand…" /></th>
+                      <th colSpan={3} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayRevenueRows.map((r, i) => {
+                      const color = brandColor(r.brand.slug)
+                      const isJoola = r.brand.slug === 'joola'
+                      const pillClass =
+                        r.signal === 'high' ? 'pill-green' : r.signal === 'medium' ? 'pill-amber' : 'pill-ghost'
+                      return (
+                        <tr key={r.brand.id} className={isJoola ? 'joola' : ''}>
+                          <td style={{ color: '#6b7280', fontWeight: 700 }}>{i + 1}</td>
+                          <td>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <span className="brand-dot" style={{ background: color }} />
+                              <span style={{ fontWeight: 700, color: isJoola ? '#22c55e' : 'var(--fg)' }}>
+                                {r.brand.name}
+                              </span>
                             </span>
-                          </span>
-                        </td>
-                        <td
-                          className="cell-num"
-                          style={{
-                            textAlign: 'right',
-                            fontVariantNumeric: 'tabular-nums',
-                          }}
-                        >
-                          ${r.avgPrice.toFixed(2)}
-                        </td>
-                        <td
-                          className="cell-num"
-                          style={{
-                            textAlign: 'right',
-                            fontVariantNumeric: 'tabular-nums',
-                          }}
-                        >
-                          {r.products}
-                        </td>
-                        <td>
-                          <span className={'pill ' + pillClass}>{r.signal}</span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div
-              style={{
-                fontSize: 10,
-                color: '#6b7280',
-                padding: '8px 16px 12px',
-                borderTop: '1px solid rgba(255,255,255,0.04)',
-              }}
-            >
-              Tracking {variants.length} product variants across {kpis.brandsWithData} brands.
-            </div>
-          </div>
-        )}
+                          </td>
+                          <td className="cell-num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                            ${r.avgPrice.toFixed(2)}
+                          </td>
+                          <td className="cell-num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                            {r.products}
+                          </td>
+                          <td>
+                            <span className={'pill ' + pillClass}>{r.signal}</span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ fontSize: 10, color: '#6b7280', padding: '8px 16px 12px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                Tracking {variants.length} product variants across {kpis.brandsWithData} brands.
+              </div>
+            </>
+          )}
+        </div>
       </section>
     </>
   )

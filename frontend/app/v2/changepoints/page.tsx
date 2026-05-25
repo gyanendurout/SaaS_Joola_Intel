@@ -8,7 +8,7 @@ import {
   type ChangepointRow,
   type TimeseriesRow,
 } from '@/lib/v2/analytics'
-import { PageHead, LoadingPage, SectionInfo, pgName, pgColor } from '@/components/v2/PageShell'
+import { PageHead, LoadingPage, SectionInfo, pgName, pgColor, SortTh, ColumnFilter } from '@/components/v2/PageShell'
 import { ChangepointTimeline } from '@/components/v2/charts/ChangepointTimeline'
 
 type SeriesName = 'attention_score' | 'estimated_units_sold' | 'ad_pressure_score'
@@ -35,6 +35,14 @@ export default function ChangepointsPage() {
   const [loading, setLoading] = useState(true)
   const [brandSlug, setBrandSlug] = useState<string>('')
   const [activeSeries, setActiveSeries] = useState<SeriesName[]>(SERIES_OPTIONS.map((s) => s.key))
+  const [logSortKey, setLogSortKey] = useState<string | null>('date')
+  const [logSortDir, setLogSortDir] = useState<'asc' | 'desc'>('desc')
+  const [logColFilter, setLogColFilter] = useState<Record<string, string>>({})
+
+  function toggleLogSort(k: string) {
+    if (logSortKey === k) setLogSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setLogSortKey(k); setLogSortDir('desc') }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -129,8 +137,27 @@ export default function ChangepointsPage() {
         })
       })
     })
-    return flat.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30)
+    return flat.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 200)
   }, [cps, brandSlug, activeSeries])
+
+  // Sort + filter the log for the table render
+  const cpLogDisplay = useMemo(() => {
+    const enriched = cpLog.map((r) => ({ ...r, brandName: pgName(r.brandSlug, brands) }))
+    const filtered = enriched.filter((r) =>
+      Object.entries(logColFilter).every(([k, q]) => {
+        if (!q) return true
+        const cell = String((r as unknown as Record<string, unknown>)[k] ?? '')
+        return cell.toLowerCase().includes(q.toLowerCase())
+      })
+    )
+    if (!logSortKey) return filtered
+    return [...filtered].sort((a, b) => {
+      const av = (a as unknown as Record<string, unknown>)[logSortKey]
+      const bv = (b as unknown as Record<string, unknown>)[logSortKey]
+      const as = String(av ?? ''), bs = String(bv ?? '')
+      return logSortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
+    })
+  }, [cpLog, logColFilter, logSortKey, logSortDir, brands])
 
   if (loading) return <LoadingPage />
 
@@ -234,12 +261,12 @@ export default function ChangepointsPage() {
 
       {!hasData && (
         <section>
-          <div className="card" style={{ padding: 36, textAlign: 'center' }}>
-            <div style={{ fontSize: 14, color: '#cbd1dc', marginBottom: 8 }}>
-              No changepoints yet.
+          <div className="card" style={{ textAlign: 'center', padding: 48 }}>
+            <div style={{ fontSize: 14, color: 'var(--fg-2)', marginBottom: 8 }}>
+              Changepoint analysis has not been generated yet.
             </div>
-            <div style={{ fontSize: 12, color: '#6b7280', fontFamily: 'monospace' }}>
-              Run <span style={{ color: '#F5E625' }}>python -m scripts.analytics_backend.run --module changepoint</span> after applying migration 013.
+            <div style={{ fontSize: 12, color: 'var(--fg-4)' }}>
+              This page will populate after the analytics pipeline runs.
             </div>
           </div>
         </section>
@@ -307,40 +334,54 @@ export default function ChangepointsPage() {
               <div className="card">
                 <div className="card-pad">
                   <h3 style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#cbd1dc', marginBottom: 12 }}>
-                    Changepoint log
+                    Changepoint log <span style={{ color: '#6b7280', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· up to 200 most recent</span>
                   </h3>
-                  {cpLog.length === 0 ? (
-                    <div style={{ fontSize: 11, color: '#6b7280' }}>No changepoints match the current filter.</div>
-                  ) : (
-                    cpLog.map((entry, i) => (
-                      <div
-                        key={`${entry.brandSlug}-${entry.date}-${i}`}
-                        style={{
-                          padding: '8px 0',
-                          borderBottom: i < cpLog.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
-                          display: 'flex',
-                          gap: 10,
-                          alignItems: 'flex-start',
-                        }}
-                      >
-                        <div style={{ width: 4, height: 4, borderRadius: 99, background: '#f59e0b', marginTop: 6, flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 11, color: '#cbd1dc', fontWeight: 700 }}>
-                            {entry.date} · <span style={{ color: pgColor(entry.brandSlug) }}>{pgName(entry.brandSlug, brands)}</span>
-                          </div>
-                          <div style={{ fontSize: 10, color: '#8a93a4', marginTop: 2 }}>
-                            {entry.productName ? entry.productName + ' · ' : ''}{entry.seriesName.replace(/_/g, ' ')}
-                          </div>
-                          <a
-                            href={`/v2/correlations?brand=${entry.brandSlug}`}
-                            style={{ fontSize: 10, color: '#F5E625', textDecoration: 'none', marginTop: 4, display: 'inline-block' }}
-                          >
-                            Investigate →
-                          </a>
-                        </div>
-                      </div>
-                    ))
-                  )}
+                  <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+                    <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                        <tr>
+                          <SortTh col="date" label="Date" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} />
+                          <SortTh col="brandName" label="Brand" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} />
+                          <SortTh col="productName" label="Detail" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} />
+                        </tr>
+                        <tr className="col-filter-row">
+                          <th />
+                          <th><ColumnFilter col="brandName" value={logColFilter.brandName} onChange={(v) => setLogColFilter((p) => ({ ...p, brandName: v }))} placeholder="brand…" /></th>
+                          <th><ColumnFilter col="productName" value={logColFilter.productName} onChange={(v) => setLogColFilter((p) => ({ ...p, productName: v }))} placeholder="product…" /></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cpLogDisplay.length === 0 ? (
+                          <tr>
+                            <td colSpan={3} style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
+                              No rows found for the selected filters.
+                            </td>
+                          </tr>
+                        ) : (
+                          cpLogDisplay.map((entry, i) => (
+                            <tr key={`${entry.brandSlug}-${entry.date}-${i}`}>
+                              <td style={{ fontSize: 11, color: '#cbd1dc', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: 99, background: '#f59e0b', marginRight: 6, verticalAlign: 'middle' }} />
+                                {entry.date}
+                              </td>
+                              <td style={{ fontSize: 11 }}>
+                                <span style={{ color: pgColor(entry.brandSlug), fontWeight: 700 }}>{entry.brandName}</span>
+                              </td>
+                              <td style={{ fontSize: 10, color: '#8a93a4' }}>
+                                {entry.productName ? entry.productName + ' · ' : ''}{entry.seriesName.replace(/_/g, ' ')}
+                                <a
+                                  href={`/v2/correlations?brand=${entry.brandSlug}`}
+                                  style={{ fontSize: 10, color: '#F5E625', textDecoration: 'none', marginLeft: 6 }}
+                                >
+                                  Investigate →
+                                </a>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>

@@ -76,6 +76,10 @@ MODULE_STEPS: dict[str, Module] = {
     ],
     "tiktok": [
         [("backend.scraping.sources.tiktok.scrape_videos",            "run")],
+        # scrape_comments depends on tiktok_videos rows existing + migration 014
+        # applied. Runs sequentially after videos so the comments scraper picks
+        # up freshly-upserted video URLs.
+        [("backend.scraping.sources.tiktok.scrape_comments",          "run")],
     ],
     # Meta + Google ad libraries — totally separate APIs
     "ads": [

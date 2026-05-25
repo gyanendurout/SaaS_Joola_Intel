@@ -65,12 +65,14 @@ SOURCES: list[tuple] = [
      "posted_at", None,
      lambda r: (r.get("text") or "")[:280]),
 
+    # tiktok_videos stores the caption in `text` (not `description`) — see
+    # backend/scraping/sources/tiktok/scrape_videos.py
     ("tiktok", "tiktok_videos",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "description,posted_at,enriched_at",
+     "text,posted_at,enriched_at",
      "posted_at", None,
-     lambda r: (r.get("description") or "")[:280]),
+     lambda r: (r.get("text") or "")[:280]),
 
     ("x_influencer", "influencer_x_posts",
      "id,brand_id,influencer_id,sentiment_score,sentiment_label,is_crisis,"

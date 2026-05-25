@@ -89,10 +89,14 @@ brands:
   - slug: franklin
     name: Franklin Pickleball
     website: https://www.franklinsports.com
-    instagram: franklinsports
+    instagram: franklinpickleball
     youtube: https://www.youtube.com/@FranklinSports
-    x_handle: FranklinSports
-    tiktok: franklinsportsofficial
+    # x_handle: removed 2026-05-24 — FranklinSports is the Franklin Sports parent
+    # company X account (baseball, basketball, soccer, etc.), not the pickleball
+    # arm. No pickleball-specific X account exists (per observation 3778).
+    x_handle: ""
+    # tiktok: removed — franklinsportsofficial is a generic Franklin Sports
+    # account, not Franklin Pickleball. Franklin Pickleball has no active TikTok.
     facebook_url: https://www.facebook.com/FranklinSports/
     facebook_page_name: Franklin Sports
     reddit_subreddits: []
@@ -103,6 +107,8 @@ brands:
     website: https://www.head.com/en/sports/padel/pickleball
     instagram: headpickleball
     youtube: https://www.youtube.com/@HEADPickleball
+    # x_handle: kept empty 2026-05-24 — head_tennis is HEAD's TENNIS arm, not the
+    # pickleball division. No pickleball-specific HEAD X account exists.
     x_handle: ""
     tiktok: ""
     facebook_url: https://www.facebook.com/headpickleball/

@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import {
-  fetchBrands, fetchTikTok, fetchTikTokTrend, fetchTopTikTokVideos,
+  fetchBrands, fetchTikTok, fetchTopTikTokVideos,
   type V2Brand, type V2TikTokRow, type V2TikTokVideo,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
-import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
-import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
+import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 
 /** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
@@ -20,7 +20,6 @@ const TIKTOK_HANDLES: Record<string, string> = {
   joola:      'joolapickleball',
   selkirk:    'selkirksport',
   crbn:       'crbnpickleball',
-  franklin:   'franklinsportsofficial',
   engage:     'engage_pickleball',
   'six-zero': 'sixzeropickleball',
   onix:       'onix_pickleball',
@@ -32,23 +31,28 @@ const TIKTOK_HANDLES: Record<string, string> = {
 export default function TikTokPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [ttData, setTtData] = useState<V2TikTokRow[]>([])
-  const [trend, setTrend] = useState<Record<string, number[]>>({})
   const [videos, setVideos] = useState<V2TikTokVideo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [colFilter, setColFilter] = useState<Record<string, string>>({})
+  const [followerSortKey, setFollowerSortKey] = useState<string | null>(null)
+  const [followerSortDir, setFollowerSortDir] = useState<'asc' | 'desc'>('desc')
+  const [followerBrandFilter, setFollowerBrandFilter] = useState('')
+  const [vpvSortKey, setVpvSortKey] = useState<string | null>(null)
+  const [vpvSortDir, setVpvSortDir] = useState<'asc' | 'desc'>('desc')
+  const [vpvBrandFilter, setVpvBrandFilter] = useState('')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
-  const { range, maxDays } = useDateRange()
+  const { range, effectiveFrom, effectiveTo } = useDateRange()
 
   useEffect(() => { document.title = 'JOOLA INTEL — TikTok' }, [])
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
-        const [t, tr, v] = await Promise.all([fetchTikTok(b), fetchTikTokTrend(b), fetchTopTikTokVideos(b, 20)])
-        setBrands(b); setAllBrands(b); setTtData(t); setTrend(tr); setVideos(v); setLoading(false)
+        const [t, v] = await Promise.all([fetchTikTok(b), fetchTopTikTokVideos(b, 200)])
+        setBrands(b); setAllBrands(b); setTtData(t); setVideos(v); setLoading(false)
       } catch (err) {
         console.error('TikTok data fetch failed', err)
         setError('Unable to load TikTok data. Please refresh.')
@@ -73,21 +77,68 @@ export default function TikTokPage() {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('desc') }
   }
+  function toggleFollowerSort(key: string) {
+    if (followerSortKey === key) setFollowerSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setFollowerSortKey(key); setFollowerSortDir('desc') }
+  }
+  function toggleVpvSort(key: string) {
+    if (vpvSortKey === key) setVpvSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setVpvSortKey(key); setVpvSortDir('desc') }
+  }
 
   const displayTT = applyBrandFilter(ttData, filteredBrands, isFiltered)
   const displayVideosAll = applyBrandFilter(videos, filteredBrands, isFiltered)
-  const displayVideos = applyDateRange(displayVideosAll, maxDays)
-  const displayTrend = applyBrandFilterRecord(trend, filteredBrands, isFiltered)
+  const displayVideos = applyDateRangeCustom(displayVideosAll, effectiveFrom, effectiveTo)
 
   const name = (s: string) => pgName(s, brands)
-  const joolaTT = displayTT.find(d => d.brand === 'joola')
   const topByFollowers = [...displayTT].sort((a, b) => b.followers - a.followers)
   const maxFollowers = topByFollowers[0]?.followers || 1
-  const totalVideos = displayTT.reduce((s, d) => s + d.videos, 0)
 
   const vpvSorted = [...displayTT].filter(d => d.videos > 0)
     .sort((a, b) => b.avgViews - a.avgViews)
   const maxVpv = vpvSorted[0]?.avgViews || 1
+
+  // ─── Follower section: filter + sort ────────────────────────────────
+  const displayFollowers = (() => {
+    const q = followerBrandFilter.trim().toLowerCase()
+    const filtered = q
+      ? topByFollowers.filter(d => name(d.brand).toLowerCase().includes(q))
+      : topByFollowers
+    const key = followerSortKey || 'followers'
+    const dir = followerSortKey ? followerSortDir : 'desc'
+    return [...filtered].sort((a, b) => {
+      let av: number | string, bv: number | string
+      if (key === 'brand') { av = name(a.brand); bv = name(b.brand) }
+      else if (key === 'videos') { av = a.videos; bv = b.videos }
+      else { av = a.followers; bv = b.followers }
+      if (typeof av === 'number' && typeof bv === 'number')
+        return dir === 'asc' ? av - bv : bv - av
+      return dir === 'asc'
+        ? String(av).localeCompare(String(bv))
+        : String(bv).localeCompare(String(av))
+    })
+  })()
+
+  // ─── Views-per-video section: filter + sort ─────────────────────────
+  const displayVpv = (() => {
+    const q = vpvBrandFilter.trim().toLowerCase()
+    const filtered = q
+      ? vpvSorted.filter(d => name(d.brand).toLowerCase().includes(q))
+      : vpvSorted
+    const key = vpvSortKey || 'avgViews'
+    const dir = vpvSortKey ? vpvSortDir : 'desc'
+    return [...filtered].sort((a, b) => {
+      let av: number | string, bv: number | string
+      if (key === 'brand') { av = name(a.brand); bv = name(b.brand) }
+      else if (key === 'videos') { av = a.videos; bv = b.videos }
+      else { av = a.avgViews; bv = b.avgViews }
+      if (typeof av === 'number' && typeof bv === 'number')
+        return dir === 'asc' ? av - bv : bv - av
+      return dir === 'asc'
+        ? String(av).localeCompare(String(bv))
+        : String(bv).localeCompare(String(av))
+    })
+  })()
 
   // Apply per-column filters (case-insensitive substring match) before sorting.
   const filteredVideos = displayVideos.filter(v => {
@@ -109,65 +160,10 @@ export default function TikTokPage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredVideos
 
-  const hasData = displayTT.some(d => d.followers > 0)
-
   return (
     <>
-      <PageHead
-        eyebrow={`TIKTOK · ${totalVideos} VIDEOS · ${displayTT.filter(d => d.followers > 0).length} ACCOUNTS`}
-        title="TikTok"
-        accent="short-form"
-        sub="JOOLA's TikTok (~20-30K followers) outpaces its X presence. Selkirk leads at ~13K. Short-form video is the fastest-growing channel for the pickleball category."
-      />
+      <PageHead title="TIKTOK" />
       <FilterBanner />
-
-      {!hasData && (
-        <section>
-          <div className="price-war" style={{ borderColor: 'rgba(245,230,37,0.3)' }}>
-            <div className="icn" style={{ color: '#F5E625' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><circle cx="12" cy="16" r="1" fill="currentColor" />
-              </svg>
-            </div>
-            <div>
-              <h4>TIKTOK DATA IS BEING REFRESHED</h4>
-              <p>Follower counts and videos for this channel will appear after the next weekly snapshot completes. Check back shortly.</p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <section>
-        <div className="kpi-grid">
-          <MiniKpi
-            label="JOOLA TikTok followers" src="TikTok profile" flavor="joola"
-            value={joolaTT && joolaTT.followers > 0 ? fmt(joolaTT.followers) : 'Pending'}
-            color="#22c55e"
-            spark={displayTrend['joola'] || []}
-            customVs={joolaTT && joolaTT.followers > 0
-              ? `vs. ${name(topByFollowers.find(d => d.brand !== 'joola')?.brand || 'selkirk')}: ${fmt(topByFollowers.find(d => d.brand !== 'joola')?.followers || 0)}`
-              : 'Run pipeline to collect'}
-          />
-          <MiniKpi
-            label="JOOLA videos" src="TikTok profile"
-            value={joolaTT && joolaTT.videos > 0 ? fmt(joolaTT.videos) : '—'}
-            color="#818cf8"
-            customVs={joolaTT && joolaTT.avgViews > 0 ? `${fmt(Math.round(joolaTT.avgViews))} avg views/video` : 'Avg views per video'}
-          />
-          <MiniKpi
-            label="Total videos tracked" src="TikTok videos"
-            value={totalVideos > 0 ? fmt(totalVideos) : '—'}
-            color="#F5E625"
-            customVs={`across ${displayTT.length} brands`}
-          />
-          <MiniKpi
-            label="Most followed" src="TikTok profiles"
-            value={topByFollowers[0]?.followers > 0 ? name(topByFollowers[0].brand) : '—'}
-            color="#818cf8"
-            customVs={topByFollowers[0]?.followers > 0 ? `${fmt(topByFollowers[0].followers)} followers` : 'Pending first scrape'}
-          />
-        </div>
-      </section>
 
       <section>
         <div className="two-col">
@@ -184,7 +180,21 @@ export default function TikTokPage() {
               <div className="sub">{displayTT.length} brands · current snapshot</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {topByFollowers.map(d => (
+              <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+                <thead>
+                  <tr>
+                    <SortTh col="brand" label="Brand" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 110 }} />
+                    <SortTh col="followers" label="Followers" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="followers" label="" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 80, textAlign: 'right' }} />
+                    <SortTh col="videos" label="Videos" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 60, textAlign: 'right' }} />
+                  </tr>
+                  <tr className="col-filter-row">
+                    <th><ColumnFilter col="brand" value={followerBrandFilter} onChange={setFollowerBrandFilter} placeholder="brand…" /></th>
+                    <th colSpan={3} />
+                  </tr>
+                </thead>
+              </table>
+              {displayFollowers.map(d => (
                 <div key={d.brand} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}>
                   <div className="lbl" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span>{name(d.brand)}</span>
@@ -204,9 +214,12 @@ export default function TikTokPage() {
                     <div className="fill" style={{
                       width: d.followers > 0 ? Math.max(2, d.followers / maxFollowers * 100) + '%' : '2%',
                       background: `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
-                    }}>{d.followers > 0 ? fmt(d.followers) : '—'}</div>
+                    }} />
                   </div>
-                  <div className="spark-mini">{d.videos > 0 ? d.videos + ' videos' : 'no data'}</div>
+                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700, color: d.followers > 0 ? 'var(--fg)' : 'var(--fg-4)' }}>
+                    {d.followers > 0 ? fmt(d.followers) : '—'}
+                  </div>
+                  <div className="delta-mini flat">{d.videos > 0 ? d.videos + 'v' : '—'}</div>
                 </div>
               ))}
             </div></div>
@@ -224,7 +237,21 @@ export default function TikTokPage() {
               <div className="sub">Who makes the most-watched videos per upload.</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {vpvSorted.length > 0 ? vpvSorted.map(d => (
+              <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+                <thead>
+                  <tr>
+                    <SortTh col="brand" label="Brand" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 110 }} />
+                    <SortTh col="avgViews" label="Avg views" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="avgViews" label="" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 80, textAlign: 'right' }} />
+                    <SortTh col="videos" label="Videos" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 60, textAlign: 'right' }} />
+                  </tr>
+                  <tr className="col-filter-row">
+                    <th><ColumnFilter col="brand" value={vpvBrandFilter} onChange={setVpvBrandFilter} placeholder="brand…" /></th>
+                    <th colSpan={3} />
+                  </tr>
+                </thead>
+              </table>
+              {displayVpv.length > 0 ? displayVpv.map(d => (
                 <div
                   key={d.brand}
                   className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}
@@ -240,13 +267,17 @@ export default function TikTokPage() {
                     <div className="fill" style={{
                       width: Math.max(2, d.avgViews / maxVpv * 100) + '%',
                       background: d.brand === 'joola' ? '#22c55e' : `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
-                    }}>{fmt(Math.round(d.avgViews))}</div>
+                    }} />
                   </div>
-                  <div className="spark-mini">avg/vid</div>
+                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--fg)' }}>
+                    {fmt(Math.round(d.avgViews))}
+                  </div>
                   <div className="delta-mini flat">{d.videos}v</div>
                 </div>
               )) : (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>No video data yet — run pipeline first</div>
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+                  {vpvBrandFilter ? 'No brands match the filter.' : 'No video data yet — run pipeline first'}
+                </div>
               )}
             </div></div>
           </div>
@@ -259,20 +290,20 @@ export default function TikTokPage() {
             Top {sortedVideos.length} videos · by views
             <SectionInfo
               title="Top TikTok Videos"
-              description="Up to the 20 most-viewed TikTok videos across the tracked brands, ranked by view count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Short-form tutorials and challenge content tend to dominate; high share counts indicate viral potential."
+              description="Up to the 200 most-viewed TikTok videos across the tracked brands, ranked by view count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Short-form tutorials and challenge content tend to dominate; high share counts indicate viral potential."
               source="tiktok_videos · scraped via clockworks/tiktok-scraper. Click column headers to sort."
             />
           </h2>
           <div className="sub">
-            Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 20 ·
+            Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 200 ·
             {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
           </div>
         </div></div>
         <div className="card">
           {sortedVideos.length > 0 ? (
-            <div className="table-wrap">
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data">
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
                     <SortTh col="text" label="Caption" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />

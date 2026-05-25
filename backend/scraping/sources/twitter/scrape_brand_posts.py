@@ -7,7 +7,7 @@ account (crbn, six-zero, engage) have no row in x_accounts and are skipped.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Any
 
 from ...core import apify_client as apify
@@ -15,6 +15,23 @@ from ...core import supabase_client as sb
 from ...core.logger import get_logger
 
 log = get_logger("twitter.brands")
+
+
+def _to_iso(raw: Any) -> str | None:
+    """Normalize Apify createdAt to an ISO-8601 string for timestamptz inserts.
+
+    apidojo/twitter-scraper-lite generally returns an ISO string, but some
+    payloads (and retries against fallback actors) emit a unix epoch int.
+    Mirrors the TikTok scraper fix — defensive against both shapes.
+    """
+    if isinstance(raw, (int, float)):
+        try:
+            return datetime.fromtimestamp(int(raw), tz=timezone.utc).isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
+    if isinstance(raw, str) and raw:
+        return raw
+    return None
 
 
 def run(ctx: dict[str, Any]) -> int:
@@ -84,6 +101,7 @@ def run(ctx: dict[str, Any]) -> int:
         if not tweet_id:
             continue
         posts.append({
+            "account_id":    account_id,
             "brand_id":      brand_id,
             "handle":        handle,
             "tweet_id":      tweet_id,
@@ -93,7 +111,7 @@ def run(ctx: dict[str, Any]) -> int:
             "retweet_count": item.get("retweetCount") or item.get("retweet_count", 0),
             "reply_count":   item.get("replyCount", 0),
             "view_count":    item.get("viewCount") or item.get("views", 0),
-            "posted_at":     item.get("createdAt") or item.get("created_at"),
+            "posted_at":     _to_iso(item.get("createdAt") or item.get("created_at")),
         })
 
     p = sb.delete_insert_weekly("x_profiles_weekly", profiles, "week_number", iso_week, iso_year)

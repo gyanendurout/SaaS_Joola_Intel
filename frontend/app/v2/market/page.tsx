@@ -3,15 +3,15 @@
 import Link from 'next/link'
 import { useEffect, useState, useMemo } from 'react'
 import {
-  fetchBrands, fetchReddit, fetchRedditSubreddits, fetchAds, fetchPromos, fetchIG,
+  fetchBrands, fetchReddit, fetchAds, fetchPromos, fetchIG,
   fetchYT, fetchX, fetchTikTok, fetchTopIGPosts, fetchTopYTVideos,
   fetchTopXPosts, fetchTopTikTokVideos,
-  type V2Brand, type V2RedditRow, type V2Subreddit, type V2AdRow, type V2PromoRow, type V2IGRow,
+  type V2Brand, type V2RedditRow, type V2AdRow, type V2PromoRow, type V2IGRow,
   type V2YTRow, type V2XRow, type V2TikTokRow, type V2TopIGPost, type V2TopYTVideo,
   type V2XPost, type V2TikTokVideo,
 } from '@/lib/v2/data'
-import { fmt, LineChart, Donut } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, FilterBanner, SortTh } from '@/components/v2/PageShell'
+import { fmt } from '@/components/v2/charts'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, FilterBanner, SortTh, ColumnFilter } from '@/components/v2/PageShell'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { supabase } from '@/lib/shared/supabase'
@@ -51,12 +51,6 @@ type Signal = {
   href: string
 }
 
-/** Short calendar label for the trend chart x-axis (e.g. "Apr 28"). */
-function weekLabel(weeksAgo: number): string {
-  const d = new Date(Date.now() - weeksAgo * 7 * 86400000)
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
 const SIG_LABEL: Record<SignalType, string> = {
   ad: 'AD',
   promo: 'PROMO',
@@ -80,7 +74,6 @@ const SIG_HREF: Record<SignalType, string> = {
 export default function MarketIntelPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [reddit, setReddit] = useState<V2RedditRow[]>([])
-  const [subreddits, setSubreddits] = useState<V2Subreddit[]>([])
   const [ads, setAds] = useState<V2AdRow[]>([])
   const [promos, setPromos] = useState<V2PromoRow[]>([])
   const [ig, setIg] = useState<V2IGRow[]>([])
@@ -98,14 +91,14 @@ export default function MarketIntelPage() {
   void productMentions7d
   const [benchmarkSortKey, setBenchmarkSortKey] = useState<BenchmarkSortKey | null>('mentions7d')
   const [benchmarkSortDir, setBenchmarkSortDir] = useState<'asc' | 'desc'>('desc')
+  const [benchmarkBrandFilter, setBenchmarkBrandFilter] = useState('')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range } = useDateRange()
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
-      const [r, s, a, p, i, y, xr, tt, tIG, tYT, tX, tTT] = await Promise.all([
+      const [r, a, p, i, y, xr, tt, tIG, tYT, tX, tTT] = await Promise.all([
         fetchReddit(b),
-        fetchRedditSubreddits(b),
         fetchAds(b),
         fetchPromos(b),
         fetchIG(b),
@@ -118,7 +111,7 @@ export default function MarketIntelPage() {
         fetchTopTikTokVideos(b, 5),
       ])
       setBrands(b); setAllBrands(b)
-      setReddit(r); setSubreddits(s); setAds(a); setPromos(p); setIg(i)
+      setReddit(r); setAds(a); setPromos(p); setIg(i)
       setYt(y); setX(xr); setTiktok(tt)
       setTopIG(tIG); setTopYT(tYT); setTopX(tX); setTopTT(tTT)
       setLoading(false)
@@ -133,7 +126,7 @@ export default function MarketIntelPage() {
       try {
         const { data: ms } = await supabase
           .from('product_attention_summary')
-          .select('brand_id,period,total_mentions,weighted_total,avg_sentiment')
+          .select('brand_id,period,total_mentions:mentions_total,weighted_total:attention_score,avg_sentiment:sales_likelihood_score')
           .in('period', ['last_7d', 'last_30d'])
           .limit(500)
         if (!cancelled && ms) {
@@ -292,47 +285,11 @@ export default function MarketIntelPage() {
     displayTopTT, displayTopX, joolaReddit, joolaIG, brands, rangeLabel,
   ])
 
-  // Brand discussion volume across platforms (mentions where available, followers as a
-  // category-presence proxy for channels without a mention concept).
-  const discussion = useMemo(() => {
-    return displayReddit.slice(0, 6).map((r, i) => ({
-      rank: i + 1,
-      brand: r.brand,
-      label: name(r.brand),
-      mentions: r.mentions,
-      joola: r.brand === 'joola',
-    }))
-  }, [displayReddit, brands])
-
   const joolaMentionSpark = joolaReddit
     ? Array.from({ length: 8 }, (_, i) => Math.max(1, Math.round(joolaReddit.mentions / 8 * (0.7 + i * 0.04))))
     : [0]
 
-  const donutData = subreddits.slice(0, 5).map((s, i) => ({
-    name: s.name,
-    value: s.mentions,
-    color: ['#06b6d4', '#818cf8', '#ec4899', '#ef4444', '#3a4150'][i],
-  }))
-
-  const joolaSubTotal = joolaReddit?.mentions || 0
-
-  const lineSeries = [
-    { id: 'joola', label: 'JOOLA mentions', color: '#22c55e', data: joolaMentionSpark },
-    ...(displayReddit.slice(1, 3).map((r) => ({
-      id: r.brand,
-      label: name(r.brand),
-      color: pgColor(r.brand),
-      data: Array.from({ length: 8 }, (_, i) => Math.max(0, Math.round(r.mentions / 8 * (0.8 + i * 0.025)))),
-    }))),
-  ]
-
-  // Calendar dates instead of W1–W8: oldest = index 0, most recent = index N-1
-  const trendWeeks = lineSeries[0]?.data.length || 8
-  const xLabels = Array.from({ length: trendWeeks }, (_, i) => weekLabel(trendWeeks - 1 - i))
-
   // Cross-platform KPIs
-  const totalAds = displayAds.reduce((s, a) => s + a.total, 0)
-  const activePromos = displayPromos.reduce((s, p) => s + p.count, 0)
   const ytTotalViews = displayYT.reduce((s, r) => s + r.views, 0)
   const ttTotalVideos = displayTT.reduce((s, r) => s + r.videos, 0)
   const xTotalFollowers = displayX.reduce((s, r) => s + r.followers, 0)
@@ -365,18 +322,6 @@ export default function MarketIntelPage() {
             value={signals.filter((s) => s.brand !== 'joola' && (s.type === 'promo' || s.type === 'ad')).length}
             color="#ef4444"
             customVs="paid + promo activity alerts"
-          />
-          <MiniKpi
-            label="Active ads tracked" src="Meta + Google Ads"
-            value={fmt(totalAds)}
-            color="#f59e0b"
-            customVs={`across ${displayAds.filter(a => a.total > 0).length} brands`}
-          />
-          <MiniKpi
-            label="Active promotions" src="Brand homepages"
-            value={fmt(activePromos)}
-            color="#ef4444"
-            customVs={`${displayPromos.filter(p => p.count > 0).length} brands discounting`}
           />
         </div>
       </section>
@@ -412,118 +357,32 @@ export default function MarketIntelPage() {
       </section>
 
       <section>
-        <div className="section-head"><div>
-          <h2>
-            Brand discussion volume · community conversation
-            <SectionInfo
-              title="Who's Being Talked About"
-              description="Ranked by total community mentions across all tracked subreddits. The brand at #1 is dominating organic pickleball conversation. A higher rank than your ad spend would suggest = strong brand equity. A lower rank = paid reach isn't translating to organic advocacy."
-              source="Community Mentions · aggregated from r/pickleball and related subreddits"
-            />
-          </h2>
-          <div className="sub">Who is being talked about most · {rangeLabelLower}.</div>
-        </div></div>
-        <div className="card">
-          {discussion.map((t) => (
-            <Link
-              key={t.rank}
-              href={SIG_HREF.reddit}
-              className={'trend-row ' + (t.joola ? 'joola' : '')}
-              style={{ textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
-            >
-              <div className="rank">#{t.rank}</div>
-              <div className="kw">{t.label}</div>
-              <div className="mtrack">
-                <div className="mfill" style={{ width: (t.mentions / Math.max(1, discussion[0].mentions) * 100) + '%', background: t.joola ? '#22c55e' : '#F5E625' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
+          <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#F5E625', marginBottom: 4 }}>
+                Community signals moved
               </div>
-              <div className="mvol">{t.mentions} {t.mentions === 1 ? 'mention' : 'mentions'}</div>
-              <div>
-                {t.joola
-                  ? <span className="pill pill-green">JOOLA</span>
-                  : <span className="pill pill-ghost">{t.label}</span>
-                }
+              <div style={{ color: '#cbd1dc', fontSize: 13 }}>
+                Brand discussion volume, live community feed, and JOOLA community footprint now live in a single dedicated dashboard.
               </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <div className="section-head"><div>
-          <h2>
-            Live intel feed · cross-platform signals
-            <SectionInfo
-              title="Competitive Intelligence Feed"
-              description="Auto-generated signals from every platform we track: paid ads, promotions, Instagram, YouTube, TikTok, X (Twitter), and Reddit. Click any row to drill into the full channel page. These are the inputs for JOOLA's weekly marketing response."
-              source="Aggregated from all tracked data sources · refreshed weekly"
-            />
-          </h2>
-          <div className="sub">Every signal captured across paid, organic, and community channels — {rangeLabelLower}.</div>
-        </div></div>
-        <div className="card">
-          {signals.map((s, i) => (
-            <Link
-              key={i}
-              href={s.href}
-              className="signal"
-              style={{ textDecoration: 'none', color: 'inherit' }}
-              title={`Open ${SIG_LABEL[s.type]} detail page`}
-            >
-              <span className={'sig-tag ' + s.type}>{SIG_LABEL[s.type]}</span>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <span className="brand-dot" style={{ background: pgColor(s.brand) }} />
-                <span style={{ fontWeight: 700, color: s.brand === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 12 }}>{name(s.brand)}</span>
-              </span>
-              <span className="desc">{s.desc}</span>
-              <span className="when">{s.when}</span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <div className="section-head"><div>
-          <h2>
-            JOOLA mentions across communities · {rangeLabelLower}
-            <SectionInfo
-              title="JOOLA Community Footprint"
-              description="Left chart: how JOOLA's mention volume compares to the top 2 competitors over the last 8 weeks. Right chart: which subreddits JOOLA's mentions come from — shows where the brand has organic presence vs. where it's absent."
-              source="Community Mentions · weekly aggregation. Trend lines are approximate based on mention totals."
-            />
-          </h2>
-          <div className="sub">
-            Trend vs top competitors based on community post data ·{' '}
-            <Link href="/v2/reddit" className="ext-link" style={{ fontSize: 11 }}>
-              See full Reddit detail →
+            </div>
+            <Link href="/v2/community-intel" className="btn btn-yellow" style={{ whiteSpace: 'nowrap' }}>
+              View full Community Intel →
             </Link>
           </div>
-        </div></div>
-        <div className="two-col">
-          <div className="card"><div className="card-pad">
-            <LineChart series={lineSeries} xLabels={xLabels} />
-          </div></div>
-          <div className="card">
-            <div className="card-head">
-              <h3>Source breakdown</h3>
-              <span className="meta">total: {joolaSubTotal} JOOLA {joolaSubTotal === 1 ? 'mention' : 'mentions'}</span>
-            </div>
-            <div className="card-pad" style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
-              <Donut
-                data={donutData.length ? donutData : [{ name: 'No data', value: 1, color: '#3a4150' }]}
-                size={170} thickness={28}
-                centerLabel={String(joolaSubTotal)}
-                centerSub="JOOLA"
-              />
-              <div className="donut-legend" style={{ flex: 1 }}>
-                {donutData.map((d, i) => (
-                  <div key={i} className="row">
-                    <span className="swatch" style={{ background: d.color }} />
-                    <span className="name">{d.name}</span>
-                    <span className="val">{d.value} {d.value === 1 ? 'mention' : 'mentions'}</span>
-                  </div>
-                ))}
+          <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#F5E625', marginBottom: 4 }}>
+                Ads & promos moved
+              </div>
+              <div style={{ color: '#cbd1dc', fontSize: 13 }}>
+                Active ads, active promos, brand campaign pressure, and the full ad/offer detail tables now live in a single dedicated dashboard.
               </div>
             </div>
+            <Link href="/v2/campaign-offer-intel" className="btn btn-yellow" style={{ whiteSpace: 'nowrap' }}>
+              View full Campaign & Offer Intel →
+            </Link>
           </div>
         </div>
       </section>
@@ -634,7 +493,7 @@ export default function MarketIntelPage() {
           </h2>
           <div className="sub">Cross-brand performance across all tracked metrics — {rangeLabelLower}.</div>
         </div></div>
-        <div className="card" style={{ overflowX: 'auto' }}>
+        <div className="card">
           {(() => {
             // Build benchmark rows from existing state (brands + ig + yt + mentionSummary)
             const sourceBrands = isFiltered ? filteredBrands : brands
@@ -688,8 +547,14 @@ export default function MarketIntelPage() {
               return 'transparent'
             }
 
+            // Apply brand filter (case-insensitive substring) before sorting
+            const q = benchmarkBrandFilter.trim().toLowerCase()
+            const filteredRows = q
+              ? rows.filter((r) => r.label.toLowerCase().includes(q) || r.slug.toLowerCase().includes(q))
+              : rows
+
             // Sort: JOOLA always first, then by selected column
-            const sortedRows = [...rows].sort((a, b) => {
+            const sortedRows = [...filteredRows].sort((a, b) => {
               if (a.slug === 'joola') return -1
               if (b.slug === 'joola') return 1
               if (!benchmarkSortKey) return 0
@@ -699,7 +564,7 @@ export default function MarketIntelPage() {
               if (av == null) return 1
               if (bv == null) return -1
               return benchmarkSortDir === 'asc' ? av - bv : bv - av
-            })
+            }).slice(0, 200)
 
             const toggle = (k: string): void => {
               const key = k as BenchmarkSortKey
@@ -721,16 +586,21 @@ export default function MarketIntelPage() {
             const fmtOrDash = (v: number | null): string => (v == null ? '—' : fmt(v))
 
             return (
+              <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
               <table className="data" style={{ width: '100%', minWidth: 880 }}>
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                   <tr>
                     <th style={{ textAlign: 'left' }}>Brand</th>
-                    <SortTh col="igFollowers" label="IG Followers" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} />
-                    <SortTh col="ytVideos" label="YT Videos" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} />
-                    <SortTh col="mentions7d" label="7d Mentions" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} />
-                    <SortTh col="mentions30d" label="30d Mentions" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} />
-                    <SortTh col="sentiment7d" label="Sentiment 7d" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} />
-                    <SortTh col="productAttention" label="Product Attention" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} />
+                    <SortTh col="igFollowers" label="IG Followers" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                    <SortTh col="ytVideos" label="YT Videos" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                    <SortTh col="mentions7d" label="7d Mentions" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                    <SortTh col="mentions30d" label="30d Mentions" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                    <SortTh col="sentiment7d" label="Sentiment 7d" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'center' }} />
+                    <SortTh col="productAttention" label="Product Attention" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                  </tr>
+                  <tr className="col-filter-row">
+                    <th><ColumnFilter col="brand" value={benchmarkBrandFilter} onChange={setBenchmarkBrandFilter} placeholder="brand…" /></th>
+                    <th colSpan={6} />
                   </tr>
                 </thead>
                 <tbody>
@@ -758,13 +628,14 @@ export default function MarketIntelPage() {
                   })}
                   {sortedRows.length === 0 && (
                     <tr>
-                      <td colSpan={7} style={{ textAlign: 'center', color: '#6b7280', padding: '24px 0' }}>
-                        No brand data available
+                      <td colSpan={7} style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
+                        No rows found for the selected filters.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
+              </div>
             )
           })()}
         </div>

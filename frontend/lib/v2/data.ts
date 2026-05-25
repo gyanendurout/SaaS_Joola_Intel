@@ -37,15 +37,31 @@ export const BRAND_COLORS: Record<string, string> = {
   head: '#0ea5e9',
 }
 
+// Module-level Promise cache for fetchBrands(). The brands table is essentially
+// static (11 rows, updated only via migration), and nearly every v2 page calls
+// fetchBrands() on mount. Caching the in-flight Promise both deduplicates concurrent
+// callers and skips redundant network round-trips when navigating between pages
+// within the same SPA session.
+let brandsCache: Promise<V2Brand[]> | null = null
+
 export async function fetchBrands(): Promise<V2Brand[]> {
-  const { data } = await supabase.from('brands').select('id,name,slug,is_joola').order('name')
-  return (data || []).map((b: any) => ({
-    id: b.slug,
-    brand_id: b.id,
-    name: b.name,
-    color: BRAND_COLORS[b.slug] || '#888',
-    joola: !!b.is_joola,
-  }))
+  if (brandsCache) return brandsCache
+  brandsCache = (async (): Promise<V2Brand[]> => {
+    try {
+      const { data } = await supabase.from('brands').select('id,name,slug,is_joola').order('name')
+      return (data || []).map((b: any) => ({
+        id: b.slug,
+        brand_id: b.id,
+        name: b.name,
+        color: BRAND_COLORS[b.slug] || '#888',
+        joola: !!b.is_joola,
+      }))
+    } catch (err) {
+      brandsCache = null // allow retry on next call after failure
+      throw err
+    }
+  })()
+  return brandsCache
 }
 
 // ─── IG followers + engagement ────────────────────────────────────────
@@ -95,7 +111,15 @@ export async function fetchIG(brands: V2Brand[]): Promise<V2IGRow[]> {
       const e = engAcc[b.id]
       const avgLikes = e?.n ? e.likes / e.n : 0
       const avgComments = e?.n ? e.comments / e.n : 0
-      const engRate = f > 0 ? ((avgLikes + avgComments) / f) * 100 : 0
+      const rawER = f > 0 ? ((avgLikes + avgComments) / f) * 100 : 0
+      // Cap ER display at 100% — anything higher means follower count is bad data
+      // (scraping artifact, locked account, mis-mapped handle). Brands with
+      // < 50 followers are filtered out by consumers via ER_MIN_FOLLOWERS.
+      if (rawER > 100 && f > 0) {
+        // eslint-disable-next-line no-console
+        console.warn(`[fetchIG] Implausible engagement rate for ${b.id}: ${rawER.toFixed(1)}% (followers=${f}). Capping at 100%.`)
+      }
+      const engRate = Math.min(100, rawER)
       const prev = trend.length > 1 ? trend[trend.length - 2] : null
       const delta = prev !== null ? f - prev : null
       const deltaPct = prev && prev > 0 ? ((f - prev) / prev) * 100 : null
@@ -166,6 +190,9 @@ export async function fetchProductStats(brands: V2Brand[]): Promise<V2ProductRow
     if (!slug) return
     counts[slug] = (counts[slug] || 0) + 1
     if (p.price_usd != null) {
+      // Defensive guard: drop scraping artifacts. Pickleball paddles are $50-$500.
+      // Outliers like $52,598 (Selkirk row) come from scrape misalignment (size code parsed as price).
+      if (p.price_usd > 500 || p.price_usd <= 0) return
       if (!buckets[slug]) buckets[slug] = []
       buckets[slug].push(p.price_usd)
     }
@@ -221,13 +248,48 @@ export async function fetchYT(brands: V2Brand[]): Promise<V2YTRow[]> {
 // ─── Reddit mentions ─────────────────────────────────────────────────
 export type V2RedditRow = { brand: string; mentions: number; positive: number; neutral: number; negative: number; delta: number | null }
 
+// ─── Contextual guard for generic-name brands ────────────────────────
+// Some brand slugs collide with common English / non-pickleball terms
+// (e.g. "gamma" → r/spain, r/lasplamas; "head" → tennis racquets, hair).
+// For these brands we only count a mention if its text/subreddit ALSO
+// carries a pickleball-context token. Brands NOT in this map pass through.
+const PICKLEBALL_CONTEXT_TOKENS = [
+  'pickleball', 'paddle', 'pickle ball', 'pickleballer', 'pickler',
+]
+const REDDIT_BRAND_CONTEXT_REQUIRED: Record<string, string[]> = {
+  // Gamma Sports paddle line ("rzr", "needle", "compass") + general gamma sports refs
+  gamma: [...PICKLEBALL_CONTEXT_TOKENS, 'gamma sports', 'rzr', 'needle', 'compass'],
+  // HEAD has tennis + hair + generic-word collisions; require pickleball context
+  // OR an explicit HEAD paddle line name.
+  head: [...PICKLEBALL_CONTEXT_TOKENS, 'head pickleball', 'radical', 'gravity', 'extreme tour'],
+}
+
+/**
+ * Returns true if this reddit row should be counted for the given brand slug.
+ * For generic-name brands we require a pickleball-context token in the
+ * combined text (subreddit + title + body). Other brands always pass.
+ */
+function redditRowPassesBrandContext(slug: string, row: any): boolean {
+  const required = REDDIT_BRAND_CONTEXT_REQUIRED[slug]
+  if (!required) return true
+  const blob = `${row.subreddit || ''} ${row.title || ''} ${row.body || ''}`.toLowerCase()
+  return required.some((tok) => blob.includes(tok))
+}
+
 export async function fetchReddit(brands: V2Brand[]): Promise<V2RedditRow[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const { data } = await supabase.from('reddit_mentions').select('brand_id,sentiment').limit(3000)
+  // Pull title/body/subreddit so we can apply the generic-name brand context guard.
+  // Schema (migration 006_enrichment_columns.sql) renamed sentiment → sentiment_label;
+  // use PostgREST alias `sentiment:sentiment_label` so downstream code keeps reading `r.sentiment`.
+  const { data } = await supabase
+    .from('reddit_mentions')
+    .select('brand_id,sentiment:sentiment_label,subreddit,title,body')
+    .limit(3000)
   const agg: Record<string, V2RedditRow> = {}
   ;(data || []).forEach((r: any) => {
     const slug = slugByBid[r.brand_id]
     if (!slug) return
+    if (!redditRowPassesBrandContext(slug, r)) return
     if (!agg[slug]) agg[slug] = { brand: slug, mentions: 0, positive: 0, neutral: 0, negative: 0, delta: null }
     agg[slug].mentions++
     if (r.sentiment === 'positive') agg[slug].positive++
@@ -315,53 +377,63 @@ export type V2TopIGPost = {
   views: number; format: string; days: number; engRate: number; url: string
 }
 
-export async function fetchTopIGPosts(brands: V2Brand[], limit = 12): Promise<V2TopIGPost[]> {
+export async function fetchTopIGPosts(brands: V2Brand[], limit = 200): Promise<V2TopIGPost[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  // Pull a wider pool so de-duplication (shortcode first, then post_id,
+  // then permalink) still leaves us with the requested `limit` after
+  // collapsing duplicate IG posts that snuck in over multiple scrapes.
   const { data } = await supabase
     .from('ig_posts')
     .select('brand_id,handle,caption,like_count,comment_count,view_count,post_format,posted_at,post_url,instagram_post_id')
     .order('like_count', { ascending: false })
-    .limit(limit)
-  const seen = new Set<string>()
-  return (data || [])
-    .filter((p: any) => {
-      const key = (p.brand_id || '') + '::' + (p.caption || '').slice(0, 60)
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
+    .limit(Math.max(limit * 3, 600))
+
+  // Frontend dedupe — schema has no unique index on shortcode, so the
+  // table is known to carry duplicates from re-scrapes. First-seen wins.
+  const seen = new Map<string, V2TopIGPost>()
+  ;(data || []).forEach((p: any) => {
+    const key = (p.instagram_post_id || p.post_url || `${p.brand_id}::${(p.caption || '').slice(0, 80)}`).trim()
+    if (!key || seen.has(key)) return
+    const days = p.posted_at
+      ? Math.max(0, Math.floor((Date.now() - new Date(p.posted_at).getTime()) / 86400000))
+      : 0
+    const url = p.post_url
+      ? p.post_url
+      : p.instagram_post_id
+        ? `https://www.instagram.com/p/${p.instagram_post_id}/`
+        : p.handle
+          ? `https://www.instagram.com/${p.handle}/`
+          : ''
+    seen.set(key, {
+      brand: slugByBid[p.brand_id] || 'unknown',
+      handle: '@' + (p.handle || ''),
+      caption: p.caption || '',
+      likes: p.like_count || 0,
+      comments: p.comment_count || 0,
+      views: p.view_count || 0,
+      format: p.post_format || 'Image',
+      days,
+      engRate: 0,
+      url,
     })
-    .map((p: any) => {
-      const days = p.posted_at ? Math.max(0, Math.floor((Date.now() - new Date(p.posted_at).getTime()) / 86400000)) : 0
-      const url = p.post_url
-        ? p.post_url
-        : p.instagram_post_id
-          ? `https://www.instagram.com/p/${p.instagram_post_id}/`
-          : p.handle
-            ? `https://www.instagram.com/${p.handle}/`
-            : ''
-      return {
-        brand: slugByBid[p.brand_id] || 'unknown',
-        handle: '@' + (p.handle || ''),
-        caption: p.caption || '',
-        likes: p.like_count || 0,
-        comments: p.comment_count || 0,
-        views: p.view_count || 0,
-        format: p.post_format || 'Image',
-        days,
-        engRate: 0,
-        url,
-      }
-    })
+  })
+  return Array.from(seen.values()).slice(0, limit)
 }
 
 // ─── Top YT videos ───────────────────────────────────────────────────
-export type V2TopYTVideo = { brand: string; title: string; views: number; likes: number; comments: number; duration: string; days: number; video_id: string; url: string }
+export type V2TopYTVideo = {
+  brand: string; title: string; views: number; likes: number; comments: number;
+  duration: string; days: number; video_id: string; url: string; is_short: boolean
+}
 
-export async function fetchTopYTVideos(brands: V2Brand[], limit = 10): Promise<V2TopYTVideo[]> {
+export async function fetchTopYTVideos(brands: V2Brand[], limit = 200): Promise<V2TopYTVideo[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  // `yt_videos.video_id` does NOT exist — the column is `youtube_video_id` (see
+  // migration 011/012 + scrape_channels.py). The previous select silently
+  // returned null video_ids which collapsed the watch link to a search query.
   const { data } = await supabase
     .from('yt_videos')
-    .select('brand_id,video_id,title,view_count,like_count,comment_count,duration_seconds,published_at')
+    .select('brand_id,youtube_video_id,video_url,title,view_count,like_count,comment_count,duration_seconds,published_at,is_short')
     .order('view_count', { ascending: false })
     .limit(limit)
   return (data || []).map((v: any) => {
@@ -369,7 +441,7 @@ export async function fetchTopYTVideos(brands: V2Brand[], limit = 10): Promise<V
     const mm = Math.floor(sec / 60).toString().padStart(2, '0')
     const ss = (sec % 60).toString().padStart(2, '0')
     const days = v.published_at ? Math.max(0, Math.floor((Date.now() - new Date(v.published_at).getTime()) / 86400000)) : 0
-    const vid = v.video_id || ''
+    const vid = v.youtube_video_id || ''
     return {
       brand: slugByBid[v.brand_id] || 'unknown',
       title: v.title || '',
@@ -379,7 +451,8 @@ export async function fetchTopYTVideos(brands: V2Brand[], limit = 10): Promise<V
       duration: `${mm}:${ss}`,
       days,
       video_id: vid,
-      url: vid ? `https://www.youtube.com/watch?v=${vid}` : '',
+      url: v.video_url || (vid ? `https://www.youtube.com/watch?v=${vid}` : ''),
+      is_short: !!v.is_short,
     }
   })
 }
@@ -557,13 +630,14 @@ export async function fetchRedditTrend(brands: V2Brand[]): Promise<Record<string
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
   const { data } = await supabase
     .from('reddit_mentions')
-    .select('brand_id,posted_at')
+    .select('brand_id,posted_at,subreddit,title,body')
     .limit(5000)
   const now = Date.now()
   const buckets: Record<string, number[]> = {}
   ;(data || []).forEach((r: any) => {
     const slug = slugByBid[r.brand_id]
     if (!slug || !r.posted_at) return
+    if (!redditRowPassesBrandContext(slug, r)) return
     const daysAgo = Math.floor((now - new Date(r.posted_at).getTime()) / 86400000)
     const weekIdx = Math.min(7, Math.floor(daysAgo / 7))
     if (!buckets[slug]) buckets[slug] = Array(8).fill(0)
@@ -577,9 +651,15 @@ export type V2Subreddit = { name: string; mentions: number; joolaShare: number }
 
 export async function fetchRedditSubreddits(brands: V2Brand[]): Promise<V2Subreddit[]> {
   const joolaIds = new Set(brands.filter((b) => b.joola).map((b) => b.brand_id))
-  const { data } = await supabase.from('reddit_mentions').select('brand_id,subreddit').limit(5000)
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  const { data } = await supabase
+    .from('reddit_mentions')
+    .select('brand_id,subreddit,title,body')
+    .limit(5000)
   const bySubreddit: Record<string, { total: number; joola: number }> = {}
   ;(data || []).forEach((r: any) => {
+    const slug = slugByBid[r.brand_id]
+    if (slug && !redditRowPassesBrandContext(slug, r)) return
     const sub = r.subreddit || 'other'
     if (!bySubreddit[sub]) bySubreddit[sub] = { total: 0, joola: 0 }
     bySubreddit[sub].total++
@@ -603,23 +683,101 @@ export type V2RedditMention = {
 
 export async function fetchTopRedditMentions(brands: V2Brand[], limit = 20): Promise<V2RedditMention[]> {
   const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  // Over-fetch so the post-filter still returns ~limit rows after dropping
+  // generic-name brand false positives (gamma in r/spain, head/tennis, etc.)
   const { data } = await supabase
     .from('reddit_mentions')
     .select('brand_id,subreddit,title,body,score,num_comments,url,posted_at')
     .order('score', { ascending: false })
-    .limit(limit)
-  return (data || []).map((m: any) => ({
-    brand: slugByBid[m.brand_id] || 'unknown',
-    subreddit: m.subreddit || '',
-    title: m.title || '',
-    body: m.body || '',
-    score: m.score || 0,
-    comments: m.num_comments || 0,
-    url: m.url || '',
-    days: m.posted_at
-      ? Math.max(0, Math.floor((Date.now() - new Date(m.posted_at).getTime()) / 86400000))
-      : 0,
-  }))
+    .limit(Math.max(limit * 3, 60))
+  return (data || [])
+    .filter((m: any) => {
+      const slug = slugByBid[m.brand_id]
+      return !slug || redditRowPassesBrandContext(slug, m)
+    })
+    .slice(0, limit)
+    .map((m: any) => ({
+      brand: slugByBid[m.brand_id] || 'unknown',
+      subreddit: m.subreddit || '',
+      title: m.title || '',
+      body: m.body || '',
+      score: m.score || 0,
+      comments: m.num_comments || 0,
+      url: m.url || '',
+      days: m.posted_at
+        ? Math.max(0, Math.floor((Date.now() - new Date(m.posted_at).getTime()) / 86400000))
+        : 0,
+    }))
+}
+
+// ─── IG comment mentions (paddle/player NER from mention_facts) ──────
+// mention_facts is fully populated for IG comments (channel='ig_comment').
+// Each row carries an optional product_id (paddle) and/or athlete_id
+// (player) extracted by the AI enrichment step. We aggregate by brand
+// (mention target) for the two-column "Paddle mentions / Player mentions"
+// section at the bottom of the Instagram page.
+export type V2IGMentionRow = {
+  brand: string        // brand being talked ABOUT
+  entityName: string   // paddle name or athlete name
+  mentions: number     // raw count of comments referencing the entity
+  positive: number     // sentiment_label='positive'
+  negative: number     // sentiment_label='negative'
+}
+
+export async function fetchIGCommentMentions(
+  brands: V2Brand[],
+  kind: 'paddle' | 'player',
+  limit = 200,
+): Promise<V2IGMentionRow[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  const entityCol = kind === 'paddle' ? 'product_id' : 'athlete_id'
+
+  const { data, error } = await supabase
+    .from('mention_facts')
+    .select(`brand_id,${entityCol},sentiment_label`)
+    .eq('channel', 'ig_comment')
+    .not(entityCol, 'is', null)
+    .limit(10_000)
+
+  if (error || !data) return []
+
+  // Resolve entity_id → display name (paddles via products_catalog, players via influencers)
+  const ids = Array.from(new Set(data.map((r: any) => r[entityCol]).filter(Boolean)))
+  if (ids.length === 0) return []
+
+  const nameMap: Record<string, string> = {}
+  if (kind === 'paddle') {
+    const { data: prods } = await supabase
+      .from('products_catalog')
+      .select('id,name')
+      .in('id', ids)
+    ;(prods || []).forEach((p: any) => { nameMap[p.id] = p.name })
+  } else {
+    const { data: ath } = await supabase
+      .from('influencers')
+      .select('id,name')
+      .in('id', ids)
+    ;(ath || []).forEach((a: any) => { nameMap[a.id] = a.name })
+  }
+
+  // Aggregate by (brand_id, entity_id)
+  const agg: Record<string, V2IGMentionRow> = {}
+  data.forEach((r: any) => {
+    const slug = slugByBid[r.brand_id]
+    const entityId = r[entityCol]
+    if (!slug || !entityId) return
+    const name = nameMap[entityId]
+    if (!name) return
+    const key = `${slug}::${entityId}`
+    if (!agg[key]) agg[key] = { brand: slug, entityName: name, mentions: 0, positive: 0, negative: 0 }
+    agg[key].mentions++
+    const s = String(r.sentiment_label || '').toLowerCase()
+    if (s === 'positive') agg[key].positive++
+    else if (s === 'negative') agg[key].negative++
+  })
+  return Object.values(agg)
+    .sort((a, b) => b.mentions - a.mentions)
+    .slice(0, limit)
 }
 
 // ─── IG post frequency heatmap (4 weeks × 7 days, Mon-first) ─────────
@@ -934,11 +1092,19 @@ export async function fetchX(brands: V2Brand[]): Promise<V2XRow[]> {
   }).sort((a, b) => b.followers - a.followers)
 }
 
+// Mirrors the seed in migrations/003_x_tiktok.sql (single source of truth).
+// Brands intentionally omitted have no confirmed pickleball-specific X account
+// (crbn, six-zero, engage, paddletek, prokennex — see migration 003 verification
+// policy). Also removed 2026-05-24:
+//   - franklin: FranklinSports is parent corporate account, not pickleball arm
+//   - head:     head_tennis is HEAD's tennis arm, not pickleball
 function sb_get_x_handles(): Record<string, string> {
   return {
-    joola: 'joolausa', selkirk: 'SelkirkSport', franklin: 'FranklinSports',
-    engage: 'engagepickleball', paddletek: 'PaddletekLLC', onix: 'OnixPickleball',
-    wilson: 'WilsonSportingG', gamma: 'gammasportsusa',
+    joola:    'joolapickleball',
+    selkirk:  'SelkirkSport',
+    onix:     'OnixPickleball',
+    wilson:   'WilsonSportingG',
+    gamma:    'gammapickleball',
   }
 }
 
@@ -955,7 +1121,7 @@ export async function fetchXTrend(brands: V2Brand[]): Promise<Record<string, num
   return trend
 }
 
-export async function fetchTopXPosts(brands: V2Brand[], limit = 15): Promise<V2XPost[]> {
+export async function fetchTopXPosts(brands: V2Brand[], limit = 200): Promise<V2XPost[]> {
   const slugByBid = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
   const { data } = await supabase.from('x_posts').select('brand_id,handle,tweet_id,post_url,text,like_count,retweet_count,reply_count,view_count,posted_at').order('like_count', { ascending: false }).limit(limit)
   return (data || []).map((p: any) => ({
@@ -1029,7 +1195,7 @@ export async function fetchTikTok(brands: V2Brand[]): Promise<V2TikTokRow[]> {
 function sb_get_tiktok_handles(): Record<string, string> {
   return {
     joola: 'joolapickleball', selkirk: 'selkirksport', crbn: 'crbnpickleball',
-    franklin: 'franklinsportsofficial', engage: 'engage_pickleball',
+    engage: 'engage_pickleball',
     'six-zero': 'sixzeropickleball', onix: 'onix_pickleball',
     wilson: 'wilsonsportinggoods', gamma: 'gammasports', prokennex: 'prokennexpickleball',
   }
@@ -1048,7 +1214,7 @@ export async function fetchTikTokTrend(brands: V2Brand[]): Promise<Record<string
   return trend
 }
 
-export async function fetchTopTikTokVideos(brands: V2Brand[], limit = 15): Promise<V2TikTokVideo[]> {
+export async function fetchTopTikTokVideos(brands: V2Brand[], limit = 200): Promise<V2TikTokVideo[]> {
   const slugByBid = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
   const { data } = await supabase.from('tiktok_videos').select('brand_id,handle,tiktok_video_id,video_url,text,view_count,like_count,comment_count,share_count,posted_at').order('view_count', { ascending: false }).limit(limit)
   return (data || []).map((v: any) => ({

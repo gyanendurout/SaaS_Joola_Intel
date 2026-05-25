@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import {
-  fetchBrands, fetchX, fetchXTrend, fetchTopXPosts,
+  fetchBrands, fetchX, fetchTopXPosts,
   type V2Brand, type V2XRow, type V2XPost,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
-import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
-import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
+import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 
 /** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
@@ -16,37 +16,43 @@ function relativeLabel(days: number): string {
   return days <= 0 ? 'today' : days === 1 ? '1 day ago' : `${days} days ago`
 }
 
+// Mirrors the seed in migrations/003_x_tiktok.sql — see scraper note about
+// brands intentionally omitted (no confirmed X account). Removed 2026-05-24:
+//   - franklin: FranklinSports is parent corporate account, not pickleball arm
+//   - head:     head_tennis is HEAD's tennis arm, not pickleball
 const X_HANDLES: Record<string, string> = {
-  joola:     'joolausa',
-  selkirk:   'SelkirkSport',
-  franklin:  'FranklinSports',
-  engage:    'engagepickleball',
-  paddletek: 'PaddletekLLC',
-  onix:      'OnixPickleball',
-  wilson:    'WilsonSportingG',
-  gamma:     'gammasportsusa',
+  joola:    'joolapickleball',
+  selkirk:  'SelkirkSport',
+  onix:     'OnixPickleball',
+  wilson:   'WilsonSportingG',
+  gamma:    'gammapickleball',
 }
 
 export default function TwitterPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [xData, setXData] = useState<V2XRow[]>([])
-  const [trend, setTrend] = useState<Record<string, number[]>>({})
   const [posts, setPosts] = useState<V2XPost[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [colFilter, setColFilter] = useState<Record<string, string>>({})
+  const [followerSortKey, setFollowerSortKey] = useState<string | null>(null)
+  const [followerSortDir, setFollowerSortDir] = useState<'asc' | 'desc'>('desc')
+  const [followerBrandFilter, setFollowerBrandFilter] = useState('')
+  const [erSortKey, setErSortKey] = useState<string | null>(null)
+  const [erSortDir, setErSortDir] = useState<'asc' | 'desc'>('desc')
+  const [erBrandFilter, setErBrandFilter] = useState('')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
-  const { range, maxDays } = useDateRange()
+  const { range, effectiveFrom, effectiveTo } = useDateRange()
 
   useEffect(() => { document.title = 'JOOLA INTEL — X / Twitter' }, [])
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
-        const [x, t, p] = await Promise.all([fetchX(b), fetchXTrend(b), fetchTopXPosts(b, 20)])
-        setBrands(b); setAllBrands(b); setXData(x); setTrend(t); setPosts(p); setLoading(false)
+        const [x, p] = await Promise.all([fetchX(b), fetchTopXPosts(b, 200)])
+        setBrands(b); setAllBrands(b); setXData(x); setPosts(p); setLoading(false)
       } catch (err) {
         console.error('X data fetch failed', err)
         setError('Unable to load X data. Please refresh.')
@@ -71,20 +77,73 @@ export default function TwitterPage() {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     else { setSortKey(key); setSortDir('desc') }
   }
+  function toggleFollowerSort(key: string) {
+    if (followerSortKey === key) setFollowerSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setFollowerSortKey(key); setFollowerSortDir('desc') }
+  }
+  function toggleErSort(key: string) {
+    if (erSortKey === key) setErSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setErSortKey(key); setErSortDir('desc') }
+  }
 
-  const displayX = applyBrandFilter(xData, filteredBrands, isFiltered)
-  const displayPostsAll = applyBrandFilter(posts, filteredBrands, isFiltered)
-  const displayPosts = applyDateRange(displayPostsAll, maxDays)
-  const displayTrend = applyBrandFilterRecord(trend, filteredBrands, isFiltered)
+  // Hide brands without a confirmed X handle (X_HANDLES is the single source of truth).
+  // Even with handles removed from sb_get_x_handles(), stale x_profiles_weekly /
+  // x_posts rows for old parent-corporate accounts (FranklinSports, head_tennis) would
+  // otherwise still render here as ghost rows ("28t" etc.) until the DB DELETE runs.
+  const xDataFiltered = xData.filter(d => !!X_HANDLES[d.brand])
+  const postsFiltered = posts.filter(p => !!X_HANDLES[p.brand])
+  const displayX = applyBrandFilter(xDataFiltered, filteredBrands, isFiltered)
+  const displayPostsAll = applyBrandFilter(postsFiltered, filteredBrands, isFiltered)
+  const displayPosts = applyDateRangeCustom(displayPostsAll, effectiveFrom, effectiveTo)
 
   const name = (s: string) => pgName(s, brands)
-  const joolaX = displayX.find(d => d.brand === 'joola')
   const topByFollowers = [...displayX].sort((a, b) => b.followers - a.followers)
   const maxFollowers = topByFollowers[0]?.followers || 1
-  const totalFollowers = displayX.reduce((s, d) => s + d.followers, 0)
 
   const erSorted = [...displayX].filter(d => d.tweets > 0).sort((a, b) => b.engRate - a.engRate)
   const maxER = erSorted[0]?.engRate || 1
+
+  // ─── Follower section: filter + sort ────────────────────────────────
+  const displayFollowers = (() => {
+    const q = followerBrandFilter.trim().toLowerCase()
+    const filtered = q
+      ? topByFollowers.filter(d => name(d.brand).toLowerCase().includes(q))
+      : topByFollowers
+    const key = followerSortKey || 'followers'
+    const dir = followerSortKey ? followerSortDir : 'desc'
+    return [...filtered].sort((a, b) => {
+      let av: number | string, bv: number | string
+      if (key === 'brand') { av = name(a.brand); bv = name(b.brand) }
+      else if (key === 'tweets') { av = a.tweets; bv = b.tweets }
+      else { av = a.followers; bv = b.followers }
+      if (typeof av === 'number' && typeof bv === 'number')
+        return dir === 'asc' ? av - bv : bv - av
+      return dir === 'asc'
+        ? String(av).localeCompare(String(bv))
+        : String(bv).localeCompare(String(av))
+    })
+  })()
+
+  // ─── Engagement-per-tweet section: filter + sort ────────────────────
+  const displayEr = (() => {
+    const q = erBrandFilter.trim().toLowerCase()
+    const filtered = q
+      ? erSorted.filter(d => name(d.brand).toLowerCase().includes(q))
+      : erSorted
+    const key = erSortKey || 'engRate'
+    const dir = erSortKey ? erSortDir : 'desc'
+    return [...filtered].sort((a, b) => {
+      let av: number | string, bv: number | string
+      if (key === 'brand') { av = name(a.brand); bv = name(b.brand) }
+      else if (key === 'tweets') { av = a.tweets; bv = b.tweets }
+      else { av = a.engRate; bv = b.engRate }
+      if (typeof av === 'number' && typeof bv === 'number')
+        return dir === 'asc' ? av - bv : bv - av
+      return dir === 'asc'
+        ? String(av).localeCompare(String(bv))
+        : String(bv).localeCompare(String(av))
+    })
+  })()
 
   // Apply per-column filters (case-insensitive substring match) BEFORE sorting.
   const filteredPosts = displayPosts.filter(p => {
@@ -106,68 +165,10 @@ export default function TwitterPage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredPosts
 
-  const hasData = displayX.some(d => d.followers > 0)
-
   return (
     <>
-      <PageHead
-        eyebrow={`X · ${displayX.filter(d => d.followers > 0).length} ACCOUNTS · ${displayPosts.length} POSTS`}
-        title="X / Twitter"
-        accent="reach"
-        sub="Brand presence, follower counts, and post engagement on X. Data refreshes every Monday morning."
-        actions={<>
-          <a href="https://x.com/search?q=pickleball&src=typed_query" target="_blank" rel="noopener noreferrer" className="btn btn-ghost">X Search ↗</a>
-        </>}
-      />
+      <PageHead title="X / TWITTER" />
       <FilterBanner />
-
-      {!hasData && (
-        <section>
-          <div className="price-war" style={{ borderColor: 'rgba(245,230,37,0.3)' }}>
-            <div className="icn" style={{ color: '#F5E625' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><circle cx="12" cy="16" r="1" fill="currentColor" />
-              </svg>
-            </div>
-            <div>
-              <h4>X DATA IS BEING REFRESHED</h4>
-              <p>Follower counts and posts for this channel will appear after the next weekly snapshot completes. Check back shortly.</p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      <section>
-        <div className="kpi-grid">
-          <MiniKpi
-            label="JOOLA X followers" src="X profile" flavor="joola"
-            value={joolaX && joolaX.followers > 0 ? fmt(joolaX.followers) : 'Pending'}
-            color="#22c55e"
-            spark={displayTrend['joola'] || []}
-            customVs={joolaX && joolaX.followers > 0
-              ? `vs. ${name(topByFollowers.find(d => d.brand !== 'joola')?.brand || 'selkirk')}: ${fmt(topByFollowers.find(d => d.brand !== 'joola')?.followers || 0)}`
-              : 'Run pipeline to collect'}
-          />
-          <MiniKpi
-            label="JOOLA engagement/tweet" src="X posts" flavor="joola"
-            value={joolaX && joolaX.engRate > 0 ? joolaX.engRate.toFixed(1) : '—'}
-            color="#818cf8"
-            customVs={joolaX && joolaX.tweets > 0 ? `${joolaX.tweets} tweets tracked` : 'Avg likes + RTs per tweet'}
-          />
-          <MiniKpi
-            label="Total X followers" src="X profiles"
-            value={totalFollowers > 0 ? fmt(totalFollowers) : '—'}
-            color="#F5E625"
-            customVs={`across ${displayX.length} brands`}
-          />
-          <MiniKpi
-            label="Most followed" src="X profiles"
-            value={topByFollowers[0]?.followers > 0 ? name(topByFollowers[0].brand) : '—'}
-            color="#818cf8"
-            customVs={topByFollowers[0]?.followers > 0 ? `${fmt(topByFollowers[0].followers)} followers` : 'Pending first scrape'}
-          />
-        </div>
-      </section>
 
       <section>
         <div className="two-col">
@@ -177,14 +178,28 @@ export default function TwitterPage() {
                 Follower count · ranked
                 <SectionInfo
                   title="X Follower Ranking"
-                  description="Who has the largest X audience among tracked pickleball brands. Wilson and Franklin have large corporate accounts. JOOLA's X at ~500 followers is much smaller than its TikTok presence."
+                  description="Who has the largest X audience among tracked pickleball brands. Wilson and Franklin have large corporate accounts. JOOLA's X presence is smaller than its TikTok footprint — X plays a supporting role for product launches and press."
                   source="x_profiles_weekly · latest weekly snapshot"
                 />
               </h2>
               <div className="sub">{displayX.length} brands · current snapshot</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {topByFollowers.map(d => (
+              <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+                <thead>
+                  <tr>
+                    <SortTh col="brand" label="Brand" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 110 }} />
+                    <SortTh col="followers" label="Followers" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="followers" label="" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 80, textAlign: 'right' }} />
+                    <SortTh col="tweets" label="Tweets" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 60, textAlign: 'right' }} />
+                  </tr>
+                  <tr className="col-filter-row">
+                    <th><ColumnFilter col="brand" value={followerBrandFilter} onChange={setFollowerBrandFilter} placeholder="brand…" /></th>
+                    <th colSpan={3} />
+                  </tr>
+                </thead>
+              </table>
+              {displayFollowers.map(d => (
                 <div key={d.brand} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}>
                   <div className="lbl" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <span>{name(d.brand)}</span>
@@ -204,9 +219,12 @@ export default function TwitterPage() {
                     <div className="fill" style={{
                       width: d.followers > 0 ? Math.max(2, d.followers / maxFollowers * 100) + '%' : '2%',
                       background: `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
-                    }}>{d.followers > 0 ? fmt(d.followers) : '—'}</div>
+                    }} />
                   </div>
-                  <div className="spark-mini">{d.tweets > 0 ? d.tweets + ' tweets' : 'no data'}</div>
+                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700, color: d.followers > 0 ? 'var(--fg)' : 'var(--fg-4)' }}>
+                    {d.followers > 0 ? fmt(d.followers) : '—'}
+                  </div>
+                  <div className="delta-mini flat">{d.tweets > 0 ? d.tweets + 't' : '—'}</div>
                 </div>
               ))}
             </div></div>
@@ -224,7 +242,21 @@ export default function TwitterPage() {
               <div className="sub">Avg likes + retweets per tweet published.</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {erSorted.length > 0 ? erSorted.map(d => (
+              <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
+                <thead>
+                  <tr>
+                    <SortTh col="brand" label="Brand" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ width: 110 }} />
+                    <SortTh col="engRate" label="Avg eng" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="engRate" label="" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ width: 80, textAlign: 'right' }} />
+                    <SortTh col="tweets" label="Tweets" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ width: 60, textAlign: 'right' }} />
+                  </tr>
+                  <tr className="col-filter-row">
+                    <th><ColumnFilter col="brand" value={erBrandFilter} onChange={setErBrandFilter} placeholder="brand…" /></th>
+                    <th colSpan={3} />
+                  </tr>
+                </thead>
+              </table>
+              {displayEr.length > 0 ? displayEr.map(d => (
                 <div
                   key={d.brand}
                   className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}
@@ -240,12 +272,17 @@ export default function TwitterPage() {
                     <div className="fill" style={{
                       width: Math.max(2, d.engRate / maxER * 100) + '%',
                       background: d.brand === 'joola' ? '#22c55e' : `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
-                    }}>{d.engRate.toFixed(1)}</div>
+                    }} />
                   </div>
-                  <div className="spark-mini">avg eng</div>
+                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--fg)' }}>
+                    {d.engRate.toFixed(1)}
+                  </div>
+                  <div className="delta-mini flat">{d.tweets}t</div>
                 </div>
               )) : (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>No post data yet — check back after the next weekly refresh</div>
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+                  {erBrandFilter ? 'No brands match the filter.' : 'No post data yet — run pipeline first'}
+                </div>
               )}
             </div></div>
           </div>
@@ -255,26 +292,26 @@ export default function TwitterPage() {
       <section id="twitter-posts-table">
         <div className="section-head"><div>
           <h2>
-            Top {sortedPosts.length} posts
+            Top {sortedPosts.length} posts · by likes
             <SectionInfo
               title="Top X Posts"
-              description="Up to the 20 highest-engagement posts across the tracked X accounts. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Product launches, pro player news, and community posts tend to dominate."
+              description="Up to the 200 highest-engagement posts across the tracked X accounts, ranked by like count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Product launches, pro player news, and community posts tend to dominate."
               source="x_posts · scraped via apidojo/twitter-scraper-lite. Click column headers to sort."
             />
           </h2>
           <div className="sub">
-            Showing <strong style={{ color: 'var(--fg)' }}>{sortedPosts.length}</strong> of up to 20 ·
+            Showing <strong style={{ color: 'var(--fg)' }}>{sortedPosts.length}</strong> of up to 200 ·
             {' '}sorted by likes · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
           </div>
         </div></div>
         <div className="card">
           {sortedPosts.length > 0 ? (
-            <div className="table-wrap">
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data">
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                    <SortTh col="text" label="Post" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '42%' }} />
+                    <SortTh col="text" label="Post" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />
                     <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
                     <SortTh col="retweets" label="RTs" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
                     <SortTh col="replies" label="Replies" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
@@ -339,6 +376,35 @@ export default function TwitterPage() {
             </div>
           )}
         </div>
+      </section>
+
+      {/* ─── Pending: X / Twitter mention intelligence ─────────────────── */}
+      <section>
+        <div className="section-head"><div>
+          <h2>
+            Paddle and player mentions on X · pending
+            <SectionInfo
+              title="X Mention Intelligence — Pending"
+              description="Cross-channel mention extraction (paddle SKU mentions, athlete tags, sentiment scoring per mention) is implemented for Reddit, Instagram, and YouTube via the mention_facts table. The X enrichment branch of the pipeline has not been wired up — no rows with channel='x' or 'x_posts' exist yet."
+              source="mention_facts · (no X channel rows yet — see TODO_SESSION.md)"
+            />
+          </h2>
+          <div className="sub">Awaiting enrichment pipeline coverage for X posts.</div>
+        </div></div>
+        <div className="card"><div className="card-pad" style={{ padding: 24, color: 'var(--fg-4)', fontSize: 12, lineHeight: 1.6 }}>
+          <p style={{ marginTop: 0 }}>
+            <strong style={{ color: 'var(--fg)' }}>Why this is empty:</strong> the AI enrichment step
+            that writes paddle/player mentions to <code>mention_facts</code> is wired to
+            <code> ig_comments</code>, <code>yt_comments</code>, <code>reddit_mentions</code>, and
+            <code> reddit_comments</code>. It does not yet read from <code>x_posts</code>, so no
+            X-channel mention rows are produced even though the raw posts are scraped.
+          </p>
+          <p>
+            <strong style={{ color: 'var(--fg)' }}>What ships when it&apos;s wired:</strong>
+            {' '}top mentioned paddles by tweet count, top mentioned athletes, sentiment per brand
+            on X, and crisis flags surfaced on the existing Crisis page with channel = <code>x</code>.
+          </p>
+        </div></div>
       </section>
     </>
   )

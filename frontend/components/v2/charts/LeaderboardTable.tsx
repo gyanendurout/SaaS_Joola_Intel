@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { fmt } from '@/components/v2/charts'
+import { SortTh, ColumnFilter } from '@/components/v2/PageShell'
 
 export interface LeaderboardRow {
   brand: string
@@ -19,6 +20,10 @@ interface LeaderboardTableProps {
   sortBy?: string
   onRowClick?: (brand: string, product: string) => void
   interpretation?: string
+  /** Hide the "Est. units sold" column entirely when no rows carry it. */
+  showEstUnitsSold?: boolean
+  /** Hide the "Best lag" column entirely when no rows carry it. */
+  showBestLag?: boolean
 }
 
 type SortKey = 'brand' | 'product' | 'attention' | 'mentions' | 'estimatedUnitsSold' | 'bestLagDays'
@@ -52,13 +57,26 @@ export function LeaderboardTable({
   sortBy,
   onRowClick,
   interpretation,
+  showEstUnitsSold = true,
+  showBestLag = true,
 }: LeaderboardTableProps) {
   const initialKey: SortKey = (sortBy as SortKey) || 'attention'
   const [sortKey, setSortKey] = useState<SortKey>(initialKey)
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [colFilter, setColFilter] = useState<Record<string, string>>({})
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((r) =>
+      Object.entries(colFilter).every(([k, q]) => {
+        if (!q) return true
+        const cell = String((r as unknown as Record<string, unknown>)[k] ?? '')
+        return cell.toLowerCase().includes(q.toLowerCase())
+      })
+    )
+  }, [rows, colFilter])
 
   const sorted = useMemo(() => {
-    return [...rows].sort((a, b) => {
+    return [...filteredRows].sort((a, b) => {
       const av = a[sortKey]
       const bv = b[sortKey]
       if (typeof av === 'number' && typeof bv === 'number') {
@@ -68,38 +86,20 @@ export function LeaderboardTable({
       const bs = String(bv ?? '')
       return sortDir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
     })
-  }, [rows, sortKey, sortDir])
+  }, [filteredRows, sortKey, sortDir])
 
-  function toggle(key: SortKey) {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+  function toggle(key: string) {
+    const k = key as SortKey
+    if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     else {
-      setSortKey(key)
+      setSortKey(k)
       setSortDir('desc')
     }
   }
 
-  const cols: { key: SortKey; label: string; numeric?: boolean }[] = [
-    { key: 'brand', label: 'Brand' },
-    { key: 'product', label: 'Product' },
-    { key: 'attention', label: 'Attention', numeric: true },
-    { key: 'mentions', label: 'Mentions', numeric: true },
-    { key: 'estimatedUnitsSold', label: 'Est. units sold', numeric: true },
-    { key: 'bestLagDays', label: 'Best lag' },
-  ]
-
-  function Arrow({ k }: { k: SortKey }) {
-    const active = sortKey === k
-    if (!active) return <span style={{ opacity: 0.25, marginLeft: 4 }}>↕</span>
-    return (
-      <span style={{ marginLeft: 4, color: '#F5E625', fontWeight: 800 }}>
-        {sortDir === 'asc' ? '▲' : '▼'}
-      </span>
-    )
-  }
-
   if (!rows.length) {
     return (
-      <div style={{ padding: 40, color: '#6b7280', fontSize: 12, textAlign: 'center' }}>
+      <div style={{ padding: 48, color: 'var(--fg-4)', fontSize: 12, textAlign: 'center' }}>
         No leaderboard data available.
       </div>
     )
@@ -108,26 +108,38 @@ export function LeaderboardTable({
   return (
     <div className="leaderboard-wrap">
       {interpretation && <div className="viz-note">{interpretation}</div>}
-      <table className="data leaderboard-table" role="table" aria-label="Product leaderboard">
-        <thead>
-          <tr>
-            {cols.map((c) => (
-              <th
-                key={c.key}
-                className="sortable"
-                onClick={() => toggle(c.key)}
-                aria-sort={sortKey === c.key ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                style={{ cursor: 'pointer', textAlign: c.numeric ? 'right' : 'left' }}
-              >
-                {c.label}
-                <Arrow k={c.key} />
-              </th>
-            ))}
-            <th style={{ textAlign: 'center' }}>Trend</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((r, i) => {
+      <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+        <table className="data leaderboard-table" role="table" aria-label="Product leaderboard">
+          <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+            <tr>
+              <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+              <SortTh col="product" label="Product" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+              <SortTh col="attention" label="Attention" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} title="Attention score combines mentions, recency, and weighted product signals where available." />
+              <SortTh col="mentions" label="Mentions" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+              {/* Optional column: hidden when no rows carry est. units sold */}
+              {showEstUnitsSold && (
+                <SortTh col="estimatedUnitsSold" label="Est. units sold" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+              )}
+              {/* Optional column: hidden when no rows carry best-lag data */}
+              {showBestLag && (
+                <SortTh col="bestLagDays" label="Best lag" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+              )}
+              <th style={{ textAlign: 'center' }}>Trend</th>
+            </tr>
+            <tr className="col-filter-row">
+              <th><ColumnFilter col="brand" value={colFilter.brand} onChange={(v) => setColFilter((p) => ({ ...p, brand: v }))} placeholder="brand…" /></th>
+              <th><ColumnFilter col="product" value={colFilter.product} onChange={(v) => setColFilter((p) => ({ ...p, product: v }))} placeholder="product…" /></th>
+              <th colSpan={3 + (showEstUnitsSold ? 1 : 0) + (showBestLag ? 1 : 0)} />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr>
+                <td colSpan={5 + (showEstUnitsSold ? 1 : 0) + (showBestLag ? 1 : 0)} style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
+                  No rows found for the selected filters.
+                </td>
+              </tr>
+            ) : sorted.map((r, i) => {
             const isJ = r.brand.toLowerCase() === 'joola'
             const sparkColor = isJ ? '#22c55e' : '#94a3b8'
             const lagText =
@@ -155,26 +167,31 @@ export function LeaderboardTable({
                 <td style={{ color: '#cbd1dc' }}>{r.product}</td>
                 <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{fmt(r.attention)}</td>
                 <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>{fmt(r.mentions)}</td>
-                <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
-                  {r.estimatedUnitsSold !== undefined ? fmt(r.estimatedUnitsSold) : '—'}
-                </td>
-                <td
-                  style={{
-                    fontSize: 11,
-                    color: r.bestLagDays !== undefined ? '#cbd1dc' : '#6b7280',
-                    fontStyle: r.bestLagDays !== undefined ? 'normal' : 'italic',
-                  }}
-                >
-                  {lagText}
-                </td>
+                {showEstUnitsSold && (
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                    {r.estimatedUnitsSold !== undefined ? fmt(r.estimatedUnitsSold) : '—'}
+                  </td>
+                )}
+                {showBestLag && (
+                  <td
+                    style={{
+                      fontSize: 11,
+                      color: r.bestLagDays !== undefined ? '#cbd1dc' : '#6b7280',
+                      fontStyle: r.bestLagDays !== undefined ? 'normal' : 'italic',
+                    }}
+                  >
+                    {lagText}
+                  </td>
+                )}
                 <td style={{ textAlign: 'center', padding: '4px 8px' }}>
                   <MiniSpark data={r.sparkline} color={sparkColor} />
                 </td>
               </tr>
             )
           })}
-        </tbody>
-      </table>
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { fetchOverview, type V2Overview } from '@/lib/v2/data'
 import { fmt, fmtPct, Sparkline, Delta, ScatterChart, Donut, BoxPlot, SentimentBar } from '@/components/v2/charts'
-import { SectionInfo, FilterBanner, displayBrandName } from '@/components/v2/PageShell'
+import { SectionInfo, FilterBanner, displayBrandName, SortTh, ColumnFilter } from '@/components/v2/PageShell'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 // ─── Page header ─────────────────────────────────────────────────────
@@ -15,7 +15,7 @@ function PageHeader() {
           <span style={{ width: 6, height: 6, borderRadius: 99, background: '#F5E625', boxShadow: '0 0 0 4px rgba(245,230,37,0.18)' }} />
           LIVE INTELLIGENCE · MON 7:00 AM IST
         </div>
-        <h1>Executive <em>briefing</em></h1>
+        <h1>Executive <em>overview</em></h1>
         <div className="sub">JOOLA's competitive position across the tracked brand set, refreshed every Monday. What changed, what it means, and what to do.</div>
       </div>
     </header>
@@ -363,12 +363,10 @@ function AdsSection({ d }: { d: V2Overview }) {
               <div key={a.brand} className={'bar-row ' + (isJ ? 'joola' : '')}>
                 <div className="lbl">{cap(a.brand)}</div>
                 <div className="track">
-                  <div className="fill" style={{ width: Math.max(2, (a.total / (d.ads[0]?.total || 1)) * 100) + '%', background: brandColor(d, a.brand) }}>
-                    {a.total}
-                  </div>
+                  <div className="fill" style={{ width: Math.max(2, (a.total / (d.ads[0]?.total || 1)) * 100) + '%', background: brandColor(d, a.brand) }} />
                 </div>
-                <div className="spark-mini">M:{a.meta} · G:{a.google}</div>
-                <div className="delta-mini flat">{a.share.toFixed(1)}%</div>
+                <div className="spark-mini" style={{ fontWeight: 700, textAlign: 'right' }}>{a.total}</div>
+                <div className="delta-mini flat">{a.share.toFixed(1)}% · M:{a.meta}/G:{a.google}</div>
               </div>
             )
           })}
@@ -429,12 +427,10 @@ function PromosSection({ d }: { d: V2Overview }) {
             <div key={p.brand} className={'bar-row ' + (isJ ? 'joola' : '')}>
               <div className="lbl">{cap(p.brand)}</div>
               <div className="track">
-                <div className="fill" style={{ width: Math.max(2, (p.count / maxCount) * 100) + '%', background: brandColor(d, p.brand) }}>
-                  {p.count}
-                </div>
+                <div className="fill" style={{ width: Math.max(2, (p.count / maxCount) * 100) + '%', background: brandColor(d, p.brand) }} />
               </div>
-              <div className="spark-mini">{p.types.slice(0, 2).join(', ') || '—'}</div>
-              <div className="delta-mini flat">{p.pct.toFixed(1)}%</div>
+              <div className="spark-mini" style={{ fontWeight: 700, textAlign: 'right' }}>{p.count}</div>
+              <div className="delta-mini flat">{p.pct.toFixed(1)}% · {p.types.slice(0, 2).join(', ') || '—'}</div>
             </div>
           )
         })}
@@ -487,7 +483,32 @@ function CommunitySection({ d }: { d: V2Overview }) {
 
 // ─── Influencers ─────────────────────────────────────────────────────
 function InfluencersSection({ d }: { d: V2Overview }) {
-  const top = d.influencers.slice(0, 10)
+  const [sortKey, setSortKey] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [colFilter, setColFilter] = useState<Record<string, string>>({})
+
+  function toggle(key: string) {
+    if (sortKey === key) setSortDir(s => s === 'asc' ? 'desc' : 'asc')
+    else { setSortKey(key); setSortDir('desc') }
+  }
+
+  // Bump to 200 rows (standardization)
+  const allRows = d.influencers.slice(0, 200).map(i => ({ ...i, brandName: cap(i.brand) }))
+  const filtered = allRows.filter(r => {
+    const rec = r as unknown as Record<string, unknown>
+    return Object.entries(colFilter).every(([col, q]) => {
+      if (!q) return true
+      const cell = col === 'brand' ? r.brandName : String(rec[col] ?? '')
+      return cell.toLowerCase().includes(q.toLowerCase())
+    })
+  })
+  const sorted = sortKey ? [...filtered].sort((a, b) => {
+    const av = (a as Record<string, unknown>)[sortKey]
+    const bv = (b as Record<string, unknown>)[sortKey]
+    if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av
+    return sortDir === 'asc' ? String(av ?? '').localeCompare(String(bv ?? '')) : String(bv ?? '').localeCompare(String(av ?? ''))
+  }) : filtered
+
   return (
     <section id="influencers">
       <div className="section-head">
@@ -500,42 +521,58 @@ function InfluencersSection({ d }: { d: V2Overview }) {
               source="influencers, influencer_posts, influencer_snapshots tables"
             />
           </h2>
-          <div className="sub">Engagement-rate leaders — the ROI signal that beats follower count.</div>
+          <div className="sub">
+            Showing <strong style={{ color: 'var(--fg)' }}>{sorted.length}</strong> of up to 200 · click column headers to sort.
+          </div>
         </div>
         <div className="actions"><a href="/v2/influencers" className="section-link">Open network →</a></div>
       </div>
       <div className="card">
-        <div className="table-wrap">
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Athlete</th><th>Brand</th><th>Followers</th><th>Posts</th><th>Avg Likes</th><th>Eng Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {top.map((i, idx) => (
-                <tr key={idx} className={i.brand === 'joola' ? 'joola' : ''}>
-                  <td>
-                    <div className="athlete-row">
-                      <span className="athlete-avatar">{i.init}</span>
-                      <span>{i.name}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="brand-dot" style={{ background: brandColor(d, i.brand), display: 'inline-block', marginRight: 6 }} />
-                    {cap(i.brand)}
-                  </td>
-                  <td className="cell-num">{fmt(i.followers)}</td>
-                  <td>{i.posts}</td>
-                  <td className="cell-num">{fmt(i.avgLikes)}</td>
-                  <td className="cell-num" style={{ color: i.engRate > 5 ? '#22c55e' : i.engRate > 1 ? '#F5E625' : '#cbd1dc' }}>
-                    {i.engRate.toFixed(2)}%
-                  </td>
+        {sorted.length > 0 ? (
+          <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+            <table className="data">
+              <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <tr>
+                  <SortTh col="name" label="Athlete" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                  <SortTh col="followers" label="Followers" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                  <SortTh col="posts" label="Posts" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                  <SortTh col="avgLikes" label="Avg Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                  <SortTh col="engRate" label="Eng Rate" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} />
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                <tr className="col-filter-row">
+                  <th><ColumnFilter col="name" value={colFilter.name} onChange={v => setColFilter(p => ({ ...p, name: v }))} placeholder="athlete…" /></th>
+                  <th><ColumnFilter col="brand" value={colFilter.brand} onChange={v => setColFilter(p => ({ ...p, brand: v }))} placeholder="brand…" /></th>
+                  <th colSpan={4} />
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((i, idx) => (
+                  <tr key={idx} className={i.brand === 'joola' ? 'joola' : ''}>
+                    <td>
+                      <div className="athlete-row">
+                        <span className="athlete-avatar">{i.init}</span>
+                        <span>{i.name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="brand-dot" style={{ background: brandColor(d, i.brand), display: 'inline-block', marginRight: 6 }} />
+                      {i.brandName}
+                    </td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(i.followers)}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{i.posts}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(i.avgLikes)}</td>
+                    <td className="cell-num" style={{ textAlign: 'right', color: i.engRate > 5 ? '#22c55e' : i.engRate > 1 ? '#F5E625' : '#cbd1dc' }}>
+                      {i.engRate.toFixed(2)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>No rows found for the selected filters.</div>
+        )}
       </div>
     </section>
   )

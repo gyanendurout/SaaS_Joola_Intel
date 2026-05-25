@@ -154,7 +154,7 @@ try {
     Write-Host "[4/4] Playwright E2E (npx playwright test e2e/)..."
     $playwrightInstalled = Test-Path 'node_modules/@playwright/test'
     if (-not $playwrightInstalled) {
-      Record 'playwright' 'SKIP' 'not installed — run: npm install && npx playwright install chromium'
+      Record 'playwright' 'SKIP' 'not installed -- run: npm install && npx playwright install chromium'
     } else {
       $serverReachable = $false
       try {
@@ -188,11 +188,11 @@ try {
   $hardFails = @($results | Where-Object { $_.Status -eq 'FAIL' })
   if ($hardFails.Count -eq 0) {
     Set-Content -Path $FlagFile -Value (Get-Date -Format o) -Encoding utf8
-    Write-Host "PASS — flag written: $FlagFile" -ForegroundColor Green
+    Write-Host "PASS -- flag written: $FlagFile" -ForegroundColor Green
     exit 0
   } else {
     if (Test-Path $FlagFile) { Remove-Item $FlagFile -Force }
-    Write-Host "FAIL — $($hardFails.Count) stage(s) failed. Flag cleared." -ForegroundColor Red
+    Write-Host "FAIL -- $($hardFails.Count) stage(s) failed. Flag cleared." -ForegroundColor Red
     Write-Host "Full log: $LogFile" -ForegroundColor DarkGray
     exit 1
   }

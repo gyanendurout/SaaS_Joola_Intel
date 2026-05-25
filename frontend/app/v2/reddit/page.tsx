@@ -251,10 +251,12 @@ export default function RedditPage() {
               <div className="sub">Where the pickleball conversation lives.</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {subreddits.map((s, i) => (
+              {subreddits.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>No rows found for the selected filters.</div>
+              ) : subreddits.map((s, i) => (
                 <div key={i} className="bar-row"
                   title={`${s.name}: ${s.mentions} mentions · JOOLA share ${s.joolaShare}%`}
-                  style={{ gridTemplateColumns: '180px 1fr 80px' }}>
+                  style={{ gridTemplateColumns: '180px 1fr 70px 70px' }}>
                   <div className="lbl" style={{ fontFamily: 'JetBrains Mono', fontSize: 12 }}>
                     <a
                       href={`https://www.reddit.com/${s.name.replace(/^\//, '')}/`}
@@ -266,12 +268,12 @@ export default function RedditPage() {
                     <div className="fill" style={{
                       width: (s.mentions / maxSubMentions * 100) + '%',
                       background: 'linear-gradient(90deg, #F5E625, rgba(245,230,37,0.6))',
-                      color: '#000',
-                    }}>
-                      {s.mentions} <span style={{ color: 'rgba(0,0,0,0.65)', fontWeight: 600 }}>mentions</span>
-                    </div>
+                    }} />
                   </div>
-                  <div className="spark-mini" style={{ textAlign: 'right', color: s.joolaShare > 20 ? '#22c55e' : 'var(--fg-3)' }}>
+                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--fg)' }}>
+                    {s.mentions}
+                  </div>
+                  <div className="delta-mini flat" style={{ textAlign: 'right', color: s.joolaShare > 20 ? '#22c55e' : 'var(--fg-3)' }}>
                     JOOLA {s.joolaShare}%
                   </div>
                 </div>
@@ -291,7 +293,9 @@ export default function RedditPage() {
               <div className="sub">Ranked by total community discussion volume.</div>
             </div></div>
             <div className="card"><div className="card-pad">
-              {displayReddit.slice(0, 10).map((d, i) => {
+              {displayReddit.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>No rows found for the selected filters.</div>
+              ) : displayReddit.slice(0, 10).map((d, i) => {
                 const sharePct = Math.round((d.mentions / Math.max(1, displayReddit[0]?.mentions || 1)) * 100)
                 const posPct = Math.round((d.positive / Math.max(1, d.mentions)) * 100)
                 const negPct = Math.round((d.negative / Math.max(1, d.mentions)) * 100)
