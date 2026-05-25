@@ -46,7 +46,6 @@ const navGroups: NavGroup[] = [
     heading: 'Analytics',
     items: [
       { href: '/v2/ask-intel',   label: 'Ask Intel',          ic: I.ask },
-      { href: '/v2',             label: 'Executive Overview', ic: I.overview },
       { href: '/v2/community-intel', label: 'Community Intel', ic: I.comments },
       { href: '/v2/influencers', label: 'Influencer Intel', ic: I.inf },
       { href: '/v2/campaign-offer-intel', label: 'Campaign & Offer Intel', ic: I.ads },

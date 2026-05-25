@@ -88,13 +88,24 @@ Output JSON ONLY in this exact shape (do NOT wrap in markdown):
 }
 
 Rules:
-- Only reference tables and columns that appear in the schema below.
+- Only reference tables and columns that appear in the schema below — EXACT names, no aliases.
 - Date filters use the table's dateField. Recent windows = last 30 days by default.
 - Brand filters use brand_id (UUID) — DO NOT filter on brand slug directly. The executor will translate slug → brand_id.
 - Use mention_facts for cross-channel mentions; prefer is_crisis / is_purchase_intent flags over raw sentiment_label.
 - Engagement rate is computed in-app; for engagement questions return raw posts/profile rows.
 - If the question is ambiguous or out of scope, set "clarification" and skip "plan".
 - Always set "limit" between 1 and 1000.
+
+CRITICAL — Common column-name mistakes to AVOID:
+- product_attention_summary / product_attention_daily: column is "mentions_total" (NOT "total_mentions"); column is "attention_score" (NOT "score" or "total_attention"); column is "joola_vs_competitor_gap" (NOT "gap"); column is "rank_in_brand" (NOT "rank"); product_attention_daily date column is "attention_date" (NOT "date").
+- mention_facts: column is "sentiment_label" (NOT "sentiment"); flags are "is_crisis"/"is_opportunity"/"is_purchase_intent" (NOT "crisis"/"opportunity"/"purchase_intent").
+- products: columns are "price_usd","sale_price_usd","discount_pct","avg_rating","review_count" (NOT "price"/"rating"/"reviews"/"discount").
+- ig_posts/yt_videos/tiktok_videos: columns are "like_count","comment_count","view_count" (NOT "likes"/"comments"/"views").
+- x_posts: "like_count","retweet_count","reply_count","view_count" (NOT "likes"/"retweets"/"replies"/"views").
+- reddit_mentions: column is "score" for upvotes (NOT "upvotes"); column is "num_comments" (NOT "comments").
+- promotions: "discount_pct","promo_type","banner_text" (NOT "discount"/"type"/"text").
+
+When using aggregations + orderBy, the orderBy can reference the aggregation alias (e.g. aggregations:[{column:"mentions_total",fn:"sum",alias:"total"}], orderBy:[{column:"total",direction:"desc"}]). The executor handles in-memory sorting for aliases.
 
 Brand slugs you can mention to users:
 ${TRACKED_BRAND_SLUGS.join(', ')}
@@ -134,6 +145,96 @@ Rules:
 
 Brand color map (for visualization tinting): joola=#22c55e selkirk=#F5E625 crbn=#818cf8 franklin=#ec4899 engage=#06b6d4 paddletek=#f59e0b six-zero=#a855f7 onix=#ef4444 wilson=#14b8a6 gamma=#60a5fa head=#0ea5e9
 `
+
+// ─── Alias auto-correct (defensive — planner sometimes hallucinates) ─
+
+/**
+ * Common LLM column-name confusions. Maps generated name → real DB name.
+ * Applied PER TABLE because some names are legitimate elsewhere (e.g.
+ * `total_views` is real on yt_channel_weekly).
+ */
+const COLUMN_ALIAS_MAP: Record<string, Record<string, string>> = {
+  product_attention_summary: {
+    total_mentions: 'mentions_total',
+    mention_count: 'mentions_total',
+    total_attention: 'attention_score',
+    score: 'attention_score',
+    gap: 'joola_vs_competitor_gap',
+    rank: 'rank_in_brand',
+  },
+  product_attention_daily: {
+    total_mentions: 'mentions_total',
+    mention_count: 'mentions_total',
+    total_attention: 'attention_score',
+    score: 'attention_score',
+    date: 'attention_date',
+  },
+  mention_facts: {
+    sentiment: 'sentiment_label',
+    crisis: 'is_crisis',
+    opportunity: 'is_opportunity',
+    purchase_intent: 'is_purchase_intent',
+    competitor_switch: 'is_competitor_switch',
+  },
+  products: {
+    rating: 'avg_rating',
+    reviews: 'review_count',
+    price: 'price_usd',
+    sale_price: 'sale_price_usd',
+    discount: 'discount_pct',
+  },
+  promotions: {
+    discount: 'discount_pct',
+    type: 'promo_type',
+    text: 'banner_text',
+  },
+  reddit_mentions: {
+    upvotes: 'score',
+    comments: 'num_comments',
+    sentiment: 'sentiment_label',
+  },
+  ig_posts: { likes: 'like_count', comments: 'comment_count', views: 'view_count' },
+  yt_videos: { views: 'view_count', likes: 'like_count', comments: 'comment_count' },
+  tiktok_videos: { views: 'view_count', likes: 'like_count', comments: 'comment_count' },
+  x_posts: { likes: 'like_count', retweets: 'retweet_count', replies: 'reply_count', views: 'view_count' },
+}
+
+function autoCorrectAliases(input: unknown): unknown {
+  if (!input || typeof input !== 'object') return input
+  const plan = input as Record<string, unknown>
+  const tableName = typeof plan.table === 'string' ? plan.table : ''
+  const aliasMap = COLUMN_ALIAS_MAP[tableName]
+  if (!aliasMap) return plan
+  const fix = (c: string): string => aliasMap[c] || c
+  const out: Record<string, unknown> = { ...plan }
+  if (Array.isArray(plan.select)) {
+    out.select = (plan.select as string[]).map(fix)
+  }
+  if (Array.isArray(plan.filters)) {
+    out.filters = (plan.filters as Array<Record<string, unknown>>).map((f) => ({
+      ...f,
+      column: typeof f.column === 'string' ? fix(f.column) : f.column,
+    }))
+  }
+  if (Array.isArray(plan.groupBy)) {
+    out.groupBy = (plan.groupBy as string[]).map(fix)
+  }
+  if (Array.isArray(plan.aggregations)) {
+    out.aggregations = (plan.aggregations as Array<Record<string, unknown>>).map((a) => ({
+      ...a,
+      column: typeof a.column === 'string' && a.column !== '*' ? fix(a.column) : a.column,
+    }))
+  }
+  if (Array.isArray(plan.orderBy)) {
+    // Don't rewrite orderBy aliases — aggregation aliases are legit references
+    // to in-memory columns. Only rewrite if it matches a real column alias.
+    out.orderBy = (plan.orderBy as Array<Record<string, unknown>>).map((o) => ({
+      ...o,
+      column: typeof o.column === 'string' ? fix(o.column) : o.column,
+    }))
+  }
+  return out
+}
 
 // ─── Plan execution ────────────────────────────────────────────────────
 
@@ -198,6 +299,10 @@ async function executePlan(
   plan: QueryPlan,
   supabase: ReturnType<typeof getSupabase>,
 ): Promise<{ rows: Record<string, unknown>[]; truncated: boolean }> {
+  const spec = WHITELISTED_TABLES[plan.table]
+  const realCols = new Set(spec?.columns.map((c) => c.name) ?? [])
+  const aggAliases = new Set((plan.aggregations || []).map((a) => a.alias || `${a.fn}_${a.column}`))
+
   let q = supabase.from(plan.table).select(buildSelectString(plan))
 
   for (const f of plan.filters || []) {
@@ -215,21 +320,41 @@ async function executePlan(
     }
   }
 
+  // Only pass orderBy clauses to PostgREST when they reference REAL columns.
+  // Aggregation-alias orderBy must be deferred to after the in-memory groupBy.
+  const deferredOrderBy: typeof plan.orderBy = []
   for (const o of plan.orderBy || []) {
-    q = q.order(o.column, { ascending: o.direction === 'asc' })
+    if (realCols.has(o.column)) {
+      q = q.order(o.column, { ascending: o.direction === 'asc' })
+    } else if (aggAliases.has(o.column)) {
+      deferredOrderBy.push(o)
+    }
+    // else: silently drop (validator should have caught, but be defensive)
   }
 
-  const cap = Math.min(plan.limit ?? 200, 1000)
-  q = q.limit(cap)
+  // When aggregating in-memory we need to over-fetch so the post-groupBy
+  // sort + limit produces correct results. Cap server-side at 1000.
+  const willAggregate = !!(plan.groupBy?.length && plan.aggregations?.length)
+  const userCap = Math.min(plan.limit ?? 200, 1000)
+  const serverCap = willAggregate ? 1000 : userCap
+  q = q.limit(serverCap)
 
   const { data, error } = await q
   if (error) throw new Error(`Supabase query failed: ${error.message}`)
 
   let rows: Record<string, unknown>[] = (data || []) as unknown as Record<string, unknown>[]
 
-  // In-memory groupBy + aggregations (PostgREST has no GROUP BY for us).
-  if (plan.groupBy?.length && plan.aggregations?.length) {
-    rows = applyGroupBy(rows, plan.groupBy, plan.aggregations)
+  if (willAggregate) {
+    rows = applyGroupBy(rows, plan.groupBy!, plan.aggregations!)
+    // Apply deferred orderBy (now that aggregation aliases exist as keys).
+    for (const o of deferredOrderBy) {
+      rows.sort((a, b) => {
+        const av = Number(a[o.column] ?? 0)
+        const bv = Number(b[o.column] ?? 0)
+        return o.direction === 'asc' ? av - bv : bv - av
+      })
+    }
+    if (rows.length > userCap) rows = rows.slice(0, userCap)
   }
 
   const truncated = rows.length >= 200
@@ -394,8 +519,15 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // ── Auto-correct common LLM column-name hallucinations ─────────────
+  // OpenAI frequently confuses friendly aliases with real DB column names
+  // (e.g. it generates `total_mentions` from training data prior knowledge
+  // even though our schema explicitly says `mentions_total`). Rewriting
+  // before validation keeps the planner working for these common slips.
+  const correctedPlan = autoCorrectAliases(planner.plan)
+
   // ── Validate plan ────────────────────────────────────────────────────
-  const validation = validateQueryPlan(planner.plan)
+  const validation = validateQueryPlan(correctedPlan)
   if (!validation.ok) {
     return NextResponse.json(
       buildErrorResponse(`Unsafe plan: ${validation.reason}`, Date.now() - startedAt),
