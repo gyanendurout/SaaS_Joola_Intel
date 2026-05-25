@@ -1,7 +1,7 @@
 """Core AI enrichment — processes all tables with enriched_at IS NULL.
 
 Covers: reddit_mentions, reddit_comments, ig_comments, yt_comments,
-        x_posts, tiktok_videos, influencer_x_posts.
+        x_posts, tiktok_videos, tiktok_comments, influencer_x_posts.
 """
 
 from __future__ import annotations
@@ -39,8 +39,14 @@ TABLES: list[tuple[str, str, str, Callable[[dict], str]]] = [
      lambda r: r.get("text") or ""),
     ("tiktok_videos",      "id", "id,text",
      lambda r: r.get("text") or ""),
+    ("tiktok_comments",    "id", "id,comment_text",
+     lambda r: r.get("comment_text") or ""),
     ("influencer_x_posts", "id", "id,text",
      lambda r: r.get("text") or ""),
+    # product_reviews — added by migration 016. Combines title + body so
+    # short titles still get sentiment + topic enrichment.
+    ("product_reviews",    "id", "id,review_text,review_title",
+     lambda r: ((r.get("review_title") or "") + "\n" + (r.get("review_text") or ""))),
 ]
 
 

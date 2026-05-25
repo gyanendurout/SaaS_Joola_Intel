@@ -25,8 +25,13 @@ export interface RawCatalogProduct {
   brand_id: string
   name: string
   price_usd: number | null
+  sale_price_usd: number | null
+  discount_pct: number | null
+  avg_rating: number | null
+  review_count: number | null
   category: string | null
   in_stock: boolean | null
+  last_scraped_at: string | null
 }
 
 export interface CuratedProduct {
@@ -400,7 +405,7 @@ export async function fetchProductIntel(brands: V2Brand[]): Promise<ProductIntel
   const [catalogRes, curatedRes, dailyRes, summaryRes, tsRows, scanRows] = await Promise.all([
     supabase
       .from('products')
-      .select('id,brand_id,name,price_usd,category,in_stock')
+      .select('id,brand_id,name,price_usd,sale_price_usd,discount_pct,avg_rating,review_count,category,in_stock,last_scraped_at')
       .limit(2000),
     supabase
       .from('products_catalog')

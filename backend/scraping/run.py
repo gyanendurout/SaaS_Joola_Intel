@@ -93,6 +93,12 @@ MODULE_STEPS: dict[str, Module] = {
          ("backend.scraping.sources.products.scrape_catalog_local",   "run"),
          ("backend.scraping.sources.products.scrape_promotions",      "run")],
     ],
+    # Reviews: separate module so it can run on its own cadence (depends on
+    # products rows existing + migration 016 applied). Invoke via
+    #   python -m backend.scraping.run --module reviews --max-products 5
+    "reviews": [
+        [("backend.scraping.sources.products.scrape_reviews",         "run")],
+    ],
     "news": [
         [("backend.scraping.sources.news.scrape_news",                "run")],
     ],
@@ -333,8 +339,8 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="JOOLA Intel Pipeline v2 (parallel runner)")
     parser.add_argument("--module", default="all",
                         help="Module: all | instagram | youtube | reddit | twitter | "
-                             "tiktok | ads | products | news | seo | enrichment | facts | "
-                             "sales-intelligence | intelligence | maintenance")
+                             "tiktok | ads | products | reviews | news | seo | enrichment | "
+                             "facts | sales-intelligence | intelligence | maintenance")
     parser.add_argument("--source", default=None,
                         help="Specific sub-source within a module (e.g. scrape-catalog-local)")
     parser.add_argument("--brands", default=None,

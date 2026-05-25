@@ -949,6 +949,10 @@ export default function ProductIntelPage() {
                   <SortTh col="name" label="Product" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} />
                   <SortTh col="category" label="Category" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} />
                   <SortTh col="price_usd" label="Price" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} style={{ textAlign: 'right' }} />
+                  <SortTh col="sale_price_usd" label="Sale" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} style={{ textAlign: 'right' }} title="Current sale price scraped from brand site (when on sale)." />
+                  <SortTh col="discount_pct" label="Disc%" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} style={{ textAlign: 'right' }} title="Product-level discount % off list price (from sale price or scraped tag)." />
+                  <SortTh col="avg_rating" label="Rating★" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} style={{ textAlign: 'right' }} title="Average star rating from brand-site review widget (Bazaarvoice / Judge.me / Okendo / etc.)." />
+                  <SortTh col="review_count" label="# Reviews" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} style={{ textAlign: 'right' }} title="Number of customer reviews on the brand site for this product." />
                   <SortTh col="in_stock" label="Stock" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} />
                   <SortTh col="last30dMentions" label="30d mentions" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} style={{ textAlign: 'right' }} />
                   <SortTh col="gap" label="Gap" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} style={{ textAlign: 'right' }} title="Gap compares this product's attention score to the top competitor product in the same period/category." />
@@ -972,6 +976,20 @@ export default function ProductIntelPage() {
                       <td style={{ fontSize: 11, color: 'var(--fg-3)' }}>{p.category || '—'}</td>
                       <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: (p.price_usd || 0) >= 200 ? '#F5E625' : 'var(--fg)' }}>
                         {p.price_usd != null ? '$' + Number(p.price_usd).toFixed(0) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: p.sale_price_usd != null ? '#22c55e' : 'var(--fg-4)' }}>
+                        {p.sale_price_usd != null ? '$' + Number(p.sale_price_usd).toFixed(0) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace' }}>
+                        {p.discount_pct != null && p.discount_pct > 0
+                          ? <span className="pill pill-amber">-{Number(p.discount_pct).toFixed(0)}%</span>
+                          : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: p.avg_rating != null ? '#F5E625' : 'var(--fg-4)', fontWeight: 700 }}>
+                        {p.avg_rating != null ? Number(p.avg_rating).toFixed(1) + '★' : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: 'var(--fg-2)' }}>
+                        {p.review_count != null && p.review_count > 0 ? fmt(p.review_count) : '—'}
                       </td>
                       <td>
                         <span className={'pill ' + (p.in_stock === false ? 'pill-red' : 'pill-green')}>

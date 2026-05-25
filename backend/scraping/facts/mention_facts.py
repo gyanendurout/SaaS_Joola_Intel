@@ -74,12 +74,33 @@ SOURCES: list[tuple] = [
      "posted_at", None,
      lambda r: (r.get("text") or "")[:280]),
 
+    # tiktok_comments table added by migration 014; mirrors ig_comments/yt_comments
+    # shape so the existing enrichment pipeline ingests it without schema work.
+    ("tiktok_comment", "tiktok_comments",
+     "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
+     "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
+     "comment_text,posted_at,enriched_at",
+     "posted_at", None,
+     lambda r: (r.get("comment_text") or "")[:280]),
+
     ("x_influencer", "influencer_x_posts",
      "id,brand_id,influencer_id,sentiment_score,sentiment_label,is_crisis,"
      "is_opportunity,purchase_intent_score,brands_mentioned,products_mentioned,"
      "text,posted_at,enriched_at",
      "posted_at", None,
      lambda r: (r.get("text") or "")[:280]),
+
+    # product_reviews — added by migration 016. Unlike other channels, the
+    # product_id is already known at scrape time (we know which product the
+    # review is for) so it's read directly from the row in _build_for_channel.
+    # The base brand_id + AI-detected brands_mentioned/products_mentioned still
+    # flow through the standard expansion logic.
+    ("product_review", "product_reviews",
+     "id,brand_id,product_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
+     "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
+     "review_text,review_title,posted_at,enriched_at",
+     "posted_at", None,
+     lambda r: ((r.get("review_title") or "") + " — " + (r.get("review_text") or ""))[:280]),
 ]
 
 
@@ -171,6 +192,11 @@ def _build_for_channel(
 
         # Resolve products via alias map (lowercase display_name OR alias text → product_id)
         product_ids: set[str | None] = set()
+        # Channel-native product_id wins when present (e.g. product_reviews
+        # already knows which product the review is about — no alias dance).
+        native_pid = r.get("product_id")
+        if native_pid:
+            product_ids.add(native_pid)
         for p in (r.get("products_mentioned") or []):
             pid = product_map.get((p or "").lower())
             if pid:

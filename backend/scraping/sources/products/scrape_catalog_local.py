@@ -8,12 +8,20 @@ This module is intentionally separate from `scrape_catalog.py` (the Apify-based
 catalog scraper). The weekly pipeline runs Apify first for brands it handles well
 (Selkirk/Paddletek/CRBN/Gamma) and falls back to this module for the rest.
 
-Brands handled here (currently 5; engage + wilson are still blocked):
-  - joola      .card.card-product
-  - six-zero   .grid__item              (AUD prices — site is .com.au but US-facing)
-  - onix       .ProductItem
-  - franklin   .product-item / [data-product-id]
-  - head       [class*="productCard-root"] (HEAD uses hashed class names)
+Brands handled here (7):
+  - joola      .card.card-product           (Judge.me likely)
+  - six-zero   .grid__item                  (AUD prices — Yotpo / Okendo)
+  - onix       .ProductItem                 (Bazaarvoice; lazy-rendered, 8s wait)
+  - franklin   .product-item / [data-pid]   (Bazaarvoice)
+  - head       [class*="productCard-root"]  (proprietary; regex fallback)
+  - engage     .card / .card.column         (regex fallback — works today)
+  - wilson     [data-test*="product-tile"]  (Bazaarvoice)
+
+Every brand's JS extractor now runs the SAME cascading rating/review widget
+detector (Bazaarvoice → Judge.me → Okendo → Shopify-SPR → Yotpo → Stamped →
+Loox → generic itemprop → regex on innerText). If none of those resolve, the
+extractor returns `null` for `rating` / `reviewCount` — the Python upsert
+then writes `null` (NOT 0) into `products.avg_rating` / `products.review_count`.
 
 Run standalone:
     python -m backend.scraping.sources.products.scrape_catalog_local
@@ -35,11 +43,139 @@ log = get_logger("products.catalog_local")
 
 
 # ---------------------------------------------------------------------------
+# Shared JS helpers — inlined into every per-brand extractor so each
+# page.evaluate() call is self-contained (no cross-evaluate state). Keep these
+# in sync with the equivalent block in scrape_catalog.py (PAGE_FUNCTION) so
+# Apify and local scrapers extract ratings the same way.
+#
+# extractRating(card) / extractReviewCount(card) try widget vendors in this
+# cascade order (most reliable first):
+#   1. Bazaarvoice   (JOOLA, Onix, Franklin, Wilson)  meta[itemprop] + .bv-*
+#   2. Judge.me      (CRBN, Paddletek, often JOOLA)    [data-average-rating]
+#   3. Okendo        (Selkirk, sometimes six-zero)     [data-oke-rating]
+#   4. Shopify SPR   (Gamma, Franklin)                 .spr-badge[data-rating]
+#   5. Yotpo         (six-zero, others)                .yotpo-stars[aria-label]
+#   6. Stamped       (rare)                            .stamped-badge[data-rating]
+#   7. Loox          (rare)                            .loox-rating[data-rating]
+#   8. Generic       itemprop="ratingValue" / [data-rating] / [data-score]
+#   9. Regex fallback over card.innerText (engage-style "4.5 out of 5 · 12 Reviews")
+#
+# All accessors are wrapped in optional chains so missing nodes return null;
+# no widget = returns null (never 0).
+# ---------------------------------------------------------------------------
+RATING_EXTRACTORS_JS = r"""
+// These helpers are inlined INSIDE the per-brand arrow function via string
+// concatenation, so they share that function's scope. Do NOT add a leading
+// `() => {` here — the per-brand JS supplies its own arrow body and the
+// `}` closer at the end.
+const numFrom = (s) => {
+    if (!s) return null;
+    const m = String(s).match(/\d+\.?\d*/);
+    return m ? m[0] : null;
+};
+
+const extractRating = (el) => {
+    if (!el) return null;
+    let r = null;
+    // 1. Bazaarvoice
+    r = r ||
+        el.querySelector('[data-bv-show="inline_rating"] meta[itemprop="ratingValue"]')?.getAttribute('content') ||
+        el.querySelector('[data-bv-show="inline_rating"] .bv_averageRating_component_container .bv_text')?.innerText?.trim() ||
+        el.querySelector('[data-bv-show="inline_rating"] .bv_text')?.innerText?.trim() ||
+        numFrom(el.querySelector('[data-bv-show="inline_rating"] .bv-off-screen')?.innerText) ||
+        numFrom(el.querySelector('[data-bv-show="inline_rating"] .bv_stars_button_container')?.getAttribute('aria-label'));
+    // 2. Judge.me
+    r = r ||
+        el.querySelector('.jdgm-prev-badge[data-average-rating]')?.getAttribute('data-average-rating') ||
+        el.querySelector('[data-average-rating]')?.getAttribute('data-average-rating');
+    // 3. Okendo
+    r = r ||
+        el.querySelector('[data-oke-rating]')?.getAttribute('data-oke-rating') ||
+        el.querySelector('.oke-sr[data-oke-reviews-rating]')?.getAttribute('data-oke-reviews-rating') ||
+        numFrom(el.querySelector('.oke-stars[aria-label]')?.getAttribute('aria-label'));
+    // 4. Shopify SPR
+    r = r ||
+        el.querySelector('.spr-badge[data-rating]')?.getAttribute('data-rating') ||
+        el.querySelector('.spr-starrating')?.getAttribute('data-rating');
+    // 5. Yotpo
+    r = r ||
+        numFrom(el.querySelector('.yotpo-stars [aria-label]')?.getAttribute('aria-label')) ||
+        el.querySelector('.yotpo-bottomline .yotpo-score')?.innerText?.trim();
+    // 6. Stamped
+    r = r ||
+        el.querySelector('.stamped-badge[data-rating], .stamped-product-reviews-badge[data-rating]')?.getAttribute('data-rating');
+    // 7. Loox
+    r = r ||
+        el.querySelector('.loox-rating[data-rating], [class*="loox-rating"][data-rating]')?.getAttribute('data-rating');
+    // 8. Generic schema.org / data-*
+    r = r ||
+        el.querySelector('meta[itemprop="ratingValue"]')?.getAttribute('content') ||
+        el.querySelector('span[itemprop="ratingValue"]')?.innerText?.trim() ||
+        el.querySelector('[data-rating]')?.getAttribute('data-rating') ||
+        el.querySelector('[data-score]')?.getAttribute('data-score') ||
+        numFrom(el.querySelector('[class*="rating-stars"][aria-label], [class*="star-rating"][aria-label]')?.getAttribute('aria-label'));
+    // 9. Regex fallback over visible text
+    if (!r) {
+        const t = el.innerText || '';
+        const m = t.match(/(\d+\.\d+)\s*(?:out\s*of|\/)\s*5/i);
+        if (m) r = m[1];
+    }
+    return r;
+};
+
+const extractReviewCount = (el) => {
+    if (!el) return null;
+    let c = null;
+    // 1. Bazaarvoice
+    c = c ||
+        el.querySelector('[data-bv-show="inline_rating"] meta[itemprop="reviewCount"]')?.getAttribute('content') ||
+        numFrom(el.querySelector('[data-bv-show="inline_rating"] .bv_numReviews_component_container .bv_text')?.innerText) ||
+        numFrom(el.querySelector('[data-bv-show="inline_rating"] .bv_numReviews_text')?.innerText);
+    // 2. Judge.me
+    c = c ||
+        el.querySelector('.jdgm-prev-badge[data-number-of-reviews]')?.getAttribute('data-number-of-reviews') ||
+        el.querySelector('[data-number-of-reviews]')?.getAttribute('data-number-of-reviews');
+    // 3. Okendo
+    c = c ||
+        numFrom(el.querySelector('.oke-sr-count')?.innerText) ||
+        numFrom(el.querySelector('.oke-sr [class*="count"]')?.innerText);
+    // 4. Shopify SPR
+    c = c ||
+        numFrom(el.querySelector('.spr-badge-caption')?.innerText);
+    // 5. Yotpo
+    c = c ||
+        numFrom(el.querySelector('.yotpo-bottomline .text-m')?.innerText);
+    // 6. Stamped
+    c = c ||
+        numFrom(el.querySelector('.stamped-badge-caption')?.innerText);
+    // 7. Loox
+    c = c ||
+        numFrom(el.querySelector('.loox-rating-count')?.innerText);
+    // 8. Generic
+    c = c ||
+        el.querySelector('[data-review-count]')?.getAttribute('data-review-count') ||
+        el.querySelector('meta[itemprop="reviewCount"]')?.getAttribute('content') ||
+        el.querySelector('span[itemprop="reviewCount"]')?.innerText?.trim() ||
+        numFrom(el.querySelector('[class*="review-count"], [class*="reviews-count"]')?.innerText);
+    // 9. Regex fallback (engage-style "12 Reviews")
+    if (!c) {
+        const t = el.innerText || '';
+        const m = t.match(/(\d+)\s*Reviews?/i);
+        if (m) c = m[1];
+    }
+    return c;
+};
+"""
+
+
+# ---------------------------------------------------------------------------
 # Per-brand extraction scripts — each returns a list of {name, price, ...} dicts.
 # We keep these as JS strings so they can run inside page.evaluate() unchanged.
+# Each per-brand JS prefixes RATING_EXTRACTORS_JS so extractRating /
+# extractReviewCount are in scope.
 # ---------------------------------------------------------------------------
 
-JS_JOOLA = r"""() => {
+JS_JOOLA = r"""() => {""" + RATING_EXTRACTORS_JS + r"""
     const cards = document.querySelectorAll('.card.card-product');
     const out = []; const seen = new Set();
     cards.forEach(card => {
@@ -63,6 +199,8 @@ JS_JOOLA = r"""() => {
             name,
             price: priceEl?.innerText?.trim() || null,
             comparePrice: compareEl?.innerText?.trim() || null,
+            rating: extractRating(card),
+            reviewCount: extractReviewCount(card),
             link: linkEl?.href || null,
             thumbnail: imgEl?.src || imgEl?.getAttribute('data-src') || null,
             inStock: card.querySelector('.sold-out, .soldout, .badge--sold-out') === null,
@@ -71,7 +209,7 @@ JS_JOOLA = r"""() => {
     return out;
 }"""
 
-JS_SIX_ZERO = r"""() => {
+JS_SIX_ZERO = r"""() => {""" + RATING_EXTRACTORS_JS + r"""
     const cards = document.querySelectorAll('.grid__item');
     const out = []; const seen = new Set();
     cards.forEach(card => {
@@ -84,6 +222,8 @@ JS_SIX_ZERO = r"""() => {
         seen.add(name);
         out.push({
             name, price, link,
+            rating: extractRating(card),
+            reviewCount: extractReviewCount(card),
             thumbnail: img?.src || img?.getAttribute('data-src') || null,
             inStock: card.querySelector('.sold-out, .soldout') === null,
         });
@@ -91,7 +231,7 @@ JS_SIX_ZERO = r"""() => {
     return out;
 }"""
 
-JS_ONIX = r"""() => {
+JS_ONIX = r"""() => {""" + RATING_EXTRACTORS_JS + r"""
     const cards = document.querySelectorAll('.ProductItem');
     const out = []; const seen = new Set();
     cards.forEach(card => {
@@ -107,6 +247,8 @@ JS_ONIX = r"""() => {
         seen.add(name);
         out.push({
             name, price, link,
+            rating: extractRating(card),
+            reviewCount: extractReviewCount(card),
             thumbnail: img?.src || img?.getAttribute('data-src') || null,
             inStock: card.querySelector('.sold-out, .soldout') === null,
         });
@@ -114,7 +256,7 @@ JS_ONIX = r"""() => {
     return out;
 }"""
 
-JS_FRANKLIN = r"""() => {
+JS_FRANKLIN = r"""() => {""" + RATING_EXTRACTORS_JS + r"""
     const cards = document.querySelectorAll('.product-item, [data-product-id]');
     const out = []; const seen = new Set();
     cards.forEach(card => {
@@ -130,6 +272,8 @@ JS_FRANKLIN = r"""() => {
         seen.add(name);
         out.push({
             name, price, link,
+            rating: extractRating(card),
+            reviewCount: extractReviewCount(card),
             thumbnail: img?.src || img?.getAttribute('data-src') || null,
             inStock: true,
         });
@@ -137,7 +281,7 @@ JS_FRANKLIN = r"""() => {
     return out;
 }"""
 
-JS_ENGAGE = r"""() => {
+JS_ENGAGE = r"""() => {""" + RATING_EXTRACTORS_JS + r"""
     // Scope to the listing area to avoid menu items that also use /products/
     const container = document.querySelector('.filters-results, .product-list, .grid--row-gutters');
     const cards = (container || document).querySelectorAll('.card.column, .card.quarter, .card');
@@ -154,13 +298,15 @@ JS_ENGAGE = r"""() => {
             && name.length < 25) return;
         seen.add(name);
         const priceMatch = allText.match(/\$\d+\.\d{2}/);
-        const ratingMatch = allText.match(/(\d+\.\d+)\s*out\s*(?:of\s*)?5/i);
-        const reviewMatch = allText.match(/(\d+)\s*Reviews?/i);
+        // extractRating/extractReviewCount already include the engage-style
+        // regex fallback as their final step, so this single call covers both
+        // the original "X out of 5" / "N Reviews" pattern AND any widget if
+        // engage swaps to one later.
         out.push({
             name,
             price: priceMatch ? priceMatch[0] : null,
-            rating: ratingMatch ? ratingMatch[1] : null,
-            reviewCount: reviewMatch ? reviewMatch[1] : null,
+            rating: extractRating(card),
+            reviewCount: extractReviewCount(card),
             link: linkEl?.href || null,
             thumbnail: imgEl?.src || imgEl?.getAttribute('data-src') || null,
             inStock: !allText.toLowerCase().includes('sold out'),
@@ -169,7 +315,7 @@ JS_ENGAGE = r"""() => {
     return out;
 }"""
 
-JS_HEAD = r"""() => {
+JS_HEAD = r"""() => {""" + RATING_EXTRACTORS_JS + r"""
     const cards = document.querySelectorAll('[class*="productCard-root"]');
     const out = []; const seen = new Set();
     const BADGE_RE = /^(coming soon|new|sale|best seller|out of stock|free|final|in stock|\$|\d+%)/i;
@@ -192,9 +338,56 @@ JS_HEAD = r"""() => {
         out.push({
             name,
             price: priceMatch ? priceMatch[0] : null,
+            // HEAD typically ships no public rating widget on the collection
+            // grid, so this usually resolves to null — but the cascade is
+            // here in case they add one.
+            rating: extractRating(card),
+            reviewCount: extractReviewCount(card),
             link,
             thumbnail: img?.src || img?.getAttribute('data-src') || null,
             inStock: !allText.toLowerCase().includes('out of stock'),
+        });
+    });
+    return out;
+}"""
+
+JS_WILSON = r"""() => {""" + RATING_EXTRACTORS_JS + r"""
+    // wilson.com uses a custom theme; tile selector covers both the
+    // current data-test attribute and the older productTile class fallback.
+    const cards = document.querySelectorAll(
+        '[data-test*="product-tile"], [data-testid*="product-tile"], ' +
+        '[class*="productTile"], [class*="product-tile"], article[class*="product"]'
+    );
+    const out = []; const seen = new Set();
+    cards.forEach(card => {
+        const nameEl = card.querySelector(
+            '[data-test*="product-name"], [data-testid*="product-name"], ' +
+            '[class*="productName"], [class*="product-name"], h2, h3'
+        );
+        const name = nameEl?.innerText?.trim();
+        if (!name || seen.has(name) || name.length < 3) return;
+        seen.add(name);
+        const priceEl = card.querySelector(
+            '[data-test*="price"], [data-testid*="price"], ' +
+            '[class*="price"]:not([class*="strikethrough"]):not([class*="was"])'
+        );
+        const compareEl = card.querySelector(
+            '[class*="strikethrough"], [class*="wasPrice"], ' +
+            '[class*="was-price"], [class*="originalPrice"], s'
+        );
+        const link = card.querySelector('a[href*="/p/"], a[href*="/product"], a')?.href;
+        const img = card.querySelector('img');
+        const allText = (card.innerText || '');
+        out.push({
+            name,
+            price: priceEl?.innerText?.trim() || null,
+            comparePrice: compareEl?.innerText?.trim() || null,
+            rating: extractRating(card),
+            reviewCount: extractReviewCount(card),
+            link,
+            thumbnail: img?.src || img?.getAttribute('data-src') ||
+                       img?.getAttribute('data-srcset')?.split(' ')[0] || null,
+            inStock: !/out\s*of\s*stock|sold\s*out/i.test(allText),
         });
     });
     return out;
@@ -207,17 +400,29 @@ JS_HEAD = r"""() => {
 # ---------------------------------------------------------------------------
 BRAND_SCRAPERS: list[dict[str, Any]] = [
     {"slug": "joola",    "url": "https://joola.com/collections/pickleball-paddles",
-     "wait_for": ".card.card-product", "js": JS_JOOLA, "currency": "USD", "stealth": False},
+     "wait_for": ".card.card-product", "js": JS_JOOLA, "currency": "USD",
+     "stealth": False, "extra_wait": 5000},
     {"slug": "six-zero", "url": "https://www.sixzeropickleball.com/collections/paddles",
-     "wait_for": ".grid__item",        "js": JS_SIX_ZERO, "currency": "AUD", "stealth": False},
+     "wait_for": ".grid__item",        "js": JS_SIX_ZERO, "currency": "AUD",
+     "stealth": False, "extra_wait": 5000},
+    # onix uses Bazaarvoice which lazy-renders after the page is interactive;
+    # 8000ms gives the BV bundle time to hydrate, otherwise rating selectors
+    # come back null even though the widget would have loaded on a real page view.
     {"slug": "onix",     "url": "https://www.onixpickleball.com/collections/paddles",
-     "wait_for": ".ProductItem",       "js": JS_ONIX, "currency": "USD", "stealth": False},
+     "wait_for": ".ProductItem",       "js": JS_ONIX, "currency": "USD",
+     "stealth": False, "extra_wait": 8000},
     {"slug": "franklin", "url": "https://www.franklinsports.com/pickleball/paddles",
-     "wait_for": ".product-item",      "js": JS_FRANKLIN, "currency": "USD", "stealth": False},
+     "wait_for": ".product-item",      "js": JS_FRANKLIN, "currency": "USD",
+     "stealth": False, "extra_wait": 6000},
     {"slug": "head",     "url": "https://www.head.com/en_US/shop-pickleball/paddle",
-     "wait_for": '[class*="productCard-root"]', "js": JS_HEAD, "currency": "USD", "stealth": False},
+     "wait_for": '[class*="productCard-root"]', "js": JS_HEAD, "currency": "USD",
+     "stealth": False, "extra_wait": 4000},
+    {"slug": "wilson",   "url": "https://www.wilson.com/en-us/collection/pickleball/paddles",
+     "wait_for": '[data-test*="product-tile"], [class*="productTile"], article[class*="product"]',
+     "js": JS_WILSON, "currency": "USD", "stealth": False, "extra_wait": 8000},
     {"slug": "engage",   "url": "https://engagepickleball.com/collections/allpaddles",
-     "wait_for": ".card", "js": JS_ENGAGE, "currency": "USD", "stealth": True},
+     "wait_for": ".card", "js": JS_ENGAGE, "currency": "USD",
+     "stealth": True, "extra_wait": 8000},
 ]
 
 
@@ -253,20 +458,27 @@ def _scrape_brand(browser, cfg: dict[str, Any]) -> list[dict[str, Any]]:
     page = ctx.new_page()
     try:
         page.goto(cfg["url"], wait_until="domcontentloaded", timeout=60000)
-        # Stealth-requiring sites tend to need longer settling time
-        page.wait_for_timeout(8000 if cfg.get("stealth") else 3000)
+        # Per-brand extra_wait honours lazy-loaded review widgets (Bazaarvoice
+        # on onix/wilson/franklin) and stealth-needing sites (engage). Falls
+        # back to 8000ms for stealth brands, 3000ms otherwise.
+        wait_ms = cfg.get("extra_wait", 8000 if cfg.get("stealth") else 3000)
+        page.wait_for_timeout(wait_ms)
         try:
             page.wait_for_selector(cfg["wait_for"], state="attached", timeout=15000)
         except Exception:
             pass  # Some pages already have content; wait_for_timeout above covers it
-        # Scroll to trigger lazy loading
+        # Scroll to trigger lazy loading (review widgets often defer to scroll)
         for _ in range(6):
             page.evaluate("window.scrollBy(0, 800)")
             page.wait_for_timeout(400)
         page.evaluate("window.scrollTo(0, 0)")
-        page.wait_for_timeout(1500)
+        # Extra settle for review widgets that hydrate post-scroll
+        page.wait_for_timeout(2500 if wait_ms >= 8000 else 1500)
         items: list[dict[str, Any]] = page.evaluate(cfg["js"])
-        log.info("  ✓ %s: %d products via local Playwright", cfg["slug"], len(items))
+        with_rating = sum(1 for it in items if it.get("rating"))
+        with_reviews = sum(1 for it in items if it.get("reviewCount"))
+        log.info("  ✓ %s: %d products via local Playwright (%d with rating, %d with reviews)",
+                 cfg["slug"], len(items), with_rating, with_reviews)
         return items
     except Exception as e:
         log.warning("  ✗ %s local scrape failed: %s", cfg["slug"], e)
@@ -335,20 +547,30 @@ def run(ctx: dict[str, Any]) -> int:
                     discount_pct = round((regular - sale) / regular * 100, 1)
                 # Only store price_usd when the source currency is USD
                 price_usd = actual if cfg.get("currency", "USD") == "USD" else None
-                # Rating/reviews — only populated by brands whose collection
-                # page exposes ratings inline (currently engage). Parse defensively.
+                # Rating/reviews — now populated for every brand via the
+                # extractRating / extractReviewCount cascade. Parse defensively
+                # using the same regex shape as scrape_catalog.py so the two
+                # writers agree on what counts as a valid rating.
                 rating_raw = it.get("rating")
                 review_raw = it.get("reviewCount")
-                try:
-                    avg_rating = float(rating_raw) if rating_raw else None
-                    if avg_rating is not None and not (0 < avg_rating <= 5):
-                        avg_rating = None
-                except (TypeError, ValueError):
-                    avg_rating = None
-                try:
-                    review_count = int(review_raw) if review_raw else None
-                except (TypeError, ValueError):
-                    review_count = None
+                avg_rating: float | None = None
+                if rating_raw not in (None, ""):
+                    m = re.search(r"\d+\.?\d*", str(rating_raw))
+                    if m:
+                        try:
+                            v = float(m.group())
+                            if 0 < v <= 5:
+                                avg_rating = v
+                        except (TypeError, ValueError):
+                            avg_rating = None
+                review_count: int | None = None
+                if review_raw not in (None, ""):
+                    m = re.search(r"\d+", str(review_raw))
+                    if m:
+                        try:
+                            review_count = int(m.group())
+                        except (TypeError, ValueError):
+                            review_count = None
                 all_rows.append({
                     "brand_id":        brand_id,
                     "name":            name[:300],

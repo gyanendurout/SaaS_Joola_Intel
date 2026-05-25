@@ -823,21 +823,37 @@ export async function fetchPromoDetails(brands: V2Brand[]): Promise<V2PromoDetai
 }
 
 // ─── Products full list ───────────────────────────────────────────────
-export type V2ProductItem = { brand: string; name: string; price: number | null; category: string | null; inStock: boolean }
+export type V2ProductItem = {
+  brand: string
+  name: string
+  price: number | null
+  salePrice: number | null
+  discountPct: number | null
+  rating: number | null
+  reviewCount: number | null
+  category: string | null
+  inStock: boolean
+  lastScrapedAt: string | null
+}
 
 export async function fetchProductsList(brands: V2Brand[], limit = 500): Promise<V2ProductItem[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
   const { data } = await supabase
     .from('products')
-    .select('brand_id,name,price_usd,category,in_stock')
+    .select('brand_id,name,price_usd,sale_price_usd,discount_pct,avg_rating,review_count,category,in_stock,last_scraped_at')
     .order('price_usd', { ascending: false })
     .limit(limit)
   return (data || []).map((p: any) => ({
     brand: slugByBid[p.brand_id] || 'unknown',
     name: p.name || '',
     price: p.price_usd != null ? Number(p.price_usd) : null,
+    salePrice: p.sale_price_usd != null ? Number(p.sale_price_usd) : null,
+    discountPct: p.discount_pct != null ? Number(p.discount_pct) : null,
+    rating: p.avg_rating != null ? Number(p.avg_rating) : null,
+    reviewCount: p.review_count != null ? Number(p.review_count) : null,
     category: p.category,
     inStock: p.in_stock ?? true,
+    lastScrapedAt: p.last_scraped_at || null,
   }))
 }
 
