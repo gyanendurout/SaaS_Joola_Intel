@@ -17,8 +17,20 @@
 -- Idempotent re-scrapes: source_review_id is the per-widget unique key
 -- (Bazaarvoice review ID / Judge.me review ID / Okendo review ID / etc.)
 -- so re-running the scraper UPSERTs in place without duplicating rows.
+--
+-- NOTE 2026-05-25: A legacy empty `product_reviews` table exists in this
+-- database with a different schema (no source_review_id, no posted_at, no
+-- enrichment columns) — likely a stub from a much earlier session that was
+-- never populated. We DROP it first because:
+--   (a) it's empty (verified via REST: select returned []),
+--   (b) `create table if not exists` will NOT alter an existing table,
+--       which causes the index creation below to fail with
+--       "ERROR: 42703: column posted_at does not exist".
+-- The DROP CASCADE also clears any orphaned indexes / FKs / policies the
+-- legacy schema may have left behind. Safe because the table has 0 rows.
+drop table if exists product_reviews cascade;
 
-create table if not exists product_reviews (
+create table product_reviews (
   id                     uuid primary key default gen_random_uuid(),
   brand_id               uuid references brands(id),
   product_id             uuid references products_catalog(id),

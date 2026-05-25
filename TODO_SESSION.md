@@ -171,3 +171,31 @@ Get-Content c:\Workspace\joola-intel-nextjs\.env | ForEach-Object {
   if ($_ -match '^\s*([^#=]+)=(.*)$') { Set-Item -Path "env:$($matches[1].Trim())" -Value $matches[2].Trim() }
 }
 ```
+
+## Ask Intel — net-new build (2026-05-25)
+
+### Files
+- Schema: frontend/lib/v2/askIntel/schema.ts (40K — tables/columns/metrics)
+- Safety: frontend/lib/v2/askIntel/sqlSafety.ts
+- Types:  frontend/lib/v2/askIntel/types.ts
+- API:    frontend/app/api/v2/ask-intel/route.ts (POST + GET /schema + GET /suggestions)
+- Page:   frontend/app/v2/ask-intel/page.tsx
+- Components: frontend/components/v2/askIntel/*.tsx
+- Sidebar: added "Ask Intel" entry
+
+### Architecture
+Two-step OpenAI flow (planner → executor → answerer).
+Structured plan (not raw SQL) — translates to typed supabase-js calls; no need for exec_safe_sql RPC.
+JOOLA green #22c55e throughout. Reuses existing charts.tsx primitives.
+
+### USER ACTIONS
+- Add OPENAI_API_KEY (server-only, no NEXT_PUBLIC_) to frontend/.env.local AND Vercel env vars.
+- Optionally create read-only DB role + RLS policies for defense in depth.
+
+### Cost
+~$0.003 per question (gpt-4o-mini planner + answerer ≈ 2k input + 1k output each).
+
+### Known limitations
+- v1 supports table/select/filter/groupBy/orderBy only — no arbitrary joins beyond schema.ts join hints.
+- Complex CTEs not supported in v1.
+- Future v2: exec_safe_sql stored proc with explicit read-only role.

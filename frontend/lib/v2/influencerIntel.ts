@@ -120,7 +120,7 @@ export interface CommunityMention {
   id: string
   player: string
   brandSlug: string
-  channel: IntelPlatform | 'ig_comment' | 'yt_comment' | 'unknown'
+  channel: IntelPlatform | 'ig_comment' | 'yt_comment' | 'tiktok_comment' | 'reddit_comment' | 'x_influencer' | 'product_review' | 'unknown'
   channelLabel: string
   mentionText: string
   sentiment: IntelSentiment
@@ -155,7 +155,7 @@ export interface PlayerProductConnection {
   productName: string
   productBrandSlug: string
   mentions: number
-  channel: IntelPlatform | 'ig_comment' | 'yt_comment' | 'unknown'
+  channel: IntelPlatform | 'ig_comment' | 'yt_comment' | 'tiktok_comment' | 'reddit_comment' | 'x_influencer' | 'product_review' | 'unknown'
   channelLabel: string
   positive: number
   negative: number
@@ -512,9 +512,12 @@ export async function fetchInfluencerIntel(
       case 'yt': return 'YouTube'
       case 'yt_comment': return 'YouTube comment'
       case 'reddit': return 'Reddit'
+      case 'reddit_comment': return 'Reddit comment'
       case 'tiktok': return 'TikTok'
+      case 'tiktok_comment': return 'TikTok comment'
       case 'x':
       case 'x_influencer': return 'X / Twitter'
+      case 'product_review': return 'Product review'
       default: return ch || 'Unknown'
     }
   }
@@ -615,12 +618,16 @@ export async function fetchInfluencerIntel(
     bumpAttention(p.athleteName, p.brandSlug, p.platform, p.sentiment, p.engagement)
   })
   playerMentions.forEach(m => {
-    // Translate community channel into one of the 5 platforms
+    // Translate community channel into one of the 5 platforms.
+    // mention_facts.channel values include comment-suffix variants
+    // (tiktok_comment, x_influencer, reddit_comment, ig_comment, yt_comment)
+    // that must be folded into their parent platform bucket.
     let plat: IntelPlatform = 'ig'
-    if (m.channel === 'yt' || m.channel === 'yt_comment') plat = 'yt'
-    else if (m.channel === 'reddit') plat = 'reddit'
-    else if (m.channel === 'tiktok') plat = 'tiktok'
-    else if (m.channel === 'x' || m.channel === 'unknown') plat = 'x'
+    const ch = String(m.channel || '')
+    if (ch === 'yt' || ch === 'yt_comment') plat = 'yt'
+    else if (ch === 'reddit' || ch === 'reddit_comment') plat = 'reddit'
+    else if (ch === 'tiktok' || ch === 'tiktok_comment') plat = 'tiktok'
+    else if (ch === 'x' || ch === 'x_influencer' || ch === 'unknown') plat = 'x'
     else plat = 'ig'
     bumpAttention(m.player, m.brandSlug, plat, m.sentiment, 0)
   })
@@ -748,10 +755,13 @@ export async function fetchInfluencerIntel(
     .sort((a, b) => b.attentionScore - a.attentionScore)
 
   // ── 9. Data coverage diagnostic ────────────────────────────────────
+  // Fold comment-suffix channels into their parent platform so counts match
+  // what mention_facts actually stores (channel='tiktok_comment','x_influencer',
+  // 'reddit_comment', etc — see backend/scraping/facts/mention_facts.py SOURCES).
   const ytMentions = playerMentions.filter(m => m.channel === 'yt' || m.channel === 'yt_comment').length
-  const tiktokMentions = playerMentions.filter(m => m.channel === 'tiktok').length
-  const xMentions = playerMentions.filter(m => m.channel === 'x').length
-  const redditMentions = playerMentions.filter(m => m.channel === 'reddit').length
+  const tiktokMentions = playerMentions.filter(m => m.channel === 'tiktok' || m.channel === 'tiktok_comment').length
+  const xMentions = playerMentions.filter(m => m.channel === 'x' || m.channel === 'x_influencer').length
+  const redditMentions = playerMentions.filter(m => m.channel === 'reddit' || m.channel === 'reddit_comment').length
   const igCommentMentions = playerMentions.filter(m => m.channel === 'ig_comment').length
 
   const dataCoverage: DataCoverage = {

@@ -24,6 +24,7 @@ const I = {
   change: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 17 9 11 13 15 21 7"/><line x1="13" y1="3" x2="13" y2="21" strokeDasharray="3 3"/></svg>,
   board: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="5" height="10"/><rect x="9.5" y="6" width="5" height="15"/><rect x="16" y="2" width="5" height="19"/></svg>,
   crisis: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+  ask: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg>,
 }
 
 const ChevronLeft = () => (
@@ -44,6 +45,7 @@ const navGroups: NavGroup[] = [
   {
     heading: 'Analytics',
     items: [
+      { href: '/v2/ask-intel',   label: 'Ask Intel',          ic: I.ask },
       { href: '/v2',             label: 'Executive Overview', ic: I.overview },
       { href: '/v2/community-intel', label: 'Community Intel', ic: I.comments },
       { href: '/v2/influencers', label: 'Influencer Intel', ic: I.inf },
