@@ -3,10 +3,13 @@
 import { useEffect, useState } from 'react'
 import {
   fetchBrands, fetchIG, fetchTopIGPosts, fetchPostFrequency, fetchIGCommentMentions,
-  type V2Brand, type V2IGRow, type V2TopIGPost, type V2IGMentionRow,
+  fetchIGDominantTheme,
+  type V2Brand, type V2IGRow, type V2TopIGPost, type V2IGMentionRow, type V2IGTheme,
 } from '@/lib/v2/data'
 import { fmt, LineChart, EngagementQualityMatrix } from '@/components/v2/charts'
 import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
+import { instagramPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
@@ -54,6 +57,7 @@ export default function InstagramPage() {
   const [freq, setFreq] = useState<Record<string, number[][]>>({})
   const [paddleMentions, setPaddleMentions] = useState<V2IGMentionRow[]>([])
   const [playerMentions, setPlayerMentions] = useState<V2IGMentionRow[]>([])
+  const [themes, setThemes] = useState<V2IGTheme[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
@@ -68,16 +72,18 @@ export default function InstagramPage() {
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
-        const [i, p, f, pm, plm] = await Promise.all([
+        const [i, p, f, pm, plm, th] = await Promise.all([
           fetchIG(b),
           fetchTopIGPosts(b, 200),
           fetchPostFrequency(b),
           fetchIGCommentMentions(b, 'paddle', 30),
           fetchIGCommentMentions(b, 'player', 30),
+          fetchIGDominantTheme(b),
         ])
         setBrands(b); setAllBrands(b)
         setIg(i); setPosts(p); setFreq(f)
         setPaddleMentions(pm); setPlayerMentions(plm)
+        setThemes(th)
         setLoading(false)
       } catch (err) {
         console.error('Instagram data fetch failed', err)
@@ -206,6 +212,110 @@ export default function InstagramPage() {
     <>
       <PageHead title="INSTAGRAM" />
       <FilterBanner />
+
+      <PlatformPlaybook
+        title="Instagram Playbook"
+        sub="Rule-derived competitor moves + recommended JOOLA actions, computed from the same data this page renders."
+        findings={instagramPlaybook(brands, displayIg, displayPosts, themes)}
+        brands={brands}
+      />
+
+      <section style={{ marginBottom: 28 }}>
+        <div className="two-col-even">
+          <div>
+            <div className="section-head">
+              <div>
+                <h2>
+                  Content format mix · by brand
+                  <SectionInfo
+                    title="Best-performing format per brand"
+                    description="Average likes per post grouped by Instagram post format (Reel/Video, Carousel, Image). Highlights which format earns the most engagement for each competitor — and where JOOLA may be under-investing."
+                    source="ig_posts.post_format · GROUP BY (brand, format), AVG(like_count)"
+                  />
+                </h2>
+                <div className="sub">Average likes per post by format · top 6 brands by sample size.</div>
+              </div>
+            </div>
+            <div className="card"><div className="card-pad">
+              {(() => {
+                type FmtAgg = { reel: { sum: number; n: number }; car: { sum: number; n: number }; img: { sum: number; n: number } }
+                const agg: Record<string, FmtAgg> = {}
+                displayPosts.forEach((p) => {
+                  if (!agg[p.brand]) agg[p.brand] = { reel: { sum: 0, n: 0 }, car: { sum: 0, n: 0 }, img: { sum: 0, n: 0 } }
+                  if (isVideoFormat(p.format)) { agg[p.brand].reel.sum += p.likes; agg[p.brand].reel.n++ }
+                  else if (isCarouselFormat(p.format)) { agg[p.brand].car.sum += p.likes; agg[p.brand].car.n++ }
+                  else if (isImageFormat(p.format)) { agg[p.brand].img.sum += p.likes; agg[p.brand].img.n++ }
+                })
+                const rows = Object.entries(agg).map(([brand, x]) => ({
+                  brand,
+                  reel: x.reel.n ? x.reel.sum / x.reel.n : 0,
+                  car: x.car.n ? x.car.sum / x.car.n : 0,
+                  img: x.img.n ? x.img.sum / x.img.n : 0,
+                  n: x.reel.n + x.car.n + x.img.n,
+                })).filter((r) => r.n >= 3).sort((a, b) => b.n - a.n).slice(0, 6)
+                if (rows.length === 0) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>No posts in current filter window.</div>
+                const max = Math.max(1, ...rows.flatMap(r => [r.reel, r.car, r.img]))
+                return (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 10 }}>
+                    {rows.map((r) => (
+                      <div key={r.brand} className={'bar-row ' + (r.brand === 'joola' ? 'joola' : '')} style={{ gridTemplateColumns: '110px 1fr 1fr 1fr' }}>
+                        <div className="lbl" style={{ fontWeight: 700 }}>{name(r.brand)}</div>
+                        <div className="track" title={`Reel avg likes: ${fmt(Math.round(r.reel))}`}>
+                          <div className="fill" style={{ width: Math.max(2, r.reel / max * 100) + '%', background: pgColor(r.brand) }} />
+                          <span style={{ fontSize: 10, color: 'var(--fg-3)', marginLeft: 6 }}>Reel {fmt(Math.round(r.reel))}</span>
+                        </div>
+                        <div className="track" title={`Carousel avg likes: ${fmt(Math.round(r.car))}`}>
+                          <div className="fill" style={{ width: Math.max(2, r.car / max * 100) + '%', background: pgColor(r.brand) + 'aa' }} />
+                          <span style={{ fontSize: 10, color: 'var(--fg-3)', marginLeft: 6 }}>Car {fmt(Math.round(r.car))}</span>
+                        </div>
+                        <div className="track" title={`Image avg likes: ${fmt(Math.round(r.img))}`}>
+                          <div className="fill" style={{ width: Math.max(2, r.img / max * 100) + '%', background: pgColor(r.brand) + '66' }} />
+                          <span style={{ fontSize: 10, color: 'var(--fg-3)', marginLeft: 6 }}>Img {fmt(Math.round(r.img))}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </div></div>
+          </div>
+
+          <div>
+            <div className="section-head">
+              <div>
+                <h2>
+                  Dominant content theme · by brand
+                  <SectionInfo
+                    title="AI-tagged dominant theme"
+                    description="The single most frequent content theme detected by the GPT-4o-mini enricher over each brand's last 30 IG posts. Reveals each brand's editorial 'lane' on Instagram."
+                    source="ig_profiles_weekly.dominant_content_theme · latest week per brand"
+                  />
+                </h2>
+                <div className="sub">Latest weekly snapshot per brand.</div>
+              </div>
+            </div>
+            <div className="card"><div className="card-pad">
+              {themes.filter(t => t.theme).length === 0 ? (
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+                  No dominant theme detected yet — re-run IG enrichment.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+                  {themes.filter(t => t.theme).map((t) => (
+                    <div key={t.brand} className={'kpi ' + (t.brand === 'joola' ? 'joola' : '')} style={{ padding: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <span className="brand-dot" style={{ background: pgColor(t.brand) }} />
+                        <span style={{ fontWeight: 700, color: t.brand === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 11 }}>{name(t.brand)}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--fg)' }}>"{t.theme}"</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div></div>
+          </div>
+        </div>
+      </section>
 
       <section id="instagram-posts-table">
         <div className="section-head">

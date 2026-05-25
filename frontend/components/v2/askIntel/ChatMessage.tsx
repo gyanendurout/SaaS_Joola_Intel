@@ -1,8 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import type { ChatTurn, FollowUp } from '@/lib/v2/askIntel/types'
 import { ResponseRenderer } from './ResponseRenderer'
 import { MethodologyAccordion } from './MethodologyAccordion'
+
+type FeedbackState = 'idle' | 'sending' | 'thanks' | 'error'
 
 export function ChatMessage({
   turn,
@@ -107,11 +110,126 @@ export function ChatMessage({
             )}
 
             <MethodologyAccordion response={r} />
+
+            <FeedbackButtons
+              messageId={r.messageId ?? null}
+              question={r.answer ?? turn.content ?? ''}
+            />
           </>
         ) : (
           <div style={{ color: 'var(--fg-4)', fontSize: 12 }}>{turn.content}</div>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Thumbs-up/down feedback widget. ALWAYS rendered on AI messages.
+ * On click:
+ *  1. Always writes a JSON entry to localStorage under
+ *     `ask_intel_feedback_log` (capped to last 500 entries).
+ *  2. If `messageId` is present (migration 017 applied + QA log row
+ *     created), additionally POSTs to /api/v2/ask-intel/feedback.
+ *     API failures are swallowed so the widget still flips to
+ *     "thanks" — the localStorage fallback is the source of truth
+ *     when the server-side log isn't available.
+ */
+function FeedbackButtons({
+  messageId,
+  question,
+}: {
+  messageId: string | null
+  question: string
+}) {
+  const [state, setState] = useState<FeedbackState>('idle')
+  const [picked, setPicked] = useState<'up' | 'down' | null>(null)
+
+  const send = async (kind: 'up' | 'down') => {
+    if (state === 'sending' || state === 'thanks') return
+    setState('sending')
+    setPicked(kind)
+
+    const synthId =
+      messageId ||
+      (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `local-${Date.now()}`)
+    const entry = {
+      messageId: synthId,
+      question,
+      feedback: kind,
+      timestamp: new Date().toISOString(),
+    }
+
+    // Always log to localStorage (fallback when migration 017 not applied).
+    try {
+      const existing = JSON.parse(
+        localStorage.getItem('ask_intel_feedback_log') || '[]',
+      ) as unknown[]
+      existing.push(entry)
+      localStorage.setItem(
+        'ask_intel_feedback_log',
+        JSON.stringify(existing.slice(-500)),
+      )
+    } catch {
+      // localStorage may be unavailable (SSR / privacy mode); swallow.
+    }
+
+    // Best-effort server-side log. Silently ignore failures.
+    if (messageId) {
+      try {
+        await fetch('/api/v2/ask-intel/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messageId, feedback: kind }),
+        })
+      } catch {
+        // ignore — localStorage entry is the durable record.
+      }
+    }
+
+    setState('thanks')
+  }
+
+  return (
+    <div style={{
+      marginTop: 12, display: 'flex', alignItems: 'center', gap: 8,
+      paddingTop: 10,
+      borderTop: '1px dashed rgba(255,255,255,0.06)',
+    }}>
+      <span style={{
+        fontSize: 10, color: 'var(--fg-4)',
+        letterSpacing: '0.1em', textTransform: 'uppercase',
+      }}>Was this helpful?</span>
+      <button
+        onClick={() => send('up')}
+        disabled={state === 'sending' || state === 'thanks'}
+        title="Helpful"
+        style={{
+          background: picked === 'up' ? 'rgba(34,197,94,0.18)' : 'transparent',
+          border: '1px solid ' + (picked === 'up' ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.12)'),
+          color: picked === 'up' ? '#22c55e' : 'var(--fg-3)',
+          padding: '3px 8px', borderRadius: 3, fontSize: 12, cursor: 'pointer',
+        }}
+      >👍</button>
+      <button
+        onClick={() => send('down')}
+        disabled={state === 'sending' || state === 'thanks'}
+        title="Not helpful"
+        style={{
+          background: picked === 'down' ? 'rgba(239,68,68,0.18)' : 'transparent',
+          border: '1px solid ' + (picked === 'down' ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)'),
+          color: picked === 'down' ? '#ef4444' : 'var(--fg-3)',
+          padding: '3px 8px', borderRadius: 3, fontSize: 12, cursor: 'pointer',
+        }}
+      >👎</button>
+      {state === 'thanks' && (
+        <span style={{ fontSize: 10, color: '#22c55e' }}>Thanks — logged.</span>
+      )}
+      {state === 'error' && (
+        <span style={{ fontSize: 10, color: '#ef4444' }}>Couldn't save feedback.</span>
+      )}
     </div>
   )
 }

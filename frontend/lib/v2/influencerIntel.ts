@@ -881,3 +881,430 @@ export async function fetchInfluencerIntel(
 
 // Silence "unused" warning on bidBySlug for callers that may want this map later.
 export type _UnusedHelper = { bidBySlug: Record<string, string> }
+
+// ─── Extended types for new influencer-intel sections ─────────────────
+
+export interface AthleteImpactRow {
+  athleteId: string
+  player: string
+  brandSlug: string
+  posts30d: number
+  avgEngagement: number
+  mentions: number
+  followerGrowthPct: number
+  productMentions: number
+  positivePct: number
+  impactScore: number
+  classification: 'rising' | 'underperforming' | 'steady'
+}
+
+export interface SponsoredOrganicRow {
+  athleteId: string
+  player: string
+  brandSlug: string
+  sponsoredPosts: number
+  organicPosts: number
+  sponsoredER: number
+  organicER: number
+  difference: number
+  recommendation: string
+}
+
+export interface AthleteProductPullRow {
+  athleteId: string
+  player: string
+  brandSlug: string
+  productName: string
+  productBrandSlug: string
+  mentions: number
+  engagement: number
+  salesLikelihood: number
+  action: string
+}
+
+export interface CompetitorThreatRow {
+  athleteId: string
+  player: string
+  brandSlug: string
+  topPlatform: IntelPlatform
+  topPlatformCount: number
+  engagement: number
+  productMentioned: string | null
+  impactScore: number
+  threatLevel: 'critical' | 'high' | 'moderate' | 'low'
+}
+
+// ─── Extended fetchers ────────────────────────────────────────────────
+
+/**
+ * Athlete Impact Score — composite "ROI-proxy" per player.
+ * Uses influencer_posts (last 30d), mention_facts, influencer_x_snapshots.
+ */
+export async function fetchAthleteImpact(brands: V2Brand[]): Promise<AthleteImpactRow[]> {
+  const slugByBid: Record<string, string> = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
+
+  const cutoffIso = new Date(Date.now() - 30 * 86_400_000).toISOString()
+
+  const [infs, posts, mentions, xSnap] = await Promise.all([
+    safeSelect<any>(() => supabase.from('influencers')
+      .select('id,name,brand_id,follower_count_ig')),
+    safeSelect<any>(() => supabase.from('influencer_posts')
+      .select('id,influencer_id,like_count,comment_count,view_count,posted_at,sentiment')
+      .gte('posted_at', cutoffIso)
+      .limit(5000)),
+    safeSelect<any>(() => supabase.from('mention_facts')
+      .select('athlete_id,product_id,sentiment_label')
+      .not('athlete_id', 'is', null)
+      .limit(10000)),
+    safeSelect<any>(() => supabase.from('influencer_x_snapshots')
+      .select('influencer_id,followers,week_number,year,scraped_at')
+      .order('scraped_at', { ascending: false })
+      .limit(5000)),
+  ])
+
+  type Agg = {
+    posts30d: number
+    engagementSum: number
+    mentions: number
+    productMentions: number
+    positiveCount: number
+    sentimentTotal: number
+  }
+  const aggByAth: Record<string, Agg> = {}
+  function bump(id: string): Agg {
+    if (!aggByAth[id]) {
+      aggByAth[id] = {
+        posts30d: 0, engagementSum: 0, mentions: 0,
+        productMentions: 0, positiveCount: 0, sentimentTotal: 0,
+      }
+    }
+    return aggByAth[id]
+  }
+
+  for (const p of posts) {
+    if (!p.influencer_id) continue
+    const a = bump(p.influencer_id)
+    a.posts30d += 1
+    a.engagementSum += (p.like_count || 0) + (p.comment_count || 0)
+  }
+  for (const m of mentions) {
+    if (!m.athlete_id) continue
+    const a = bump(m.athlete_id)
+    a.mentions += 1
+    if (m.product_id) a.productMentions += 1
+    a.sentimentTotal += 1
+    if (m.sentiment_label === 'positive') a.positiveCount += 1
+  }
+
+  // Follower growth: latest two snapshots per influencer.
+  const snapByAth: Record<string, { followers: number; scraped_at: string }[]> = {}
+  for (const s of xSnap) {
+    if (!s.influencer_id) continue
+    if (!snapByAth[s.influencer_id]) snapByAth[s.influencer_id] = []
+    snapByAth[s.influencer_id].push({ followers: s.followers || 0, scraped_at: s.scraped_at })
+  }
+  const growthByAth: Record<string, number> = {}
+  for (const [id, list] of Object.entries(snapByAth)) {
+    list.sort((a, b) => (b.scraped_at || '').localeCompare(a.scraped_at || ''))
+    if (list.length >= 2) {
+      const cur = list[0].followers
+      const prev = list[1].followers
+      growthByAth[id] = prev > 0 ? Number((((cur - prev) / prev) * 100).toFixed(2)) : 0
+    }
+  }
+
+  // Build rows with composite score (normalize each dim 0..1, then sum × 100).
+  const raw = infs.map((i): {
+    athleteId: string; player: string; brandSlug: string;
+    posts30d: number; avgEngagement: number; mentions: number;
+    growth: number; productMentions: number; positivePct: number;
+  } => {
+    const a = aggByAth[i.id] || { posts30d: 0, engagementSum: 0, mentions: 0, productMentions: 0, positiveCount: 0, sentimentTotal: 0 }
+    const avgEng = a.posts30d > 0 ? Math.round(a.engagementSum / a.posts30d) : 0
+    const posPct = a.sentimentTotal > 0 ? Math.round((a.positiveCount / a.sentimentTotal) * 100) : 0
+    return {
+      athleteId: i.id,
+      player: i.name || '?',
+      brandSlug: slugByBid[i.brand_id] || 'unknown',
+      posts30d: a.posts30d,
+      avgEngagement: avgEng,
+      mentions: a.mentions,
+      growth: growthByAth[i.id] || 0,
+      productMentions: a.productMentions,
+      positivePct: posPct,
+    }
+  })
+
+  const maxPosts = Math.max(1, ...raw.map(r => r.posts30d))
+  const maxEng = Math.max(1, ...raw.map(r => r.avgEngagement))
+  const maxMentions = Math.max(1, ...raw.map(r => r.mentions))
+  const maxGrowth = Math.max(1, ...raw.map(r => Math.abs(r.growth)))
+  const maxProduct = Math.max(1, ...raw.map(r => r.productMentions))
+
+  const rows: AthleteImpactRow[] = raw.map((r): AthleteImpactRow => {
+    const score =
+      ((r.posts30d / maxPosts) +
+        (r.avgEngagement / maxEng) +
+        (r.mentions / maxMentions) +
+        (Math.max(0, r.growth) / maxGrowth) +
+        (r.productMentions / maxProduct) +
+        (r.positivePct / 100)) / 6 * 100
+    return {
+      athleteId: r.athleteId,
+      player: r.player,
+      brandSlug: r.brandSlug,
+      posts30d: r.posts30d,
+      avgEngagement: r.avgEngagement,
+      mentions: r.mentions,
+      followerGrowthPct: r.growth,
+      productMentions: r.productMentions,
+      positivePct: r.positivePct,
+      impactScore: Number(score.toFixed(1)),
+      classification: 'steady',
+    }
+  }).sort((a, b) => b.impactScore - a.impactScore)
+
+  rows.forEach((r, i) => {
+    if (i < 10) r.classification = 'rising'
+    else if (i >= rows.length - 10 && rows.length > 20) r.classification = 'underperforming'
+  })
+  return rows
+}
+
+/**
+ * Sponsored vs Organic Performance — compares ER on sponsored vs organic
+ * influencer_posts. ER capped at 100% to avoid micro-account distortion.
+ */
+export async function fetchSponsoredVsOrganic(brands: V2Brand[]): Promise<SponsoredOrganicRow[]> {
+  const slugByBid: Record<string, string> = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
+
+  const [infs, posts] = await Promise.all([
+    safeSelect<any>(() => supabase.from('influencers').select('id,name,brand_id,follower_count_ig')),
+    safeSelect<any>(() => supabase.from('influencer_posts')
+      .select('influencer_id,like_count,comment_count,is_sponsored')
+      .limit(10000)),
+  ])
+
+  type B = { sumEr: number; n: number }
+  const sp: Record<string, B> = {}
+  const og: Record<string, B> = {}
+  const infById: Record<string, any> = {}
+  for (const i of infs) infById[i.id] = i
+
+  for (const p of posts) {
+    const inf = infById[p.influencer_id]
+    if (!inf) continue
+    const followers = inf.follower_count_ig || 0
+    if (followers <= 0) continue
+    const er = Math.min(100, ((p.like_count || 0) + (p.comment_count || 0)) / followers * 100)
+    const bucket = p.is_sponsored ? sp : og
+    if (!bucket[p.influencer_id]) bucket[p.influencer_id] = { sumEr: 0, n: 0 }
+    bucket[p.influencer_id].sumEr += er
+    bucket[p.influencer_id].n += 1
+  }
+
+  const allIdsSet = new Set<string>()
+  Object.keys(sp).forEach(k => allIdsSet.add(k))
+  Object.keys(og).forEach(k => allIdsSet.add(k))
+  const allIds = Array.from(allIdsSet)
+  const rows: SponsoredOrganicRow[] = []
+  for (const id of allIds) {
+    const inf = infById[id]
+    if (!inf) continue
+    const s = sp[id] || { sumEr: 0, n: 0 }
+    const o = og[id] || { sumEr: 0, n: 0 }
+    const sER = s.n > 0 ? Number((s.sumEr / s.n).toFixed(2)) : 0
+    const oER = o.n > 0 ? Number((o.sumEr / o.n).toFixed(2)) : 0
+    if (s.n === 0 && o.n === 0) continue
+    let rec = 'Insufficient data — gather more posts.'
+    if (s.n > 0 && o.n > 0) {
+      const ratio = oER > 0 ? sER / oER : 0
+      if (ratio < 0.5) rec = 'Sponsored content underperforming — review content fit.'
+      else if (ratio > 1.5) rec = 'Sponsored format strong — scale program.'
+      else rec = 'Sponsored matches organic — healthy balance.'
+    } else if (s.n === 0) {
+      rec = 'No sponsored posts yet — pilot a campaign.'
+    } else {
+      rec = 'No organic baseline — encourage organic cadence.'
+    }
+    rows.push({
+      athleteId: id,
+      player: inf.name || '?',
+      brandSlug: slugByBid[inf.brand_id] || 'unknown',
+      sponsoredPosts: s.n,
+      organicPosts: o.n,
+      sponsoredER: sER,
+      organicER: oER,
+      difference: Number((sER - oER).toFixed(2)),
+      recommendation: rec,
+    })
+  }
+  return rows.sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference))
+}
+
+/**
+ * Athlete-to-Product Pull — mention_facts where athlete_id AND product_id.
+ * Optionally enriched with product_attention_daily for sales-likelihood.
+ */
+export async function fetchAthleteProductPull(brands: V2Brand[]): Promise<AthleteProductPullRow[]> {
+  const slugByBid: Record<string, string> = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
+
+  const [infs, mentions] = await Promise.all([
+    safeSelect<any>(() => supabase.from('influencers').select('id,name,brand_id')),
+    safeSelect<any>(() => supabase.from('mention_facts')
+      .select('athlete_id,product_id,sentiment_label,is_purchase_intent')
+      .not('athlete_id', 'is', null)
+      .not('product_id', 'is', null)
+      .limit(10000)),
+  ])
+
+  const productIds = Array.from(new Set(mentions.map(m => m.product_id).filter(Boolean)))
+  let productMap: Record<string, { name: string; brandSlug: string }> = {}
+  if (productIds.length > 0) {
+    const prods = await safeSelect<any>(() =>
+      supabase.from('products_catalog').select('id,display_name,brand_id').in('id', productIds))
+    for (const p of prods) {
+      productMap[p.id] = {
+        name: p.display_name || '',
+        brandSlug: slugByBid[p.brand_id] || 'unknown',
+      }
+    }
+  }
+
+  // Optional sales-likelihood lookup
+  let likelihoodByProduct: Record<string, number> = {}
+  if (productIds.length > 0) {
+    const att = await safeSelect<any>(() =>
+      supabase.from('product_attention_summary')
+        .select('product_id,sales_likelihood_score')
+        .in('product_id', productIds)
+        .eq('period', 'last_30d'))
+    for (const a of att) {
+      likelihoodByProduct[a.product_id] = Number(a.sales_likelihood_score || 0)
+    }
+  }
+
+  const infById: Record<string, any> = {}
+  for (const i of infs) infById[i.id] = i
+
+  type Bucket = {
+    athleteId: string; player: string; brandSlug: string;
+    productName: string; productBrandSlug: string; productId: string;
+    mentions: number; engagement: number;
+    purchaseIntent: number;
+  }
+  const map = new Map<string, Bucket>()
+  for (const m of mentions) {
+    const inf = infById[m.athlete_id]
+    if (!inf) continue
+    const prod = productMap[m.product_id]
+    if (!prod) continue
+    const key = `${m.athlete_id}::${m.product_id}`
+    if (!map.has(key)) {
+      map.set(key, {
+        athleteId: m.athlete_id,
+        player: inf.name || '?',
+        brandSlug: slugByBid[inf.brand_id] || 'unknown',
+        productName: prod.name,
+        productBrandSlug: prod.brandSlug,
+        productId: m.product_id,
+        mentions: 0,
+        engagement: 0,
+        purchaseIntent: 0,
+      })
+    }
+    const b = map.get(key)!
+    b.mentions += 1
+    if (m.is_purchase_intent) b.purchaseIntent += 1
+  }
+
+  const rows: AthleteProductPullRow[] = Array.from(map.values()).map(b => {
+    const likelihood = likelihoodByProduct[b.productId] || 0
+    let action = 'Monitor cadence.'
+    if (b.brandSlug === 'joola' && b.productBrandSlug === 'joola') {
+      action = likelihood > 50 ? 'Amplify — JOOLA player + JOOLA paddle resonating.' : 'Coordinate content push.'
+    } else if (b.brandSlug === 'joola' && b.productBrandSlug !== 'joola') {
+      action = 'Investigate — JOOLA athlete mentioning competitor product.'
+    } else if (b.productBrandSlug === 'joola') {
+      action = 'Capture — competitor athlete mentioning JOOLA paddle.'
+    } else if (likelihood > 60) {
+      action = 'Track — high-intent competitor pairing.'
+    }
+    return {
+      athleteId: b.athleteId,
+      player: b.player,
+      brandSlug: b.brandSlug,
+      productName: b.productName,
+      productBrandSlug: b.productBrandSlug,
+      mentions: b.mentions,
+      engagement: b.engagement,
+      salesLikelihood: Number(likelihood.toFixed(1)),
+      action,
+    }
+  })
+  return rows.sort((a, b) => b.mentions - a.mentions)
+}
+
+/**
+ * Competitor Athlete Threats — top 10 competitor athletes by impact score.
+ */
+export async function fetchCompetitorAthleteThreats(
+  brands: V2Brand[],
+  impactRows: AthleteImpactRow[],
+  platformStats: PlatformAttention[],
+  productConnections: PlayerProductConnection[],
+): Promise<CompetitorThreatRow[]> {
+  const competitorOnly = impactRows.filter(r => r.brandSlug !== 'joola' && r.brandSlug !== 'unknown')
+  // Compute per-brand percentile for threat-level classification
+  const byBrand: Record<string, AthleteImpactRow[]> = {}
+  for (const r of competitorOnly) {
+    if (!byBrand[r.brandSlug]) byBrand[r.brandSlug] = []
+    byBrand[r.brandSlug].push(r)
+  }
+  for (const slug of Object.keys(byBrand)) {
+    byBrand[slug].sort((a, b) => b.impactScore - a.impactScore)
+  }
+
+  const rows: CompetitorThreatRow[] = competitorOnly.map(r => {
+    // Find dominant platform
+    const att = platformStats.find(p => p.player === r.player && p.brandSlug === r.brandSlug)
+    const platCounts: Record<IntelPlatform, number> = {
+      ig: att?.ig || 0, yt: att?.yt || 0, tiktok: att?.tiktok || 0,
+      x: att?.x || 0, reddit: att?.reddit || 0,
+    }
+    let top: IntelPlatform = 'ig'
+    let topN = 0
+    for (const [k, v] of Object.entries(platCounts) as [IntelPlatform, number][]) {
+      if (v > topN) { topN = v; top = k }
+    }
+
+    // Product mentioned (first connection for player)
+    const conn = productConnections.find(c => c.player === r.player && c.brandSlug === r.brandSlug)
+    const productMentioned = conn ? conn.productName : null
+
+    // Threat level: top quartile within brand = critical, etc.
+    const brandList = byBrand[r.brandSlug] || []
+    const idx = brandList.findIndex(b => b.athleteId === r.athleteId)
+    const pct = brandList.length > 0 ? idx / brandList.length : 1
+    let threatLevel: CompetitorThreatRow['threatLevel'] = 'low'
+    if (pct < 0.1) threatLevel = 'critical'
+    else if (pct < 0.25) threatLevel = 'high'
+    else if (pct < 0.5) threatLevel = 'moderate'
+
+    return {
+      athleteId: r.athleteId,
+      player: r.player,
+      brandSlug: r.brandSlug,
+      topPlatform: top,
+      topPlatformCount: topN,
+      engagement: att?.engagement || r.avgEngagement,
+      productMentioned,
+      impactScore: r.impactScore,
+      threatLevel,
+    }
+  })
+    .sort((a, b) => b.impactScore - a.impactScore)
+    .slice(0, 10)
+
+  return rows
+}

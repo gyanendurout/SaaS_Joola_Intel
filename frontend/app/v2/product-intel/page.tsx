@@ -13,13 +13,24 @@ import {
 import { LineChart, BoxPlot, fmt, type LineSeries } from '@/components/v2/charts'
 import { LeaderboardTable } from '@/components/v2/charts/LeaderboardTable'
 import { TableSearch } from '@/components/v2/TableSearch'
+import { ActionFrame, Caveat } from '@/components/v2/ActionFrame'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import {
   fetchProductIntel,
+  fetchCompetitorAttackMap,
+  fetchAttentionFunnel,
+  fetchProductChannelSplit,
+  fetchLaunchTracker,
+  fetchUnmatchedProductMentions,
   type ProductIntelData,
   type RawCatalogProduct,
   type CuratedProduct,
   type AttentionSummaryRow,
+  type AttackMapRow,
+  type FunnelRow,
+  type ChannelSplitRow,
+  type LaunchTrackerData,
+  type UnmatchedMentionRow,
 } from '@/lib/v2/productIntel'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange } from '@/lib/v2/DateRangeContext'
@@ -58,6 +69,13 @@ export default function ProductIntelPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [intel, setIntel] = useState<ProductIntelData | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // ── New section state (Sections A-E) ──────────────────────────────
+  const [attackMap, setAttackMap] = useState<AttackMapRow[]>([])
+  const [funnelRows, setFunnelRows] = useState<FunnelRow[]>([])
+  const [channelSplit, setChannelSplit] = useState<ChannelSplitRow[]>([])
+  const [launchData, setLaunchData] = useState<LaunchTrackerData | null>(null)
+  const [unmatchedRows, setUnmatchedRows] = useState<UnmatchedMentionRow[]>([])
 
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { effectiveFrom, effectiveTo } = useDateRange()
@@ -98,6 +116,21 @@ export default function ProductIntelPage() {
         setBrands(b)
         setAllBrands(b)
         setIntel(data)
+
+        // Fire the new sections in parallel — they fail soft to empty arrays.
+        const [attack, funnel, split, launches, unmatched] = await Promise.all([
+          fetchCompetitorAttackMap(b).catch(() => [] as AttackMapRow[]),
+          fetchAttentionFunnel(b).catch(() => [] as FunnelRow[]),
+          fetchProductChannelSplit(b).catch(() => [] as ChannelSplitRow[]),
+          fetchLaunchTracker(b).catch(() => ({ rows: [], totalProducts: 0, productsWithLaunchDate: 0 } as LaunchTrackerData)),
+          fetchUnmatchedProductMentions(b).catch(() => [] as UnmatchedMentionRow[]),
+        ])
+        if (cancelled) return
+        setAttackMap(attack)
+        setFunnelRows(funnel)
+        setChannelSplit(split)
+        setLaunchData(launches)
+        setUnmatchedRows(unmatched)
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -1008,6 +1041,383 @@ export default function ProductIntelPage() {
             </table>
           </div>
         </div>
+      </section>
+
+      {/* ─── NEW SECTIONS · Product Intel Expansion (2026-05-25) ──── */}
+
+      {/* ── A. Competitor product attack map ────────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              A. Competitor product attack map · top {attackMap.filter(r => allowedSlugs.has(r.brandSlug)).length} rows
+              <SectionInfo
+                title="Competitor Attack Map"
+                description="Non-JOOLA paddles ranked by 30-day attention. Growth uses last 7d × (30/7) versus 30d total as a momentum proxy. Main channel is the highest per-channel mention column for the period. Closest JOOLA paddle is matched within the same category, ranked by JOOLA attention."
+                source="product_attention_summary (last_7d + last_30d) · product_attention_daily (per-channel) · products_catalog · products"
+              />
+            </h2>
+            <div className="sub">Where competitors are winning right now — and the JOOLA paddle to counter with.</div>
+          </div>
+        </div>
+        <div className="card">
+          {attackMap.filter(r => allowedSlugs.has(r.brandSlug)).length === 0 ? (
+            <div style={emptyStyle}>No competitor attack rows for the current brand filter / window.</div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+              <table className="data" style={{ width: '100%' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                  <tr>
+                    <th>Competitor product</th>
+                    <th>Brand</th>
+                    <th style={{ textAlign: 'right' }}>7d</th>
+                    <th style={{ textAlign: 'right' }}>30d</th>
+                    <th style={{ textAlign: 'right' }}>Growth</th>
+                    <th>Main channel</th>
+                    <th>Closest JOOLA paddle</th>
+                    <th style={{ textAlign: 'right' }}>Gap</th>
+                    <th>Recommended response</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {attackMap.filter(r => allowedSlugs.has(r.brandSlug)).map((r) => {
+                    const grow = r.growthPct
+                    const growColor = grow == null ? 'var(--fg-4)' : grow > 0 ? '#22c55e' : grow < 0 ? '#ef4444' : 'var(--fg-3)'
+                    return (
+                      <tr key={r.productId}>
+                        <td style={{ color: 'var(--fg)', fontWeight: 600 }}>{r.productName}</td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="brand-dot" style={{ background: pgColor(r.brandSlug) }} />
+                            <span style={{ fontWeight: 700, color: pgColor(r.brandSlug), fontSize: 11.5 }}>{r.brandName}</span>
+                          </span>
+                        </td>
+                        <td style={cellNumStyle}>{r.attention7d > 0 ? fmt(r.attention7d) : '—'}</td>
+                        <td style={{ ...cellNumStyle, color: '#fff', fontWeight: 700 }}>{fmt(r.attention30d)}</td>
+                        <td style={{ ...cellNumStyle, color: growColor, fontWeight: 700 }}>
+                          {grow == null ? '—' : (grow > 0 ? '+' : '') + grow + '%'}
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--fg-2)' }}>{r.mainChannel}</td>
+                        <td style={{ color: '#22c55e', fontSize: 11.5, fontWeight: 600 }}>{r.closestJoolaName}</td>
+                        <td style={{ ...cellNumStyle, color: r.gap == null ? 'var(--fg-4)' : r.gap > 0 ? '#22c55e' : '#ef4444' }}>
+                          {r.gap == null ? '—' : (r.gap > 0 ? '+' : '') + fmt(r.gap)}
+                        </td>
+                        <td>
+                          <span className={'pill ' + (r.recommendedResponse.startsWith('Match') ? 'pill-amber' : r.recommendedResponse.startsWith('Push') ? 'pill-green' : 'pill-info')}>
+                            {r.recommendedResponse}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <ActionFrame
+          move="Top competitors are stacking attention on specific paddles (see #1 row above) — often paired with sale prices or stronger main-channel cadence."
+          impact="Mind-share leak. Each week a competitor leads the conversation in a category, JOOLA's comparable paddle drops further down consideration sets and into longer review cycles."
+          action="For each row, brief the social team to mirror the dominant channel within 7 days and route any JOOLA paddle with negative gap into the next promo cycle."
+        />
+        <Caveat tables={['product_attention_summary (last_7d, last_30d)', 'product_attention_daily', 'products_catalog', 'products']} />
+      </section>
+
+      {/* ── B. Product attention funnel ─────────────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              B. Product attention funnel · top {funnelRows.filter(r => allowedSlugs.has(r.brandSlug)).length} paddles
+              <SectionInfo
+                title="Attention Funnel"
+                description="Five-step funnel per paddle for the trailing 30 days: mentions → positive sentiment % → purchase-intent count → modelled sales-likelihood (0–100) → inventory moves (restocks + sellouts). Sales-likelihood is NOT confirmed revenue; it is the AI-derived attention proxy."
+                source="product_attention_daily (last 30d) · inventory_events (restock + sellout, last 30d)"
+              />
+            </h2>
+            <div className="sub">JOOLA paddles render first when present; everything below is sorted by mentions.</div>
+          </div>
+        </div>
+        <div className="card">
+          {funnelRows.filter(r => allowedSlugs.has(r.brandSlug)).length === 0 ? (
+            <div style={emptyStyle}>No funnel data yet — pipeline rolling up.</div>
+          ) : (
+            <div className="card-pad" style={{ display: 'grid', gap: 14 }}>
+              {funnelRows.filter(r => allowedSlugs.has(r.brandSlug)).map((r) => {
+                const maxMentions = Math.max(1, ...funnelRows.map((x) => x.mentions))
+                const stages: { label: string; value: string; pct: number; color: string }[] = [
+                  { label: 'Mentions', value: fmt(r.mentions), pct: Math.max(2, (r.mentions / maxMentions) * 100), color: r.isJoola ? '#22c55e' : pgColor(r.brandSlug) },
+                  { label: 'Positive %', value: r.positivePct + '%', pct: Math.max(2, r.positivePct), color: '#22c55e' },
+                  { label: 'Purchase intent', value: fmt(r.purchaseIntent), pct: Math.max(2, Math.min(100, r.purchaseIntent * 5)), color: '#F5E625' },
+                  { label: 'Sales likelihood', value: String(r.salesLikelihood), pct: Math.max(2, r.salesLikelihood), color: '#06b6d4' },
+                  { label: 'Inventory moves', value: fmt(r.inventoryMoves), pct: Math.max(2, Math.min(100, r.inventoryMoves * 10)), color: '#a855f7' },
+                ]
+                return (
+                  <div key={r.productId} style={{ borderLeft: r.isJoola ? '2px solid #22c55e' : '2px solid transparent', paddingLeft: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: r.isJoola ? '#22c55e' : 'var(--fg)' }}>
+                        {r.productName}
+                      </span>
+                      <span style={{ fontSize: 10.5, color: pgColor(r.brandSlug), fontWeight: 700 }}>
+                        {pgName(r.brandSlug, brands)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6 }}>
+                      {stages.map((s) => (
+                        <div key={s.label} title={`${s.label}: ${s.value}`}>
+                          <div style={{ fontSize: 9, color: 'var(--fg-4)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
+                            {s.label}
+                          </div>
+                          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 3, height: 10, overflow: 'hidden' }}>
+                            <div style={{ width: s.pct + '%', height: 10, background: `linear-gradient(90deg, ${s.color}, ${s.color}99)` }} />
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--fg)', fontFamily: 'JetBrains Mono, monospace', marginTop: 3, fontWeight: 700 }}>{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        <ActionFrame
+          move="High-attention competitor paddles with strong purchase-intent counts (column 3) and inventory moves (column 5) are converting eyeballs to bought paddles."
+          impact="Conversion drag for JOOLA paddles with weaker positive % or sales-likelihood scores even when raw mentions look healthy."
+          action="Audit any JOOLA row whose positive % < 60 or sales-likelihood < 40 — root cause is usually a quality complaint cluster or weak proof content (reviews / video demos)."
+        />
+        <Caveat tables={['product_attention_daily (30d window)', 'inventory_events (restock + sellout, 30d window)']} />
+      </section>
+
+      {/* ── C. Product channel split ────────────────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              C. Product channel split · {channelSplit.filter(r => allowedSlugs.has(r.brandSlug)).length} paddles
+              <SectionInfo
+                title="Channel Split"
+                description="Per-paddle 30-day mention totals broken out across IG, YouTube, Reddit, TikTok, X/Twitter, influencer posts, ads, and promotions. The dominant channel cell is highlighted to show where each paddle's conversation is concentrated."
+                source="product_attention_daily — per-channel mention columns, 30-day sum"
+              />
+            </h2>
+            <div className="sub">Where each paddle's conversation actually lives.</div>
+          </div>
+        </div>
+        <div className="card">
+          {channelSplit.filter(r => allowedSlugs.has(r.brandSlug)).length === 0 ? (
+            <div style={emptyStyle}>No per-channel attention rows for the active brand window.</div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+              <table className="data" style={{ width: '100%' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                  <tr>
+                    <th>Product</th>
+                    <th>Brand</th>
+                    {['IG', 'YouTube', 'Reddit', 'TikTok', 'X', 'Influencer', 'Ads', 'Promos'].map((h) => (
+                      <th key={h} style={{ textAlign: 'right' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {channelSplit.filter(r => allowedSlugs.has(r.brandSlug)).map((r) => {
+                    const channelMap: { key: keyof ChannelSplitRow; label: string }[] = [
+                      { key: 'instagram', label: 'IG' },
+                      { key: 'youtube', label: 'YouTube' },
+                      { key: 'reddit', label: 'Reddit' },
+                      { key: 'tiktok', label: 'TikTok' },
+                      { key: 'twitter', label: 'X' },
+                      { key: 'influencer', label: 'Influencer' },
+                      { key: 'ads', label: 'Ads' },
+                      { key: 'promotions', label: 'Promos' },
+                    ]
+                    return (
+                      <tr key={r.productId} style={{ borderLeft: r.isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                        <td style={{ color: r.isJoola ? '#22c55e' : 'var(--fg)', fontWeight: 600 }}>{r.productName}</td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="brand-dot" style={{ background: pgColor(r.brandSlug) }} />
+                            <span style={{ fontWeight: 700, color: pgColor(r.brandSlug), fontSize: 11.5 }}>{pgName(r.brandSlug, brands)}</span>
+                          </span>
+                        </td>
+                        {channelMap.map((cm) => {
+                          const v = Number(r[cm.key] || 0)
+                          const isDom = cm.key === r.dominantCol
+                          return (
+                            <td
+                              key={String(cm.key)}
+                              style={{
+                                ...cellNumStyle,
+                                fontWeight: isDom ? 800 : 600,
+                                color: v <= 0 ? 'var(--fg-4)' : isDom ? '#F5E625' : 'var(--fg-2)',
+                                background: isDom && v > 0 ? 'rgba(245,230,37,0.08)' : 'transparent',
+                              }}
+                              title={isDom ? 'Dominant channel for this paddle' : undefined}
+                            >
+                              {v > 0 ? fmt(v) : '—'}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <ActionFrame
+          move="Each competitor paddle has a clear conversation home — usually IG or Reddit for premium paddles, TikTok for value, and ads for newer launches."
+          impact="Generic cross-channel briefs underperform paddle-specific ones. JOOLA misses moments where the audience is already concentrated."
+          action="Use the highlighted column to assign one channel owner per JOOLA paddle for the next sprint; cross-post only after the home channel hits 25+ mentions."
+        />
+        <Caveat tables={['product_attention_daily — per-channel mention columns, 30d sum']} />
+      </section>
+
+      {/* ── D. Competitor paddle launch tracker ─────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              D. Paddle launch tracker · {launchData ? launchData.rows.filter(r => allowedSlugs.has(r.brandSlug)).length : 0} launches
+              <SectionInfo
+                title="Launch Tracker"
+                description="For every product in products_catalog with launched_at populated, we compare mentions in the 14 days BEFORE launch (pre-buzz) versus 14 days AFTER (post-buzz). Top channel is the channel that delivered the most post-launch mentions."
+                source="products_catalog (launched_at IS NOT NULL) · product_attention_daily ±14d"
+              />
+            </h2>
+            <div className="sub">Activates as launch dates are populated on competitor + JOOLA paddles.</div>
+          </div>
+        </div>
+        <div className="card">
+          {!launchData || launchData.productsWithLaunchDate === 0 ? (
+            <div style={emptyStyle}>
+              <div>Launch tracker activates when products_catalog.launched_at is populated.</div>
+              <div style={{ marginTop: 6, opacity: 0.7 }}>
+                Currently <strong style={{ color: '#F5E625' }}>{launchData?.productsWithLaunchDate ?? 0}</strong> of{' '}
+                <strong style={{ color: '#F5E625' }}>{launchData?.totalProducts ?? 0}</strong> products have launch dates.
+              </div>
+            </div>
+          ) : launchData.rows.filter(r => allowedSlugs.has(r.brandSlug)).length === 0 ? (
+            <div style={emptyStyle}>No launches match the active brand filter.</div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+              <table className="data" style={{ width: '100%' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                  <tr>
+                    <th>Product</th>
+                    <th>Brand</th>
+                    <th>Launch date</th>
+                    <th style={{ textAlign: 'right' }}>Pre (14d)</th>
+                    <th style={{ textAlign: 'right' }}>Post (14d)</th>
+                    <th>Top channel</th>
+                    <th style={{ textAlign: 'right' }}>Sales likelihood</th>
+                    <th>JOOLA response</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {launchData.rows.filter(r => allowedSlugs.has(r.brandSlug)).map((r) => {
+                    const isJoola = r.brandSlug === 'joola'
+                    return (
+                      <tr key={r.productId} style={{ borderLeft: isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                        <td style={{ color: isJoola ? '#22c55e' : 'var(--fg)', fontWeight: 600 }}>{r.productName}</td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="brand-dot" style={{ background: pgColor(r.brandSlug) }} />
+                            <span style={{ fontWeight: 700, color: pgColor(r.brandSlug), fontSize: 11.5 }}>{r.brandName}</span>
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--fg-2)' }}>{r.launchedAt.slice(0, 10)}</td>
+                        <td style={cellNumStyle}>{r.preBuzz > 0 ? fmt(r.preBuzz) : '—'}</td>
+                        <td style={{ ...cellNumStyle, color: r.postBuzz > r.preBuzz ? '#22c55e' : 'var(--fg-2)', fontWeight: 700 }}>
+                          {r.postBuzz > 0 ? fmt(r.postBuzz) : '—'}
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--fg-2)' }}>{r.topChannel}</td>
+                        <td style={{ ...cellNumStyle, color: r.salesLikelihood >= 50 ? '#22c55e' : r.salesLikelihood >= 25 ? '#F5E625' : 'var(--fg-3)' }}>
+                          {r.salesLikelihood || '—'}
+                        </td>
+                        <td>
+                          <span className="pill pill-info">{r.joolaResponse}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <ActionFrame
+          move="Competitor launches typically generate a 5–10x lift in post-buzz vs pre-buzz on the dominant channel, often piggy-backing on athlete drops or ambassador content."
+          impact="JOOLA launches without a coordinated 14-day post-launch content plan lose the share-of-attention window forever."
+          action="Backfill launched_at on every JOOLA product and require a 14-day post-launch content cadence — minimum 6 IG posts, 2 YouTube videos, and 1 Reddit AMA-style thread."
+        />
+        <Caveat tables={['products_catalog.launched_at', 'product_attention_daily (±14d window)', 'product_attention_summary.sales_likelihood_score']} />
+      </section>
+
+      {/* ── E. Product alias gap finder ─────────────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              E. Product alias gap finder · {unmatchedRows.length} unmatched mentions
+              <SectionInfo
+                title="Alias Gap Finder"
+                description="Free-text product names extracted by the AI enrichment pipeline from comments and posts in the last 90 days, that do NOT match any current products_catalog.aliases entry (case + punctuation insensitive). Each unmatched string is a candidate alias the catalog is missing."
+                source="reddit_mentions, ig_comments, yt_comments, tiktok_videos, tiktok_comments, x_posts — products_mentioned text[] arrays · 90d window"
+              />
+            </h2>
+            <div className="sub">Run these into products_catalog.aliases to widen the AI matcher's coverage.</div>
+          </div>
+        </div>
+        <div className="card">
+          {unmatchedRows.length === 0 ? (
+            <div style={emptyStyle}>No unmatched product mentions in the 90-day window — catalog coverage looks healthy.</div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+              <table className="data" style={{ width: '100%' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                  <tr>
+                    <th>Mention text</th>
+                    <th style={{ textAlign: 'right' }}>Occurrences</th>
+                    <th>Channels seen</th>
+                    <th>Brands talking</th>
+                    <th>Likely owner</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unmatchedRows.map((r) => (
+                    <tr key={r.mention}>
+                      <td style={{ color: 'var(--fg)', fontWeight: 600 }}>{r.displayMention}</td>
+                      <td style={{ ...cellNumStyle, color: '#F5E625', fontWeight: 700 }}>{fmt(r.totalOccurrences)}</td>
+                      <td style={{ fontSize: 11, color: 'var(--fg-2)' }}>{r.channels.join(', ') || '—'}</td>
+                      <td>
+                        <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
+                          {r.brandsTalking.length === 0 ? <span style={{ color: 'var(--fg-4)' }}>—</span> : r.brandsTalking.map((s) => (
+                            <span key={s} className="brand-dot" style={{ background: pgColor(s), border: '1px solid rgba(255,255,255,0.15)' }} title={pgName(s, brands)} />
+                          ))}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 11, fontWeight: 700, color: r.likelyOwnerBrand === '—' ? 'var(--fg-4)' : pgColor(r.likelyOwnerBrand) }}>
+                        {r.likelyOwnerBrand === '—' ? '—' : pgName(r.likelyOwnerBrand, brands)}
+                      </td>
+                      <td>
+                        <span className="pill pill-info">Add alias to products_catalog</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <ActionFrame
+          move="Competitors are getting talked about under names and abbreviations the catalog matcher does not yet know, so their attention rolls up as 'unattributed' or to the wrong row."
+          impact="JOOLA's competitive view systematically under-counts the noisiest competitor paddles, which compresses gap_to_top_competitor toward 0 and hides real category leaders."
+          action="Each row whose 'Likely owner' is correct gets added as an alias on the matching products_catalog row, then re-run the enrichment + facts pipelines to backfill."
+        />
+        <Caveat tables={['reddit_mentions.products_mentioned', 'ig_comments.products_mentioned', 'yt_comments.products_mentioned', 'tiktok_videos.products_mentioned', 'tiktok_comments.products_mentioned', 'x_posts.products_mentioned (90d window)']} />
       </section>
 
     </>

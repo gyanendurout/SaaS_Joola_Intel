@@ -185,6 +185,345 @@ export interface CampaignOfferIntelData {
   dataStatus: CampaignOfferDataStatus
 }
 
+// ─── Campaign Strategy Matrix (2x2 quadrant) ─────────────────────────
+export type CampaignStrategyQuadrant =
+  | 'aggressive-growth'
+  | 'brand-building'
+  | 'price-sensitive'
+  | 'quiet'
+
+export interface CampaignStrategyPoint {
+  brand: string                   // slug
+  brandName: string
+  /** X: ad_pressure_score avg (or fallback to ads count) over the active filter */
+  adPressure: number
+  /** Y: promo_active_flag avg × promo_depth_pct (or fallback to promo count) */
+  promoPressure: number
+  /** Bubble size driver — total ad+promo activity */
+  totalActivity: number
+  quadrant: CampaignStrategyQuadrant
+}
+
+export interface CampaignStrategyMatrix {
+  points: CampaignStrategyPoint[]
+  xMedian: number
+  yMedian: number
+  joolaQuadrant: CampaignStrategyQuadrant | null
+  source: 'ad_pressure_daily+promotion_daily' | 'marketing_ads+promotions-fallback'
+}
+
+// ─── Competitor Offer Playbook ───────────────────────────────────────
+export interface OfferPlaybookRow {
+  brand: string
+  brandName: string
+  promoType: string
+  discountDepth: number | null
+  frequency: number
+  lastDetected: string | null
+  productAffected: string | null
+  joolaResponse: string
+}
+
+// ─── Creative Message Intelligence (rule-based) ──────────────────────
+export type MessageTheme =
+  | 'performance'
+  | 'power'
+  | 'sale'
+  | 'pro-endorsement'
+  | 'new-launch'
+  | 'beginner'
+  | 'tournament'
+  | 'other'
+
+export interface MessageThemeRow {
+  brand: string
+  brandName: string
+  theme: MessageTheme
+  themeLabel: string
+  cta: string
+  platform: string
+  count: number
+  exampleCopy: string
+}
+
+export interface MessageThemeChartCell {
+  brand: string
+  theme: MessageTheme
+  count: number
+}
+
+/**
+ * Rule-based ad-copy theme classifier. Pure regex/keyword — no LLM call.
+ * Keywords were chosen by reviewing JOOLA, Selkirk, Paddletek, Engage, and CRBN
+ * ad copy patterns from the marketing_ads sample on 2026-05-25 and the
+ * `dominant_content_theme` taxonomy used in mig 011 / instagram_themes.py:
+ *   - performance / power split mirrors how brands describe paddle feel
+ *     ("control" / "spin" vs "pop" / "drive")
+ *   - sale captures explicit price language
+ *   - pro-endorsement captures the dominant JOOLA + Selkirk hero athletes
+ *   - new-launch captures product-drop announcements
+ *   - beginner targets entry-tier paddle marketing
+ *   - tournament captures PPA / MLP sponsorship copy
+ * Returns the FIRST matching theme to keep totals additive; if no theme
+ * matches we drop the row to `other` so the table still shows it.
+ */
+const THEME_KEYWORDS: Array<{ theme: MessageTheme; label: string; pattern: RegExp }> = [
+  { theme: 'sale',            label: 'Sale / Discount',     pattern: /(sale|% off|\boff\b|save|deal|clearance|discount|promo)/i },
+  { theme: 'pro-endorsement', label: 'Pro endorsement',     pattern: /(ben johns|anna bright|tyson mcguffin|catherine parenteau|federico staksrud|jw johnson|pro player|world #?1|champion|ppa pro|mlp pro)/i },
+  { theme: 'new-launch',      label: 'New launch',          pattern: /(\bnew\b|launch|introducing|just dropped|now available|coming soon|release)/i },
+  { theme: 'tournament',      label: 'Tournament / Pro tour', pattern: /(tournament|ppa|mlp|major league|championship|finals|invitational)/i },
+  { theme: 'beginner',        label: 'Beginner friendly',   pattern: /(beginner|starter|easy to use|new to pickleball|first paddle|recreational)/i },
+  { theme: 'power',           label: 'Power',               pattern: /(power|\bpop\b|\bdrive\b|hit harder|explosive|smash)/i },
+  { theme: 'performance',     label: 'Performance / Control', pattern: /(performance|control|precision|\bspin\b|\bspeed\b|touch|finesse|accuracy)/i },
+]
+
+export function classifyAdTheme(copy: string): { theme: MessageTheme; label: string } {
+  const text = String(copy || '').trim()
+  if (!text) return { theme: 'other', label: 'Other' }
+  for (const rule of THEME_KEYWORDS) {
+    if (rule.pattern.test(text)) return { theme: rule.theme, label: rule.label }
+  }
+  return { theme: 'other', label: 'Other' }
+}
+
+const PRO_TO_BRAND: Array<{ pattern: RegExp; brand: string }> = [
+  { pattern: /ben johns/i, brand: 'joola' },
+  { pattern: /anna bright/i, brand: 'joola' },
+  { pattern: /jw johnson/i, brand: 'joola' },
+  { pattern: /tyson mcguffin/i, brand: 'selkirk' },
+  { pattern: /catherine parenteau/i, brand: 'selkirk' },
+  { pattern: /federico staksrud/i, brand: 'selkirk' },
+]
+
+export function detectAthleteInCopy(copy: string): string | null {
+  for (const rule of PRO_TO_BRAND) if (rule.pattern.test(copy)) return rule.brand
+  return null
+}
+
+// Public helpers + factory for the page (keeps page code thin)
+
+export function buildMessageThemeRows(ads: AdCreative[]): { rows: MessageThemeRow[]; chartCells: MessageThemeChartCell[] } {
+  // Group by (brand, theme) to compute count + pick one example copy + favourite CTA + dominant platform
+  const groups = new Map<string, { brand: string; brandName: string; theme: MessageTheme; label: string; count: number; examples: string[]; ctas: Record<string, number>; platforms: Record<string, number> }>()
+  for (const a of ads) {
+    const { theme, label } = classifyAdTheme(a.copy)
+    const key = `${a.brand}::${theme}`
+    let g = groups.get(key)
+    if (!g) {
+      g = { brand: a.brand, brandName: a.brandName, theme, label, count: 0, examples: [], ctas: {}, platforms: {} }
+      groups.set(key, g)
+    }
+    g.count += 1
+    if (a.copy && g.examples.length < 3) g.examples.push(a.copy)
+    const cta = (a.cta || '').trim() || '—'
+    g.ctas[cta] = (g.ctas[cta] || 0) + 1
+    const p = a.platform || '—'
+    g.platforms[p] = (g.platforms[p] || 0) + 1
+  }
+  const rows: MessageThemeRow[] = Array.from(groups.values()).map((g) => {
+    const dominantCta = Object.entries(g.ctas).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
+    const dominantPlatform = Object.entries(g.platforms).sort((a, b) => b[1] - a[1])[0]?.[0] || '—'
+    const example = (g.examples[0] || '').slice(0, 140) + ((g.examples[0]?.length || 0) > 140 ? '…' : '')
+    return {
+      brand: g.brand,
+      brandName: g.brandName,
+      theme: g.theme,
+      themeLabel: g.label,
+      cta: dominantCta,
+      platform: dominantPlatform,
+      count: g.count,
+      exampleCopy: example,
+    }
+  }).sort((a, b) => b.count - a.count)
+
+  const chartCells: MessageThemeChartCell[] = rows.map((r) => ({ brand: r.brand, theme: r.theme, count: r.count }))
+  return { rows, chartCells }
+}
+
+export function buildOfferPlaybook(offers: ActiveOffer[]): OfferPlaybookRow[] {
+  // Group by (brand, promo_type) and pick max discount + most recent detected_at.
+  const groups = new Map<string, { brand: string; brandName: string; type: string; deepest: number | null; count: number; lastDetected: string | null }>()
+  for (const p of offers) {
+    const key = `${p.brand}::${p.type || 'other'}`
+    let g = groups.get(key)
+    if (!g) {
+      g = { brand: p.brand, brandName: p.brandName, type: p.type || 'other', deepest: null, count: 0, lastDetected: null }
+      groups.set(key, g)
+    }
+    g.count += 1
+    if (p.discount != null && p.discount > 0) {
+      if (g.deepest == null || p.discount > g.deepest) g.deepest = p.discount
+    }
+    if (p.detectedAt && (!g.lastDetected || new Date(p.detectedAt).getTime() > new Date(g.lastDetected).getTime())) {
+      g.lastDetected = p.detectedAt
+    }
+  }
+  return Array.from(groups.values()).map((g) => ({
+    brand: g.brand,
+    brandName: g.brandName,
+    promoType: g.type,
+    discountDepth: g.deepest,
+    frequency: g.count,
+    lastDetected: g.lastDetected,
+    productAffected: null, // promotions table has no product FK — see caveat banner on the page
+    joolaResponse: recommendJoolaResponse(g.type, g.deepest),
+  })).sort((a, b) => b.frequency - a.frequency)
+}
+
+function recommendJoolaResponse(type: string, discount: number | null): string {
+  const depth = discount ?? 0
+  if (depth >= 30) return 'Match selectively on a non-flagship SKU or differentiate on warranty/value.'
+  const t = String(type || '').toLowerCase()
+  if (t === 'flash' || /flash/i.test(t)) return 'Counter with content + UGC instead of price — flash sales bait price wars.'
+  if (t === 'bundle') return 'Bundle response if margin allows — ship a JOOLA paddle + bag combo.'
+  if (t === 'free_shipping') return 'Match free-shipping threshold quietly; don\'t advertise — table-stakes.'
+  if (t === 'launch') return 'Track the launched SKU\'s reception before responding; review-card the competitor.'
+  if (depth >= 15) return 'Hold price. Surface positive reviews + Ben Johns / Anna Bright proof to defend.'
+  if (depth > 0) return 'No discount needed — value messaging beats shallow promo response.'
+  return 'Monitor only — non-discount promo carries low conversion urgency.'
+}
+
+// ─── Campaign Strategy Matrix loader (uses analytics marts when present) ──
+//
+// Adds an OPTIONAL fetch from `ad_pressure_daily` + `promotion_daily` (mig 013).
+// If those marts are empty (population not yet wired), we fall back to a
+// derived score from `marketing_ads` + `promotions` so the UI still renders.
+
+interface RawAdPressureDaily {
+  brand_id: string
+  metric_date: string
+  active_creatives: number | null
+  ad_pressure_score: number | null
+}
+
+interface RawPromotionDaily {
+  brand_id: string
+  metric_date: string
+  promo_active_flag: number | null
+  promo_depth_pct: number | null
+}
+
+async function safeMartQuery<T = unknown>(builder: unknown): Promise<T[]> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = (await (builder as any))
+    if (error) return []
+    return (data || []) as T[]
+  } catch {
+    return []
+  }
+}
+
+export async function fetchCampaignStrategyMatrix(
+  brands: V2Brand[],
+  fallback: { ads: AdCreative[]; offers: ActiveOffer[] },
+): Promise<CampaignStrategyMatrix> {
+  const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+
+  const [pressureRows, promoRows] = await Promise.all([
+    safeMartQuery<RawAdPressureDaily>(
+      supabase
+        .from('ad_pressure_daily')
+        .select('brand_id,metric_date,active_creatives,ad_pressure_score')
+        .gte('metric_date', since30)
+        .limit(5000),
+    ),
+    safeMartQuery<RawPromotionDaily>(
+      supabase
+        .from('promotion_daily')
+        .select('brand_id,metric_date,promo_active_flag,promo_depth_pct')
+        .gte('metric_date', since30)
+        .limit(10000),
+    ),
+  ])
+
+  // Aggregate from marts. If both are empty we fall back below.
+  const usingMarts = pressureRows.length > 0 || promoRows.length > 0
+  const adAgg = new Map<string, { sum: number; count: number; activeSum: number }>()
+  for (const r of pressureRows) {
+    const slug = slugByBid[r.brand_id]
+    if (!slug) continue
+    const cur = adAgg.get(slug) || { sum: 0, count: 0, activeSum: 0 }
+    cur.sum += Number(r.ad_pressure_score || 0)
+    cur.count += 1
+    cur.activeSum += Number(r.active_creatives || 0)
+    adAgg.set(slug, cur)
+  }
+  const promoAgg = new Map<string, { activeSum: number; daysWithPromo: number; depthSum: number; depthCount: number }>()
+  for (const r of promoRows) {
+    const slug = slugByBid[r.brand_id]
+    if (!slug) continue
+    const cur = promoAgg.get(slug) || { activeSum: 0, daysWithPromo: 0, depthSum: 0, depthCount: 0 }
+    cur.activeSum += Number(r.promo_active_flag || 0)
+    cur.daysWithPromo += r.promo_active_flag ? 1 : 0
+    if (r.promo_depth_pct != null) {
+      cur.depthSum += Number(r.promo_depth_pct)
+      cur.depthCount += 1
+    }
+    promoAgg.set(slug, cur)
+  }
+
+  // Fallback aggregations from raw tables (always cheap, already in memory)
+  const fbAds = new Map<string, number>()
+  for (const a of fallback.ads) fbAds.set(a.brand, (fbAds.get(a.brand) || 0) + 1)
+  const fbPromos = new Map<string, number>()
+  for (const p of fallback.offers) fbPromos.set(p.brand, (fbPromos.get(p.brand) || 0) + 1)
+
+  // Build points for every brand we know about
+  const points: CampaignStrategyPoint[] = brands.map((b) => {
+    const a = adAgg.get(b.id)
+    const p = promoAgg.get(b.id)
+    const adAvg = a && a.count > 0 ? a.sum / a.count : 0
+    const promoAvg = p && p.activeSum > 0 ? p.activeSum / Math.max(1, p.daysWithPromo + 1) : 0
+    const depthAvg = p && p.depthCount > 0 ? p.depthSum / p.depthCount : 0
+    const martPromo = promoAvg * Math.max(1, depthAvg)
+
+    const adPressure = usingMarts && adAvg > 0 ? adAvg : (fbAds.get(b.id) || 0)
+    const promoPressure = usingMarts && martPromo > 0 ? martPromo : (fbPromos.get(b.id) || 0)
+
+    return {
+      brand: b.id,
+      brandName: b.name,
+      adPressure,
+      promoPressure,
+      totalActivity: adPressure + promoPressure,
+      quadrant: 'quiet', // placeholder, filled below
+    }
+  })
+
+  // Compute medians on the active brand set, then label quadrants
+  const activeAd = points.filter((p) => p.adPressure > 0).map((p) => p.adPressure)
+  const activePromo = points.filter((p) => p.promoPressure > 0).map((p) => p.promoPressure)
+  const xMedian = activeAd.length ? medianOf(activeAd) : 0
+  const yMedian = activePromo.length ? medianOf(activePromo) : 0
+
+  for (const p of points) {
+    const hiA = p.adPressure >= xMedian && p.adPressure > 0
+    const hiP = p.promoPressure >= yMedian && p.promoPressure > 0
+    if (hiA && hiP) p.quadrant = 'aggressive-growth'
+    else if (hiA && !hiP) p.quadrant = 'brand-building'
+    else if (!hiA && hiP) p.quadrant = 'price-sensitive'
+    else p.quadrant = 'quiet'
+  }
+
+  const joola = points.find((p) => p.brand === 'joola') || null
+  return {
+    points,
+    xMedian,
+    yMedian,
+    joolaQuadrant: joola?.quadrant || null,
+    source: usingMarts ? 'ad_pressure_daily+promotion_daily' : 'marketing_ads+promotions-fallback',
+  }
+}
+
+function medianOf(values: number[]): number {
+  if (values.length === 0) return 0
+  const s = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(s.length / 2)
+  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid]
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────
 function normalizeText(raw: string | null | undefined): string {
   if (!raw) return ''

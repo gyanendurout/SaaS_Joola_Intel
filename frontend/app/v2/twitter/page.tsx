@@ -7,6 +7,8 @@ import {
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
 import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
+import { twitterPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
@@ -169,6 +171,106 @@ export default function TwitterPage() {
     <>
       <PageHead title="X / TWITTER" />
       <FilterBanner />
+
+      <PlatformPlaybook
+        title="X / Twitter Playbook"
+        sub="Rule-derived X competitor moves — reply quality, tweet frequency vs follower growth, engagement."
+        findings={twitterPlaybook(brands, displayX, displayPosts)}
+        brands={brands}
+      />
+
+      <section style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>
+              Reply-to-OP ratio · engagement quality
+              <SectionInfo
+                title="Replies per tweet (engagement quality proxy)"
+                description="Average number of replies per tweet, per brand. Replies indicate conversation, not just impressions — a high ratio means the audience cares enough to respond."
+                source="x_posts.reply_count · GROUP BY brand_id"
+              />
+            </h2>
+            <div className="sub">Higher = better discussion-driving content. JOOLA marked green.</div>
+          </div>
+        </div>
+        <div className="card"><div className="card-pad">
+          {(() => {
+            const grp: Record<string, { replies: number; n: number }> = {}
+            displayPosts.forEach(p => {
+              if (!grp[p.brand]) grp[p.brand] = { replies: 0, n: 0 }
+              grp[p.brand].replies += p.replies
+              grp[p.brand].n++
+            })
+            const rows = Object.entries(grp)
+              .map(([brand, g]) => ({ brand, ratio: g.n > 0 ? g.replies / g.n : 0, replies: g.replies, n: g.n }))
+              .filter(r => r.n >= 3)
+              .sort((a, b) => b.ratio - a.ratio)
+            if (rows.length === 0) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>Not enough tweets to compute ratio.</div>
+            const max = rows[0]?.ratio || 1
+            return (
+              <div>
+                {rows.map(r => (
+                  <div key={r.brand} className={'bar-row ' + (r.brand === 'joola' ? 'joola' : '')} style={{ gridTemplateColumns: '120px 1fr 80px 70px' }}>
+                    <div className="lbl" style={{ fontWeight: 700 }}>{name(r.brand)}</div>
+                    <div className="track">
+                      <div className="fill" style={{ width: Math.max(2, r.ratio / max * 100) + '%', background: `linear-gradient(90deg, ${pgColor(r.brand)}, ${pgColor(r.brand)}99)` }} />
+                    </div>
+                    <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700 }}>{r.ratio.toFixed(1)}/tweet</div>
+                    <div className="delta-mini flat">{r.n} tweets</div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
+        </div></div>
+      </section>
+
+      <section style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>
+              Tweet frequency × follower size
+              <SectionInfo
+                title="Frequency vs scale"
+                description="Each dot is a brand; X = total tweets sampled, Y = follower count. Helps spot whether high cadence is paying off in audience size."
+                source="x_profiles_weekly + x_posts"
+              />
+            </h2>
+            <div className="sub">Are high-cadence brands also large-audience brands?</div>
+          </div>
+        </div>
+        <div className="card"><div className="card-pad">
+          {(() => {
+            const data = displayX.filter(d => d.followers > 0)
+            if (data.length === 0) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>No X profile data.</div>
+            const W = 760, H = 280, padL = 50, padR = 20, padT = 16, padB = 32
+            const maxT = Math.max(1, ...data.map(d => d.tweets))
+            const maxF = Math.max(1, ...data.map(d => d.followers))
+            const x = (t: number) => padL + (t / maxT) * (W - padL - padR)
+            const y = (f: number) => H - padB - (f / maxF) * (H - padT - padB)
+            return (
+              <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+                <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
+                <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
+                <text x={W / 2} y={H - 6} fill="#8a93a4" fontSize="10" textAnchor="middle">Tweets sampled</text>
+                <text x={12} y={H / 2} fill="#8a93a4" fontSize="10" textAnchor="middle" transform={`rotate(-90 12 ${H / 2})`}>Followers</text>
+                {data.map(d => (
+                  <g key={d.brand}>
+                    <circle cx={x(d.tweets)} cy={y(d.followers)} r={d.brand === 'joola' ? 8 : 6}
+                      fill={pgColor(d.brand)} fillOpacity={0.75}
+                      stroke={d.brand === 'joola' ? '#22c55e' : 'transparent'} strokeWidth={2}>
+                      <title>{name(d.brand)} · {d.tweets} tweets · {fmt(d.followers)} followers</title>
+                    </circle>
+                    <text x={x(d.tweets)} y={y(d.followers) - 10} textAnchor="middle" fill={d.brand === 'joola' ? '#22c55e' : '#cbd1dc'} fontSize="10" fontWeight={d.brand === 'joola' ? 800 : 500}>
+                      {name(d.brand)}
+                    </text>
+                  </g>
+                ))}
+              </svg>
+            )
+          })()}
+        </div></div>
+      </section>
 
       <section>
         <div className="two-col">

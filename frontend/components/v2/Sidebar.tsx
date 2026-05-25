@@ -54,6 +54,7 @@ const navGroups: NavGroup[] = [
       { href: '/v2/market',      label: 'Market Intel',       ic: I.mkt },
       { href: '/v2/correlations', label: 'Correlations',     ic: I.corr },
       { href: '/v2/changepoints', label: 'Changepoints',     ic: I.change },
+      { href: '/v2/data-health',  label: 'Data Health',      ic: I.overview },
     ],
   },
   {

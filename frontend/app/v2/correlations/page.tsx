@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '@/lib/shared/supabase'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import {
   fetchLagScans,
@@ -10,6 +11,55 @@ import {
 import { PageHead, LoadingPage, SectionInfo, pgName, pgColor, SortTh, ColumnFilter } from '@/components/v2/PageShell'
 import { CorrelationHeatmap, type CorrelationCell } from '@/components/v2/charts/CorrelationHeatmap'
 import { LagScanChart } from '@/components/v2/charts/LagScanChart'
+
+type LeadingIndicatorRow = {
+  kind: string
+  driver: string
+  target: string
+  bestLag: number | null
+  bestScore: number | null
+  bestPvalue: number | null
+}
+
+function formatMetricName(s: string): string {
+  if (!s) return '—'
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function whatItMeans(driver: string, target: string, bestLag: number | null): string {
+  const lag = bestLag ?? 0
+  const d = (driver || '').toLowerCase()
+  if (d.includes('ad_pressure')) return `Competitor ad activity leads outcome by ${lag} days`
+  if (d.includes('attention')) return `Attention signals lead outcome by ${lag} days`
+  if (d.includes('promo')) return `Promo activity leads outcome by ${lag} days`
+  return `${driver} leads ${target} by ${lag} days`
+}
+
+function businessMeaning(driver: string, target: string): { meaning: string; action: string } {
+  const key = `${driver}->${target}`
+  if (driver === 'ad_pressure_score' && target === 'attention_score') {
+    return {
+      meaning: 'Competitor ads are driving attention',
+      action: 'Monitor their creatives and respond before the sales window closes',
+    }
+  }
+  if (driver === 'promo_active_flag' && target === 'mentions_total') {
+    return {
+      meaning: 'Promos are creating buzz',
+      action: 'Consider a counter-promotion',
+    }
+  }
+  if (driver === 'attention_score' && target === 'estimated_units_sold') {
+    return {
+      meaning: 'Attention is converting to sales',
+      action: 'Amplify high-attention products',
+    }
+  }
+  return {
+    meaning: 'Statistical relationship detected',
+    action: `Investigate the ${driver} → ${target} pair (${key})`,
+  }
+}
 
 const DEFAULT_TARGET = 'estimated_units_sold'
 
@@ -24,6 +74,7 @@ export default function CorrelationsPage() {
   const [tblSortKey, setTblSortKey] = useState<string | null>('absScore')
   const [tblSortDir, setTblSortDir] = useState<'asc' | 'desc'>('desc')
   const [tblColFilter, setTblColFilter] = useState<Record<string, string>>({})
+  const [leadingRows, setLeadingRows] = useState<LeadingIndicatorRow[]>([])
 
   function toggleTblSort(k: string) {
     if (tblSortKey === k) setTblSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -40,6 +91,31 @@ export default function CorrelationsPage() {
         const rows = await fetchLagScans()
         if (cancelled) return
         setScans(rows)
+
+        // Leading-indicator / CCF rows for Sections "Leading Indicator Board" + "Action Translation".
+        try {
+          const { data: leadData } = await supabase
+            .from('analysis_results')
+            .select('kind,driver,target,best_lag,best_score,best_pvalue')
+            .in('kind', ['lag_scan', 'ccf'])
+            .order('best_score', { ascending: false, nullsFirst: false })
+            .limit(20)
+          if (!cancelled && Array.isArray(leadData)) {
+            setLeadingRows(
+              (leadData as Array<Record<string, unknown>>).map((r) => ({
+                kind: String(r.kind ?? ''),
+                driver: String(r.driver ?? ''),
+                target: String(r.target ?? ''),
+                bestLag: r.best_lag != null ? Number(r.best_lag) : null,
+                bestScore: r.best_score != null ? Number(r.best_score) : null,
+                bestPvalue: r.best_pvalue != null ? Number(r.best_pvalue) : null,
+              })),
+            )
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('[correlations] leading indicators fetch failed', e)
+        }
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[correlations] failed to load', err)
@@ -496,6 +572,129 @@ export default function CorrelationsPage() {
           </div>
         </section>
       )}
+
+      {/* ── Leading Indicator Board ───────────────────────────── */}
+      <section style={{ marginTop: 24 }}>
+        <div className="section-head">
+          <div>
+            <h2>
+              Leading Indicator Board
+              <SectionInfo
+                title="Leading Indicator Board"
+                description="Top 20 strongest leading-indicator scans (lag_scan + cross-correlation). Read each row as: when DRIVER moves, OUTCOME follows N days later with the given confidence score."
+                source="analysis_results · kind in (lag_scan, ccf)"
+              />
+            </h2>
+            <div className="sub">
+              Top {leadingRows.length} signals ranked by |r|. Use this to spot which competitor levers your KPIs respond to and on what time horizon.
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          {leadingRows.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+              Run <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 3 }}>python -m analytics_backend.run --module all</code> to populate analysis results.
+            </div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
+              <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <tr>
+                    <th>Outcome</th>
+                    <th>Leading signal</th>
+                    <th style={{ textAlign: 'right' }}>Lag (days)</th>
+                    <th style={{ textAlign: 'right' }}>Confidence</th>
+                    <th>What it means</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leadingRows.map((r, i) => (
+                    <tr key={`${r.driver}-${r.target}-${i}`}>
+                      <td style={{ color: 'var(--fg)', fontWeight: 700 }}>{formatMetricName(r.target)}</td>
+                      <td style={{ color: 'var(--fg-2)' }}>{formatMetricName(r.driver)}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                        {r.bestLag != null ? `${r.bestLag > 0 ? '+' : ''}${r.bestLag}d` : '—'}
+                      </td>
+                      <td style={{ textAlign: 'right', fontFamily: 'monospace' }}>
+                        <span
+                          className={
+                            'pill ' +
+                            (r.bestPvalue != null && r.bestPvalue < 0.05 ? 'pill-green' : 'pill-ghost')
+                          }
+                          style={{ fontSize: 10 }}
+                        >
+                          {r.bestScore != null ? r.bestScore.toFixed(3) : '—'}
+                          {r.bestPvalue != null && r.bestPvalue < 0.05 ? ' · sig' : ''}
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--fg-2)', fontSize: 12 }}>
+                        {whatItMeans(r.driver, r.target, r.bestLag)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Action Translation ───────────────────────────── */}
+      <section style={{ marginTop: 24 }}>
+        <div className="section-head">
+          <div>
+            <h2>
+              Action Translation
+              <SectionInfo
+                title="Action Translation"
+                description="Statistically significant (p < 0.05) findings translated into plain-English business meaning + a recommended next step the team can actually run with."
+                source="analysis_results · kind in (lag_scan, ccf) · p_value < 0.05"
+              />
+            </h2>
+            <div className="sub">
+              Significant findings only. Every row is a finding the analytics pipeline thinks is worth acting on.
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          {leadingRows.filter((r) => r.bestPvalue != null && r.bestPvalue < 0.05).length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+              No statistically significant findings yet. Run <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 3 }}>python -m analytics_backend.run --module all</code> to populate analysis results.
+            </div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
+              <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <tr>
+                    <th>Finding</th>
+                    <th>Business meaning</th>
+                    <th>Recommended action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leadingRows
+                    .filter((r) => r.bestPvalue != null && r.bestPvalue < 0.05)
+                    .map((r, i) => {
+                      const tr = businessMeaning(r.driver, r.target)
+                      return (
+                        <tr key={`act-${r.driver}-${r.target}-${i}`}>
+                          <td style={{ color: 'var(--fg)', fontWeight: 600, fontSize: 12 }}>
+                            {formatMetricName(r.driver)} → {formatMetricName(r.target)}
+                            <div style={{ fontSize: 10, color: 'var(--fg-4)', fontFamily: 'monospace', marginTop: 2 }}>
+                              r = {r.bestScore != null ? r.bestScore.toFixed(3) : '—'} · p = {r.bestPvalue != null ? r.bestPvalue.toFixed(3) : '—'} · lag = {r.bestLag != null ? `${r.bestLag > 0 ? '+' : ''}${r.bestLag}d` : '—'}
+                            </div>
+                          </td>
+                          <td style={{ color: 'var(--fg-2)', fontSize: 12 }}>{tr.meaning}</td>
+                          <td style={{ color: '#22c55e', fontSize: 12, fontWeight: 600 }}>{tr.action}</td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
     </>
   )
 }

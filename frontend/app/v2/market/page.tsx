@@ -15,6 +15,7 @@ import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, FilterBan
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { supabase } from '@/lib/shared/supabase'
+import { fetchMarketIntel, type MarketIntelData, type CommandCenterRow, type BrandStrategyCard } from '@/lib/v2/marketIntel'
 
 interface MentionSummaryRow {
   brand_id: string
@@ -86,6 +87,7 @@ export default function MarketIntelPage() {
   const [topTT, setTopTT] = useState<V2TikTokVideo[]>([])
   const [loading, setLoading] = useState(true)
   const [mentionSummary, setMentionSummary] = useState<MentionSummaryRow[]>([])
+  const [marketIntel, setMarketIntel] = useState<MarketIntelData | null>(null)
   // Reserved for future product-level breakdown (kept to match planned interface contract).
   const [productMentions7d] = useState<ProductMentionAgg[]>([])
   void productMentions7d
@@ -115,6 +117,11 @@ export default function MarketIntelPage() {
       setYt(y); setX(xr); setTiktok(tt)
       setTopIG(tIG); setTopYT(tYT); setTopX(tX); setTopTT(tTT)
       setLoading(false)
+      // Command-center summary — independent fetch so the page doesn't block on it
+      fetchMarketIntel(b)
+        .then((mi) => setMarketIntel(mi))
+        // eslint-disable-next-line no-console
+        .catch((err) => console.warn('[market] fetchMarketIntel failed', err))
     }).catch(() => setLoading(false))
   }, [setAllBrands])
 
@@ -639,6 +646,146 @@ export default function MarketIntelPage() {
             )
           })()}
         </div>
+      </section>
+
+      {/* ─── Section D: Command Center Summary ──────────────────────── */}
+      <section>
+        <div className="section-head"><div>
+          <h2>
+            Command Center summary
+            <SectionInfo
+              title="Command Center summary"
+              description="One row per domain — product attention, campaign pressure, community sentiment, influencer impact, and sales/stock movement. Winner = top brand on each metric over the last 30 days. JOOLA rank + biggest non-JOOLA threat + a rule-based recommended action. Hover the value cells to see the underlying metric."
+              source="product_attention_summary + ad_pressure_daily + promotion_daily + mention_facts + inventory_events"
+            />
+          </h2>
+          <div className="sub">Every tracked domain rolled up — what JOOLA should do this week.</div>
+        </div></div>
+        <div className="card">
+          {marketIntel ? (
+            <div className="table-wrap" style={{ overflowX: 'auto' }}>
+              <table className="data" style={{ width: '100%', minWidth: 960 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>Area</th>
+                    <th style={{ textAlign: 'left' }}>Winner</th>
+                    <th style={{ textAlign: 'center' }}>JOOLA rank</th>
+                    <th style={{ textAlign: 'left' }}>Biggest threat</th>
+                    <th style={{ textAlign: 'left' }}>Recommended action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {marketIntel.command.map((row: CommandCenterRow) => {
+                    const winnerIsJoola = row.winnerBrand === 'joola'
+                    const winnerVsJoola = row.joolaValue > 0
+                      ? `${row.winnerLabel}: winner=${row.winnerValue.toFixed(2)} · JOOLA=${row.joolaValue.toFixed(2)}`
+                      : `${row.winnerLabel}: winner=${row.winnerValue.toFixed(2)} · JOOLA=0`
+                    return (
+                      <tr key={row.area} style={winnerIsJoola ? { background: 'rgba(34,197,94,0.04)' } : {}}>
+                        <td style={{ textAlign: 'left', fontWeight: 700 }}>
+                          {row.areaLabel}
+                          {row.caveat && (
+                            <div style={{ marginTop: 4, fontSize: 10, color: '#F5E625', fontWeight: 400 }}>* {row.caveat}</div>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'left' }} title={winnerVsJoola}>
+                          {row.winnerBrand ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ width: 8, height: 8, borderRadius: 99, background: pgColor(row.winnerBrand) }} />
+                              <span style={{ fontWeight: 700, color: winnerIsJoola ? '#22c55e' : 'inherit' }}>{name(row.winnerBrand)}</span>
+                            </span>
+                          ) : (
+                            <span style={{ color: '#6b7280' }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'center' }} title={`JOOLA value on "${row.winnerLabel}": ${row.joolaValue.toFixed(2)}`}>
+                          {row.joolaRank ? (
+                            <span className={'pill ' + (row.joolaRank === 1 ? 'pill-green' : row.joolaRank <= 3 ? 'pill-amber' : 'pill-ghost')} style={{ fontSize: 10 }}>
+                              #{row.joolaRank}
+                            </span>
+                          ) : <span style={{ color: '#6b7280' }}>—</span>}
+                        </td>
+                        <td style={{ textAlign: 'left' }} title={`${row.winnerLabel}: ${row.threatValue.toFixed(2)}`}>
+                          {row.threatBrand ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ width: 8, height: 8, borderRadius: 99, background: pgColor(row.threatBrand) }} />
+                              <span style={{ fontWeight: 600 }}>{name(row.threatBrand)}</span>
+                            </span>
+                          ) : (
+                            <span style={{ color: '#6b7280' }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'left', fontSize: 12 }}>{row.recommendedAction}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)', fontSize: 13 }}>
+              Loading command-center summary…
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ─── Section E: Competitor Strategy Summary ─────────────────── */}
+      <section>
+        <div className="section-head"><div>
+          <h2>
+            Competitor strategy summary
+            <SectionInfo
+              title="Competitor strategy summary"
+              description="One card per non-JOOLA brand. Strategy label is rule-based, combining: their campaign quadrant (high/low ads × high/low promos), product attention rank, dominant Instagram content theme, and athlete-tied mentions. JOOLA counter-move is canned per strategy type."
+              source="ad_pressure_daily + promotion_daily + product_attention_summary + mention_facts + ig_profiles_weekly"
+            />
+          </h2>
+          <div className="sub">Live read on what each competitor is doing — and how JOOLA should respond.</div>
+        </div></div>
+        {marketIntel ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 12 }}>
+            {marketIntel.strategies.map((card: BrandStrategyCard) => (
+              <div
+                key={card.brand}
+                className="card"
+                style={{
+                  padding: 0,
+                  display: 'grid',
+                  gridTemplateColumns: '6px 1fr',
+                  overflow: 'hidden',
+                }}
+              >
+                <div style={{ background: pgColor(card.brand) }} />
+                <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.3 }}>{name(card.brand)}</span>
+                    <span className="pill pill-ghost" style={{ fontSize: 9 }}>{card.campaignQuadrant.replace(/-/g, ' ')}</span>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#F5E625' }}>{card.strategyLabel}</div>
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 4 }}>Evidence</div>
+                    <ul style={{ margin: 0, paddingLeft: 16, color: '#cbd1dc', fontSize: 12, lineHeight: 1.6 }}>
+                      {card.evidence.map((e, i) => <li key={i}>{e}</li>)}
+                    </ul>
+                  </div>
+                  <div style={{ marginTop: 4, padding: 10, background: 'rgba(34,197,94,0.07)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 6, fontSize: 12, color: '#cbd1dc' }}>
+                    <span style={{ color: '#22c55e', fontWeight: 700 }}>JOOLA counter-move:</span> {card.joolaCounterMove}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {marketIntel.strategies.length === 0 && (
+              <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)', fontSize: 13 }}>
+                No competitor strategy signals available yet.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)', fontSize: 13 }}>
+            Loading competitor strategy summary…
+          </div>
+        )}
       </section>
     </>
   )

@@ -1321,6 +1321,447 @@ export async function fetchTopInfluencerPosts(
     .filter((r): r is V2TopInfluencerPost => r !== null)
 }
 
+// ─── YouTube video AI analysis (intelligence layer / migration 012) ─
+// One row per video; explains WHY the video performed and what product
+// was mentioned. Powers the "Why competitor videos worked" table on the
+// YouTube page Platform Playbook.
+export type V2YTVideoAnalysis = {
+  brand: string
+  title: string
+  views: number
+  url: string
+  contentType: string | null
+  performanceThesis: string | null
+  productsMentioned: string[]
+  isShort: boolean
+  days: number
+}
+
+export async function fetchYTVideoAnalysis(
+  brands: V2Brand[],
+  limit = 20,
+): Promise<V2YTVideoAnalysis[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  // Optimistic select — if the table is missing or empty just return [].
+  try {
+    const { data, error } = await supabase
+      .from('yt_video_analysis')
+      .select('brand_id,video_id,content_type,performance_thesis,products_mentioned,view_count_at_analysis,enriched_at')
+      .order('view_count_at_analysis', { ascending: false, nullsFirst: false })
+      .limit(limit * 3)
+    if (error || !data || data.length === 0) return []
+
+    // Resolve video_id → title + url + is_short by batched lookup in yt_videos.
+    const videoIds = Array.from(new Set(data.map((r: any) => r.video_id).filter(Boolean)))
+    if (videoIds.length === 0) return []
+    const { data: vids } = await supabase
+      .from('yt_videos')
+      .select('id,title,video_url,youtube_video_id,is_short,published_at')
+      .in('id', videoIds)
+    const vmap: Record<string, any> = {}
+    ;(vids || []).forEach((v: any) => { vmap[v.id] = v })
+
+    return data
+      .map((r: any): V2YTVideoAnalysis | null => {
+        const v = vmap[r.video_id]
+        if (!v) return null
+        const url = v.video_url
+          || (v.youtube_video_id ? `https://www.youtube.com/watch?v=${v.youtube_video_id}` : '')
+        const days = v.published_at
+          ? Math.max(0, Math.floor((Date.now() - new Date(v.published_at).getTime()) / 86400000))
+          : 0
+        return {
+          brand: slugByBid[r.brand_id] || 'unknown',
+          title: v.title || '',
+          views: Number(r.view_count_at_analysis) || 0,
+          url,
+          contentType: r.content_type || null,
+          performanceThesis: r.performance_thesis || null,
+          productsMentioned: Array.isArray(r.products_mentioned) ? r.products_mentioned : [],
+          isShort: !!v.is_short,
+          days,
+        }
+      })
+      .filter((r): r is V2YTVideoAnalysis => r !== null)
+      .slice(0, limit)
+  } catch {
+    return []
+  }
+}
+
+// ─── Instagram dominant content theme (from ig_profiles_weekly) ──────
+// Latest snapshot per brand of the AI-detected dominant content theme.
+export type V2IGTheme = { brand: string; theme: string | null; weekNumber: number | null; year: number | null }
+
+export async function fetchIGDominantTheme(brands: V2Brand[]): Promise<V2IGTheme[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  try {
+    const { data, error } = await supabase
+      .from('ig_profiles_weekly')
+      .select('brand_id,dominant_content_theme,week_number,year,scraped_at')
+      .order('scraped_at', { ascending: false })
+      .limit(200)
+    if (error || !data) return []
+    const seen = new Set<string>()
+    const out: V2IGTheme[] = []
+    data.forEach((r: any) => {
+      const slug = slugByBid[r.brand_id]
+      if (!slug || seen.has(slug)) return
+      seen.add(slug)
+      out.push({
+        brand: slug,
+        theme: r.dominant_content_theme || null,
+        weekNumber: r.week_number ?? null,
+        year: r.year ?? null,
+      })
+    })
+    return out
+  } catch {
+    return []
+  }
+}
+
+// ─── TikTok comments aggregate (per-brand sentiment + paddle mentions) ─
+// Powers the TikTok Platform Playbook sections.
+export type V2TikTokCommentStats = {
+  brand: string
+  total: number
+  positive: number
+  negative: number
+  neutral: number
+  enriched: number
+}
+
+export type V2TikTokPaddleMention = {
+  brand: string
+  paddle: string
+  mentions: number
+}
+
+export async function fetchTikTokCommentStats(
+  brands: V2Brand[],
+): Promise<V2TikTokCommentStats[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  try {
+    const { data, error } = await supabase
+      .from('tiktok_comments')
+      .select('brand_id,sentiment_label,enriched_at')
+      .limit(20_000)
+    if (error || !data) return []
+    const agg: Record<string, V2TikTokCommentStats> = {}
+    data.forEach((r: any) => {
+      const slug = slugByBid[r.brand_id]
+      if (!slug) return
+      if (!agg[slug]) agg[slug] = { brand: slug, total: 0, positive: 0, negative: 0, neutral: 0, enriched: 0 }
+      agg[slug].total++
+      if (r.enriched_at) agg[slug].enriched++
+      const s = String(r.sentiment_label || '').toLowerCase()
+      if (s === 'positive') agg[slug].positive++
+      else if (s === 'negative') agg[slug].negative++
+      else agg[slug].neutral++
+    })
+    return Object.values(agg).sort((a, b) => b.total - a.total)
+  } catch {
+    return []
+  }
+}
+
+export async function fetchTikTokPaddleMentions(
+  brands: V2Brand[],
+  limit = 20,
+): Promise<V2TikTokPaddleMention[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  try {
+    const { data, error } = await supabase
+      .from('tiktok_comments')
+      .select('brand_id,products_mentioned')
+      .not('products_mentioned', 'is', null)
+      .limit(10_000)
+    if (error || !data) return []
+    const agg: Record<string, V2TikTokPaddleMention> = {}
+    data.forEach((r: any) => {
+      const slug = slugByBid[r.brand_id]
+      if (!slug || !Array.isArray(r.products_mentioned)) return
+      r.products_mentioned.forEach((p: string) => {
+        const paddle = String(p || '').trim()
+        if (!paddle) return
+        const key = `${slug}::${paddle.toLowerCase()}`
+        if (!agg[key]) agg[key] = { brand: slug, paddle, mentions: 0 }
+        agg[key].mentions++
+      })
+    })
+    return Object.values(agg).sort((a, b) => b.mentions - a.mentions).slice(0, limit)
+  } catch {
+    return []
+  }
+}
+
+// ─── Reddit signals: velocity, removed posts, crisis keywords ────────
+export type V2RedditViral = {
+  brand: string
+  subreddit: string
+  title: string
+  velocity: number
+  score: number
+  url: string
+  days: number
+}
+
+export type V2RedditRemoved = {
+  brand: string
+  count: number
+}
+
+export type V2RedditCrisisCluster = {
+  brand: string
+  keyword: string
+  mentions: number
+}
+
+export async function fetchRedditViral(
+  brands: V2Brand[],
+  limit = 20,
+): Promise<V2RedditViral[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  try {
+    const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
+    const { data, error } = await supabase
+      .from('reddit_mentions')
+      .select('brand_id,subreddit,title,body,velocity_per_hour,score,url,posted_at')
+      .gte('posted_at', cutoff)
+      .not('velocity_per_hour', 'is', null)
+      .order('velocity_per_hour', { ascending: false, nullsFirst: false })
+      .limit(limit * 3)
+    if (error || !data) return []
+    return data
+      .filter((r: any) => {
+        const slug = slugByBid[r.brand_id]
+        return !slug || redditRowPassesBrandContext(slug, r)
+      })
+      .slice(0, limit)
+      .map((r: any) => ({
+        brand: slugByBid[r.brand_id] || 'unknown',
+        subreddit: r.subreddit || '',
+        title: r.title || '',
+        velocity: r.velocity_per_hour != null ? Number(r.velocity_per_hour) : 0,
+        score: r.score || 0,
+        url: r.url || '',
+        days: r.posted_at
+          ? Math.max(0, Math.floor((Date.now() - new Date(r.posted_at).getTime()) / 86400000))
+          : 0,
+      }))
+  } catch {
+    return []
+  }
+}
+
+export async function fetchRedditRemoved(brands: V2Brand[]): Promise<V2RedditRemoved[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  try {
+    const { data, error } = await supabase
+      .from('reddit_mentions')
+      .select('brand_id,is_removed')
+      .eq('is_removed', true)
+      .limit(5000)
+    if (error || !data) return []
+    const agg: Record<string, V2RedditRemoved> = {}
+    data.forEach((r: any) => {
+      const slug = slugByBid[r.brand_id]
+      if (!slug) return
+      if (!agg[slug]) agg[slug] = { brand: slug, count: 0 }
+      agg[slug].count++
+    })
+    return Object.values(agg).sort((a, b) => b.count - a.count)
+  } catch {
+    return []
+  }
+}
+
+export async function fetchRedditCrisisClusters(
+  brands: V2Brand[],
+  limit = 20,
+): Promise<V2RedditCrisisCluster[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  try {
+    const { data, error } = await supabase
+      .from('reddit_mentions')
+      .select('brand_id,crisis_keywords,subreddit,title,body')
+      .not('crisis_keywords', 'is', null)
+      .limit(5000)
+    if (error || !data) return []
+    const agg: Record<string, V2RedditCrisisCluster> = {}
+    data.forEach((r: any) => {
+      const slug = slugByBid[r.brand_id]
+      if (!slug || !Array.isArray(r.crisis_keywords)) return
+      if (!redditRowPassesBrandContext(slug, r)) return
+      r.crisis_keywords.forEach((k: string) => {
+        const keyword = String(k || '').trim()
+        if (!keyword) return
+        const key = `${slug}::${keyword.toLowerCase()}`
+        if (!agg[key]) agg[key] = { brand: slug, keyword, mentions: 0 }
+        agg[key].mentions++
+      })
+    })
+    return Object.values(agg).sort((a, b) => b.mentions - a.mentions).slice(0, limit)
+  } catch {
+    return []
+  }
+}
+
+// ─── Reddit reply tree vs OP sentiment scatter ────────────────────────
+// Pairs reddit_comments aggregated by parent post against the parent
+// reddit_mentions sentiment. Used by the Reddit page Platform Playbook.
+export type V2RedditReplyVsOp = {
+  brand: string
+  parentId: string
+  opSentiment: 'positive' | 'neutral' | 'negative'
+  opNumeric: number    // -1 / 0 / +1
+  replyNet: number     // (pos - neg) / total in (-1..+1)
+  replies: number
+}
+
+export async function fetchRedditReplyVsOp(
+  brands: V2Brand[],
+  limit = 100,
+): Promise<V2RedditReplyVsOp[]> {
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  try {
+    const { data: comments, error: cErr } = await supabase
+      .from('reddit_comments')
+      .select('parent_post_id,sentiment_label,brand_id')
+      .limit(10_000)
+    if (cErr || !comments) return []
+    const parents: Record<string, { brand: string; pos: number; neg: number; total: number }> = {}
+    comments.forEach((c: any) => {
+      const slug = slugByBid[c.brand_id]
+      if (!slug || !c.parent_post_id) return
+      if (!parents[c.parent_post_id]) parents[c.parent_post_id] = { brand: slug, pos: 0, neg: 0, total: 0 }
+      const s = String(c.sentiment_label || '').toLowerCase()
+      if (s === 'positive') parents[c.parent_post_id].pos++
+      else if (s === 'negative') parents[c.parent_post_id].neg++
+      parents[c.parent_post_id].total++
+    })
+    const parentIds = Object.keys(parents).slice(0, 500)
+    if (parentIds.length === 0) return []
+    const { data: mentions, error: mErr } = await supabase
+      .from('reddit_mentions')
+      .select('id,sentiment_label:sentiment_label,brand_id,subreddit,title,body')
+      .in('id', parentIds)
+    if (mErr || !mentions) return []
+    const out: V2RedditReplyVsOp[] = []
+    mentions.forEach((m: any) => {
+      const slug = slugByBid[m.brand_id]
+      if (!slug) return
+      if (!redditRowPassesBrandContext(slug, m)) return
+      const stats = parents[m.id]
+      if (!stats || stats.total < 2) return
+      const sLabel = String(m.sentiment_label || '').toLowerCase() as 'positive' | 'neutral' | 'negative'
+      const opSentiment: 'positive' | 'neutral' | 'negative' =
+        sLabel === 'positive' || sLabel === 'negative' ? sLabel : 'neutral'
+      const opNumeric = opSentiment === 'positive' ? 1 : opSentiment === 'negative' ? -1 : 0
+      const replyNet = (stats.pos - stats.neg) / stats.total
+      out.push({
+        brand: slug,
+        parentId: m.id,
+        opSentiment,
+        opNumeric,
+        replyNet,
+        replies: stats.total,
+      })
+    })
+    return out.slice(0, limit)
+  } catch {
+    return []
+  }
+}
+
+// ─── analysis_results counts per kind (data-health probe) ─────────────
+export type V2AnalysisCount = { kind: string; count: number }
+
+export async function fetchAnalysisResultCounts(): Promise<V2AnalysisCount[]> {
+  try {
+    const { data, error } = await supabase
+      .from('analysis_results')
+      .select('kind')
+      .limit(10_000)
+    if (error || !data) return []
+    const agg: Record<string, number> = {}
+    data.forEach((r: any) => {
+      const k = String(r.kind || 'unknown')
+      agg[k] = (agg[k] || 0) + 1
+    })
+    return Object.entries(agg).map(([kind, count]) => ({ kind, count })).sort((a, b) => b.count - a.count)
+  } catch {
+    return []
+  }
+}
+
+// ─── Generic table-freshness probe for Data Health page ──────────────
+export type V2TableHealth = {
+  table: string
+  rowCount: number
+  lastTs: string | null
+  status: 'green' | 'amber' | 'red' | 'grey'
+  issue: string
+}
+
+/**
+ * Probe a table for liveness using a head-count query plus optional max(ts).
+ * If the table is missing or restricted by RLS the probe returns status='red'.
+ */
+export async function probeTable(
+  table: string,
+  tsColumn: string | null,
+  options: { staleAfterDays?: number; pipelinePending?: boolean } = {},
+): Promise<V2TableHealth> {
+  const staleAfter = options.staleAfterDays ?? 7
+  try {
+    const { count, error: cErr } = await supabase
+      .from(table)
+      .select('*', { count: 'exact', head: true })
+    if (cErr) {
+      return { table, rowCount: 0, lastTs: null, status: 'red', issue: cErr.message || 'query failed' }
+    }
+    const rowCount = count ?? 0
+    if (rowCount === 0) {
+      return {
+        table,
+        rowCount: 0,
+        lastTs: null,
+        status: options.pipelinePending ? 'grey' : 'red',
+        issue: options.pipelinePending ? 'Pipeline pending' : 'No rows',
+      }
+    }
+    let lastTs: string | null = null
+    if (tsColumn) {
+      try {
+        const { data: tsData } = await supabase
+          .from(table)
+          .select(tsColumn)
+          .order(tsColumn, { ascending: false, nullsFirst: false })
+          .limit(1)
+        const r = (tsData as any)?.[0]
+        lastTs = r ? r[tsColumn] : null
+      } catch {
+        lastTs = null
+      }
+    }
+    let status: V2TableHealth['status'] = 'green'
+    let issue = ''
+    if (lastTs) {
+      const ageMs = Date.now() - new Date(lastTs).getTime()
+      const ageDays = ageMs / 86400000
+      if (ageDays > staleAfter) {
+        status = 'amber'
+        issue = `${Math.floor(ageDays)}d stale`
+      }
+    }
+    return { table, rowCount, lastTs, status, issue }
+  } catch (err: any) {
+    return { table, rowCount: 0, lastTs: null, status: 'red', issue: err?.message || 'probe failed' }
+  }
+}
+
 export async function fetchOverview(): Promise<V2Overview> {
   const brands = await fetchBrands()
   const [ig, ads, promos, products, yt, reddit, influencers, adSample, topIGPosts, topYTVideos, topComments] = await Promise.all([

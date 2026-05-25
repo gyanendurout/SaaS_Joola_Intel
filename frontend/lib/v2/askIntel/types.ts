@@ -132,6 +132,11 @@ export type AskIntelResponse = {
   confidence: number
   /** Methodology — surfaced behind an accordion in the UI. */
   methodology?: string
+  /** Server-assigned id of the ask_intel_qa_log row for this turn — used by
+   * the thumbs-up/down feedback button to attach feedback after the answer
+   * has been rendered. Null when the QA log insert failed (e.g. migration
+   * 017 not applied). */
+  messageId?: string | null
 }
 
 // ─── Suggested-prompt catalog (returned by /suggestions) ────────────

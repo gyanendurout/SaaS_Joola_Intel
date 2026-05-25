@@ -3,10 +3,14 @@
 import { useEffect, useState } from 'react'
 import {
   fetchBrands, fetchTikTok, fetchTopTikTokVideos,
+  fetchTikTokCommentStats, fetchTikTokPaddleMentions,
   type V2Brand, type V2TikTokRow, type V2TikTokVideo,
+  type V2TikTokCommentStats, type V2TikTokPaddleMention,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
 import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
+import { tiktokPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
@@ -32,6 +36,8 @@ export default function TikTokPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [ttData, setTtData] = useState<V2TikTokRow[]>([])
   const [videos, setVideos] = useState<V2TikTokVideo[]>([])
+  const [commentStats, setCommentStats] = useState<V2TikTokCommentStats[]>([])
+  const [paddleMentions, setPaddleMentions] = useState<V2TikTokPaddleMention[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
@@ -51,8 +57,12 @@ export default function TikTokPage() {
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
-        const [t, v] = await Promise.all([fetchTikTok(b), fetchTopTikTokVideos(b, 200)])
-        setBrands(b); setAllBrands(b); setTtData(t); setVideos(v); setLoading(false)
+        const [t, v, cs, pm] = await Promise.all([
+          fetchTikTok(b), fetchTopTikTokVideos(b, 200),
+          fetchTikTokCommentStats(b), fetchTikTokPaddleMentions(b, 20),
+        ])
+        setBrands(b); setAllBrands(b); setTtData(t); setVideos(v)
+        setCommentStats(cs); setPaddleMentions(pm); setLoading(false)
       } catch (err) {
         console.error('TikTok data fetch failed', err)
         setError('Unable to load TikTok data. Please refresh.')
@@ -164,6 +174,145 @@ export default function TikTokPage() {
     <>
       <PageHead title="TIKTOK" />
       <FilterBanner />
+
+      <PlatformPlaybook
+        title="TikTok Playbook"
+        sub="Rule-derived TikTok competitor moves from tiktok_videos + tiktok_comments."
+        findings={tiktokPlaybook(brands, displayTT, displayVideos, commentStats, paddleMentions)}
+        brands={brands}
+      />
+
+      <section style={{ marginBottom: 28 }}>
+        <div className="two-col-even">
+          <div>
+            <div className="section-head">
+              <div>
+                <h2>
+                  TikTok comment sentiment · by brand
+                  <SectionInfo
+                    title="TikTok comment sentiment"
+                    description="Positive vs negative vs neutral TikTok comment counts per brand. Pulled from the tiktok_comments table (migration 014) and its sentiment_label column."
+                    source="tiktok_comments · sentiment_label · GROUP BY brand_id"
+                  />
+                </h2>
+                <div className="sub">Audience tone per brand — large neutral % usually means classifier still calibrating.</div>
+              </div>
+            </div>
+            <div className="card"><div className="card-pad">
+              {commentStats.length === 0 ? (
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+                  No TikTok comment data — run scrape_comments.py + enrichment.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                  {commentStats.slice(0, 10).map(c => {
+                    const tot = Math.max(1, c.total)
+                    const posPct = (c.positive / tot) * 100
+                    const neuPct = (c.neutral / tot) * 100
+                    const negPct = (c.negative / tot) * 100
+                    return (
+                      <div key={c.brand} className={'sent-row ' + (c.brand === 'joola' ? 'joola' : '')} style={{ padding: 6 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: c.brand === 'joola' ? '#22c55e' : 'var(--fg)' }}>{name(c.brand)}</span>
+                          <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{fmt(c.total)} comments · {Math.round((c.enriched / tot) * 100)}% enriched</span>
+                        </div>
+                        <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
+                          <div style={{ width: posPct + '%', background: '#22c55e' }} title={`Positive ${c.positive}`} />
+                          <div style={{ width: neuPct + '%', background: '#94a3b8', opacity: 0.5 }} title={`Neutral ${c.neutral}`} />
+                          <div style={{ width: negPct + '%', background: '#ef4444' }} title={`Negative ${c.negative}`} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div></div>
+          </div>
+
+          <div>
+            <div className="section-head">
+              <div>
+                <h2>
+                  Top paddle mentions · TikTok comments
+                  <SectionInfo
+                    title="Paddle mentions in TikTok comments"
+                    description="Which paddles get name-checked most in TikTok comment threads. Extracted from tiktok_comments.products_mentioned[] (GPT-4o-mini NER)."
+                    source="tiktok_comments.products_mentioned[] · aggregated by (brand, paddle)"
+                  />
+                </h2>
+                <div className="sub">Top 20 paddle mentions across the TikTok comment stream.</div>
+              </div>
+            </div>
+            <div className="card"><div className="card-pad">
+              {paddleMentions.length === 0 ? (
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+                  No paddle mentions yet — run tiktok_enrichment.py.
+                </div>
+              ) : (
+                <div>
+                  {paddleMentions.map((p, i) => {
+                    const max = paddleMentions[0]?.mentions || 1
+                    return (
+                      <div key={i} className={'bar-row ' + (p.brand === 'joola' ? 'joola' : '')} style={{ gridTemplateColumns: '160px 1fr 50px' }}>
+                        <div className="lbl" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ fontSize: 12 }}>{p.paddle}</span>
+                          <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{name(p.brand)}</span>
+                        </div>
+                        <div className="track">
+                          <div className="fill" style={{ width: Math.max(2, p.mentions / max * 100) + '%', background: `linear-gradient(90deg, ${pgColor(p.brand)}, ${pgColor(p.brand)}99)` }} />
+                        </div>
+                        <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(p.mentions)}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div></div>
+          </div>
+        </div>
+      </section>
+
+      <section style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>
+              Viral video pattern · views vs comments
+              <SectionInfo
+                title="Viral pattern scatter"
+                description="Each dot is a TikTok video; X-axis = view count, Y-axis = comment count. Outliers in the top-right are the most engaging videos in absolute terms. Colored by brand."
+                source="tiktok_videos · top 100 by views"
+              />
+            </h2>
+            <div className="sub">Top 100 TikTok videos in the sample, plotted to surface viral outliers.</div>
+          </div>
+        </div>
+        <div className="card"><div className="card-pad">
+          {(() => {
+            const sample = displayVideos.slice(0, 100)
+            if (sample.length === 0) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>No TikTok videos to plot.</div>
+            const W = 760, H = 320, padL = 50, padR = 20, padT = 16, padB = 32
+            const maxV = Math.max(1, ...sample.map(v => v.views))
+            const maxC = Math.max(1, ...sample.map(v => v.comments))
+            const xScale = (v: number) => padL + (Math.log10(v + 1) / Math.log10(maxV + 1)) * (W - padL - padR)
+            const yScale = (c: number) => H - padB - (Math.log10(c + 1) / Math.log10(maxC + 1)) * (H - padT - padB)
+            return (
+              <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+                <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
+                <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
+                <text x={W / 2} y={H - 6} fill="#8a93a4" fontSize="10" textAnchor="middle">Views (log scale)</text>
+                <text x={12} y={H / 2} fill="#8a93a4" fontSize="10" textAnchor="middle" transform={`rotate(-90 12 ${H / 2})`}>Comments (log scale)</text>
+                {sample.map((v, i) => (
+                  <circle key={i} cx={xScale(v.views)} cy={yScale(v.comments)} r={v.brand === 'joola' ? 5 : 3}
+                    fill={pgColor(v.brand)} fillOpacity={0.7}
+                    stroke={v.brand === 'joola' ? '#22c55e' : 'transparent'} strokeWidth={1.5}>
+                    <title>{name(v.brand)} · {fmt(v.views)} views · {fmt(v.comments)} comments</title>
+                  </circle>
+                ))}
+              </svg>
+            )
+          })()}
+        </div></div>
+      </section>
 
       <section>
         <div className="two-col">

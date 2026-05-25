@@ -35,6 +35,10 @@ import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL, type DateRangeKey
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import {
   fetchInfluencerIntel,
+  fetchAthleteImpact,
+  fetchSponsoredVsOrganic,
+  fetchAthleteProductPull,
+  fetchCompetitorAthleteThreats,
   platformLabel, platformShort,
   type InfluencerIntelData,
   type InfluencerRow,
@@ -47,6 +51,10 @@ import {
   type PlayerProductConnection,
   type IntelPlatform,
   type IntelSentiment,
+  type AthleteImpactRow,
+  type SponsoredOrganicRow,
+  type AthleteProductPullRow,
+  type CompetitorThreatRow,
 } from '@/lib/v2/influencerIntel'
 import { formatCalendarDate } from '@/lib/v2/format'
 
@@ -118,6 +126,13 @@ export default function InfluencerIntelPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // ─── Extended-section state ────────────────────────────────────────
+  const [athleteImpact, setAthleteImpact] = useState<AthleteImpactRow[]>([])
+  const [sponsoredOrganic, setSponsoredOrganic] = useState<SponsoredOrganicRow[]>([])
+  const [athletePull, setAthletePull] = useState<AthleteProductPullRow[]>([])
+  const [competitorThreats, setCompetitorThreats] = useState<CompetitorThreatRow[]>([])
+  const [pullJoolaOnly, setPullJoolaOnly] = useState(false)
+
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, setRange, mode, customFrom, customTo, setCustomFrom, setCustomTo, effectiveFrom, effectiveTo } = useDateRange()
 
@@ -154,6 +169,21 @@ export default function InfluencerIntelPage() {
         const d = await fetchInfluencerIntel(b, { from: effectiveFrom, to: effectiveTo })
         if (cancelled) return
         setData(d)
+
+        // Extended sections: athlete impact, sponsored/organic, athlete-product pull, threats.
+        const [impactRows, sponsoredRows, pullRows] = await Promise.all([
+          fetchAthleteImpact(b).catch(() => [] as AthleteImpactRow[]),
+          fetchSponsoredVsOrganic(b).catch(() => [] as SponsoredOrganicRow[]),
+          fetchAthleteProductPull(b).catch(() => [] as AthleteProductPullRow[]),
+        ])
+        if (cancelled) return
+        const threatRows = await fetchCompetitorAthleteThreats(b, impactRows, d.platformStats, d.playerProductConnections)
+          .catch(() => [] as CompetitorThreatRow[])
+        if (cancelled) return
+        setAthleteImpact(impactRows)
+        setSponsoredOrganic(sponsoredRows)
+        setAthletePull(pullRows)
+        setCompetitorThreats(threatRows)
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[influencer-intel] load failed', err)
@@ -931,6 +961,271 @@ export default function InfluencerIntelPage() {
         )}
       </Section>
 
+      {/* ── Section E — Athlete Impact Score ──────────────────── */}
+      <Section id="athlete-impact"
+        title="Athlete impact score"
+        info="Composite ROI-proxy per athlete. Normalized sum of: posts (30d), avg engagement, mentions (mention_facts), follower growth WoW (influencer_x_snapshots), product mentions, positive sentiment %. Not literal spend ROI — we have no spend data."
+        source="influencer_posts + influencer_x_snapshots + mention_facts"
+        sub={`${athleteImpact.length} athletes scored`}
+      >
+        <ScrollTable maxHeight={520}>
+          <table className="data">
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <tr>
+                <th>#</th>
+                <th>Player</th>
+                <th>Brand</th>
+                <th style={{ textAlign: 'right' }}>Posts (30d)</th>
+                <th style={{ textAlign: 'right' }}>Avg eng</th>
+                <th style={{ textAlign: 'right' }}>Mentions</th>
+                <th style={{ textAlign: 'right' }}>Growth %</th>
+                <th style={{ textAlign: 'right' }}>Product mentions</th>
+                <th style={{ textAlign: 'right' }}>Positive %</th>
+                <th style={{ textAlign: 'right' }}>Impact score</th>
+                <th>Class</th>
+              </tr>
+            </thead>
+            <tbody>
+              {athleteImpact.length === 0 && (
+                <tr><td colSpan={11} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No athletes scored yet.</td></tr>
+              )}
+              {athleteImpact.slice(0, 100).map((r, i) => {
+                const maxScore = athleteImpact[0]?.impactScore || 100
+                const barPct = Math.min(100, (r.impactScore / maxScore) * 100)
+                return (
+                  <tr key={r.athleteId} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                    <td className="cell-num">{i + 1}</td>
+                    <td style={{ fontWeight: 700 }}>{r.player}</td>
+                    <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{r.posts30d}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.avgEngagement)}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.mentions)}</td>
+                    <td className="cell-num" style={{ textAlign: 'right', color: r.followerGrowthPct > 0 ? '#22c55e' : r.followerGrowthPct < 0 ? '#ef4444' : 'var(--fg-4)' }}>
+                      {r.followerGrowthPct === 0 ? '—' : `${r.followerGrowthPct > 0 ? '+' : ''}${r.followerGrowthPct}%`}
+                    </td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.productMentions)}</td>
+                    <td className="cell-num" style={{ textAlign: 'right', color: r.positivePct >= 60 ? '#22c55e' : 'var(--fg)' }}>{r.positivePct}%</td>
+                    <td className="cell-num" style={{ textAlign: 'right', verticalAlign: 'middle' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                        <span style={{ fontWeight: 800, color: '#F5E625' }}>{r.impactScore.toFixed(1)}</span>
+                        <div style={{ width: 80, height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ width: `${barPct}%`, height: '100%', background: r.brandSlug === 'joola' ? '#22c55e' : '#F5E625' }} />
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{
+                        fontSize: 10, fontWeight: 700,
+                        color: r.classification === 'rising' ? '#22c55e' : r.classification === 'underperforming' ? '#ef4444' : 'var(--fg-3)',
+                        padding: '2px 8px', borderRadius: 99,
+                        background: r.classification === 'rising' ? 'rgba(34,197,94,0.10)' : r.classification === 'underperforming' ? 'rgba(239,68,68,0.10)' : 'rgba(148,163,184,0.10)',
+                        border: `1px solid ${r.classification === 'rising' ? 'rgba(34,197,94,0.30)' : r.classification === 'underperforming' ? 'rgba(239,68,68,0.30)' : 'rgba(148,163,184,0.30)'}`,
+                      }}>{r.classification.toUpperCase()}</span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </ScrollTable>
+      </Section>
+
+      {/* ── Section F — Sponsored vs Organic ──────────────────── */}
+      <Section id="sponsored-vs-organic"
+        title="Sponsored vs organic performance"
+        info="Compares engagement rate on each athlete's sponsored posts vs organic posts (influencer_posts.is_sponsored). ER capped at 100%."
+        source="influencer_posts (is_sponsored split)"
+        sub={`${sponsoredOrganic.length} athletes with comparable data`}
+      >
+        {sponsoredOrganic.length === 0 ? (
+          <div className="card"><div style={{ padding: 24, color: 'var(--fg-4)', textAlign: 'center' }}>
+            <div style={{ fontSize: 13, marginBottom: 6 }}>No sponsored/organic split data yet.</div>
+            <div style={{ fontSize: 11 }}>Becomes meaningful once influencer_posts has a healthy mix of is_sponsored=true/false rows.</div>
+          </div></div>
+        ) : (
+          <ScrollTable maxHeight={520}>
+            <table className="data">
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+                <tr>
+                  <th>Player</th>
+                  <th>Brand</th>
+                  <th style={{ textAlign: 'right' }}>Sponsored posts</th>
+                  <th style={{ textAlign: 'right' }}>Organic posts</th>
+                  <th style={{ textAlign: 'right' }}>Sponsored ER</th>
+                  <th style={{ textAlign: 'right' }}>Organic ER</th>
+                  <th style={{ textAlign: 'right' }}>Δ</th>
+                  <th>Recommendation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sponsoredOrganic.slice(0, 100).map(r => (
+                  <tr key={r.athleteId} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                    <td style={{ fontWeight: 700 }}>{r.player}</td>
+                    <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{r.sponsoredPosts}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{r.organicPosts}</td>
+                    <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625' }}>{r.sponsoredER.toFixed(2)}%</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{r.organicER.toFixed(2)}%</td>
+                    <td className="cell-num" style={{ textAlign: 'right', color: r.difference > 0 ? '#22c55e' : r.difference < 0 ? '#ef4444' : 'var(--fg-4)', fontWeight: 700 }}>
+                      {r.difference > 0 ? '+' : ''}{r.difference.toFixed(2)}%
+                    </td>
+                    <td style={{ fontSize: 12, color: 'var(--fg-3)' }}>{r.recommendation}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ScrollTable>
+        )}
+        <ImpactCards
+          competitorMove="Competitor sponsored posts are increasingly transparent (is_sponsored=true)."
+          businessImpact="When sponsored ER lags organic, the partnership is burning cash without earned reach."
+          recommendedAction="Pause spend on athletes with sponsored ER < 50% of organic; double down on those above 150%."
+        />
+      </Section>
+
+      {/* ── Section G — Athlete-to-Product Pull ──────────────── */}
+      <Section id="athlete-product-pull"
+        title="Athlete-to-product pull"
+        info="Pairs of (athlete, product) where mention_facts has both athlete_id AND product_id set. Sales-likelihood comes from product_attention_summary (last_30d period) when available."
+        source="mention_facts (athlete_id + product_id) + product_attention_summary"
+        sub={`${athletePull.length} (player × product) pairs`}
+      >
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <button
+            className={'chip ' + (pullJoolaOnly ? 'on' : '')}
+            onClick={() => setPullJoolaOnly(v => !v)}
+            style={{
+              padding: '6px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700,
+              background: pullJoolaOnly ? 'rgba(34,197,94,0.20)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${pullJoolaOnly ? 'rgba(34,197,94,0.45)' : 'rgba(255,255,255,0.10)'}`,
+              color: pullJoolaOnly ? '#22c55e' : 'var(--fg-2)',
+              cursor: 'pointer',
+            }}
+          >
+            JOOLA only
+          </button>
+        </div>
+        {athletePull.length === 0 ? (
+          <div className="card"><div style={{ padding: 24, color: 'var(--fg-4)', textAlign: 'center' }}>
+            <div style={{ fontSize: 13, marginBottom: 6 }}>No (athlete × product) pairs in mention_facts yet.</div>
+            <div style={{ fontSize: 11 }}>Becomes useful once enrichment extracts both athlete + product from the same mention.</div>
+          </div></div>
+        ) : (
+          <ScrollTable maxHeight={520}>
+            <table className="data">
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+                <tr>
+                  <th>Player</th>
+                  <th>Brand</th>
+                  <th>Product mentioned</th>
+                  <th style={{ textAlign: 'right' }}>Mentions</th>
+                  <th style={{ textAlign: 'right' }}>Engagement</th>
+                  <th style={{ textAlign: 'right' }}>Sales likelihood</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {athletePull
+                  .filter(r => !pullJoolaOnly || r.brandSlug === 'joola' || r.productBrandSlug === 'joola')
+                  .slice(0, 200)
+                  .map((r, i) => {
+                    const isJoolaPlayer = r.brandSlug === 'joola'
+                    return (
+                      <tr key={`${r.athleteId}-${i}`} className={isJoolaPlayer ? 'joola' : ''}>
+                        <td style={{ fontWeight: 700 }}>{r.player}</td>
+                        <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="brand-dot" style={{ background: pgColor(r.productBrandSlug) }} />
+                            <span style={{ fontSize: 12 }}>{r.productName}</span>
+                          </span>
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.mentions)}</td>
+                        <td className="cell-num" style={{ textAlign: 'right' }}>{r.engagement > 0 ? fmt(r.engagement) : '—'}</td>
+                        <td className="cell-num" style={{ textAlign: 'right', color: r.salesLikelihood > 60 ? '#22c55e' : r.salesLikelihood > 30 ? '#F5E625' : 'var(--fg-3)' }}>
+                          {r.salesLikelihood > 0 ? r.salesLikelihood.toFixed(1) : '—'}
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--fg-3)' }}>{r.action}</td>
+                      </tr>
+                    )
+                  })}
+              </tbody>
+            </table>
+          </ScrollTable>
+        )}
+        <ImpactCards
+          competitorMove="Competitor athletes are publicly linking themselves to specific paddle SKUs."
+          businessImpact="(Player × paddle) pairs predict sales lift weeks before inventory data confirms."
+          recommendedAction="Brief JOOLA players to name the specific paddle in 1-of-3 posts; flag competitor pairings for sales-team intel."
+        />
+      </Section>
+
+      {/* ── Section H — Competitor Athlete Threats ────────────── */}
+      <Section id="competitor-threats"
+        title="Competitor athlete threats"
+        info="Top 10 competitor athletes ranked by impact score, with their dominant platform and any product they're tied to. Threat level reflects percentile rank within their own brand's roster."
+        source="influencers (brand != joola) + impact score + platformStats + product connections"
+        sub="Top 10 watch list"
+      >
+        {competitorThreats.length === 0 ? (
+          <div className="card"><div style={{ padding: 24, color: 'var(--fg-4)', textAlign: 'center' }}>No competitor athletes scored yet.</div></div>
+        ) : (
+          <ScrollTable>
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Player</th>
+                  <th>Brand</th>
+                  <th>Top platform</th>
+                  <th style={{ textAlign: 'right' }}>Engagement</th>
+                  <th>Product mentioned</th>
+                  <th style={{ textAlign: 'right' }}>Impact score</th>
+                  <th>Threat level</th>
+                </tr>
+              </thead>
+              <tbody>
+                {competitorThreats.map((r, i) => {
+                  const threatColor = r.threatLevel === 'critical' ? '#ef4444'
+                    : r.threatLevel === 'high' ? '#fb923c'
+                      : r.threatLevel === 'moderate' ? '#F5E625' : '#94a3b8'
+                  return (
+                    <tr key={r.athleteId}>
+                      <td className="cell-num">{i + 1}</td>
+                      <td style={{ fontWeight: 700 }}>{r.player}</td>
+                      <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <PlatformPill p={r.topPlatform} />
+                          <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{r.topPlatformCount}</span>
+                        </span>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>{r.engagement > 0 ? fmt(r.engagement) : '—'}</td>
+                      <td style={{ fontSize: 12 }}>{r.productMentioned || <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625', fontWeight: 700 }}>{r.impactScore.toFixed(1)}</td>
+                      <td>
+                        <span style={{
+                          fontSize: 10, fontWeight: 800, letterSpacing: '0.06em',
+                          color: threatColor,
+                          padding: '2px 8px', borderRadius: 99,
+                          background: `${threatColor}22`,
+                          border: `1px solid ${threatColor}55`,
+                        }}>{r.threatLevel.toUpperCase()}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </ScrollTable>
+        )}
+        <ImpactCards
+          competitorMove="Competitor brands are concentrating engagement around a small set of high-impact athletes."
+          businessImpact="One critical-threat athlete can outweigh ten organic JOOLA athletes' combined reach."
+          recommendedAction="Run a counter-content sprint or partnership outreach against the top-3 critical threats this quarter."
+        />
+      </Section>
+
       {/* ── Section 13 — Review required ──────────────────────── */}
       {data.reviewRequired.length > 0 && (
         <Section id="review"
@@ -1039,6 +1334,41 @@ function SentimentMix({ positive, negative, total }: { positive: number; negativ
       </div>
       <div style={{ fontSize: 9, color: 'var(--fg-4)' }}>
         +{positive} / −{negative}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Reusable framing cards rendered below intel sections.
+ * Three cards: Competitor move / Business impact / Recommended JOOLA action.
+ */
+function ImpactCards({
+  competitorMove, businessImpact, recommendedAction,
+}: {
+  competitorMove: string; businessImpact: string; recommendedAction: string
+}) {
+  const card: React.CSSProperties = {
+    padding: 14,
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 8,
+    fontSize: 12,
+    color: 'var(--fg-2)',
+  }
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginTop: 12 }}>
+      <div style={card}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#06b6d4', marginBottom: 4 }}>Competitor move</div>
+        <div>{competitorMove}</div>
+      </div>
+      <div style={card}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#F5E625', marginBottom: 4 }}>Business impact</div>
+        <div>{businessImpact}</div>
+      </div>
+      <div style={{ ...card, borderColor: 'rgba(34,197,94,0.30)', background: 'rgba(34,197,94,0.06)' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#22c55e', marginBottom: 4 }}>Recommended JOOLA action</div>
+        <div>{recommendedAction}</div>
       </div>
     </div>
   )

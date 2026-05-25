@@ -3,10 +3,14 @@
 import { useEffect, useState } from 'react'
 import {
   fetchBrands, fetchReddit, fetchRedditTrend, fetchRedditSubreddits, fetchTopRedditMentions,
+  fetchRedditViral, fetchRedditRemoved, fetchRedditCrisisClusters, fetchRedditReplyVsOp,
   type V2Brand, type V2RedditRow, type V2Subreddit, type V2RedditMention,
+  type V2RedditViral, type V2RedditRemoved, type V2RedditCrisisCluster, type V2RedditReplyVsOp,
 } from '@/lib/v2/data'
 import { fmt, LineChart, SentimentBar } from '@/components/v2/charts'
 import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, ColumnFilter, FilterBanner } from '@/components/v2/PageShell'
+import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
+import { redditPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
@@ -28,6 +32,10 @@ export default function RedditPage() {
   const [trend, setTrend] = useState<Record<string, number[]>>({})
   const [subreddits, setSubreddits] = useState<V2Subreddit[]>([])
   const [mentions, setMentions] = useState<V2RedditMention[]>([])
+  const [viral, setViral] = useState<V2RedditViral[]>([])
+  const [removed, setRemoved] = useState<V2RedditRemoved[]>([])
+  const [crisisClusters, setCrisisClusters] = useState<V2RedditCrisisCluster[]>([])
+  const [replyVsOp, setReplyVsOp] = useState<V2RedditReplyVsOp[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
@@ -43,13 +51,19 @@ export default function RedditPage() {
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
-        const [r, t, s, m] = await Promise.all([
+        const [r, t, s, m, vi, rm, cc, rv] = await Promise.all([
           fetchReddit(b),
           fetchRedditTrend(b),
           fetchRedditSubreddits(b),
           fetchTopRedditMentions(b, 20),
+          fetchRedditViral(b, 20),
+          fetchRedditRemoved(b),
+          fetchRedditCrisisClusters(b, 20),
+          fetchRedditReplyVsOp(b, 120),
         ])
-        setBrands(b); setAllBrands(b); setReddit(r); setTrend(t); setSubreddits(s); setMentions(m); setLoading(false)
+        setBrands(b); setAllBrands(b); setReddit(r); setTrend(t); setSubreddits(s); setMentions(m)
+        setViral(vi); setRemoved(rm); setCrisisClusters(cc); setReplyVsOp(rv)
+        setLoading(false)
       } catch (err) {
         console.error('Data fetch failed', err)
         setError('Unable to load data. Please refresh.')

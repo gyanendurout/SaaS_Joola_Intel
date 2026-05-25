@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import {
-  fetchBrands, fetchYT, fetchTopYTVideos,
-  type V2Brand, type V2YTRow, type V2TopYTVideo,
+  fetchBrands, fetchYT, fetchTopYTVideos, fetchYTVideoAnalysis,
+  type V2Brand, type V2YTRow, type V2TopYTVideo, type V2YTVideoAnalysis,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
 import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
+import { youtubePlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
@@ -39,6 +41,7 @@ export default function YouTubePage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [yt, setYt] = useState<V2YTRow[]>([])
   const [videos, setVideos] = useState<V2TopYTVideo[]>([])
+  const [analyses, setAnalyses] = useState<V2YTVideoAnalysis[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
@@ -58,8 +61,8 @@ export default function YouTubePage() {
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
-        const [y, v] = await Promise.all([fetchYT(b), fetchTopYTVideos(b, 200)])
-        setBrands(b); setAllBrands(b); setYt(y); setVideos(v); setLoading(false)
+        const [y, v, a] = await Promise.all([fetchYT(b), fetchTopYTVideos(b, 200), fetchYTVideoAnalysis(b, 20)])
+        setBrands(b); setAllBrands(b); setYt(y); setVideos(v); setAnalyses(a); setLoading(false)
       } catch (err) {
         console.error('YouTube data fetch failed', err)
         setError('Unable to load YouTube data. Please refresh.')
@@ -177,6 +180,74 @@ export default function YouTubePage() {
     <>
       <PageHead title="YOUTUBE" />
       <FilterBanner />
+
+      <PlatformPlaybook
+        title="YouTube Playbook"
+        sub="Rule-derived competitor moves from yt_videos + yt_video_analysis."
+        findings={youtubePlaybook(brands, displayYt, displayVideos, analyses)}
+        brands={brands}
+      />
+
+      <section style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>
+              Why competitor videos worked · top performers
+              <SectionInfo
+                title="Performance thesis from yt_video_analysis"
+                description="One AI-generated row per top competitor video explaining WHY it performed (content type + thesis + product mentions). Pulled from the intelligence layer added in migration 012."
+                source="yt_video_analysis (mig 012) JOIN yt_videos · ordered by view_count_at_analysis"
+              />
+            </h2>
+            <div className="sub">Up to 20 most-viewed analyzed videos. Each row is a learnable performance pattern.</div>
+          </div>
+        </div>
+        <div className="card">
+          {analyses.length === 0 ? (
+            <div style={{ padding: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+              No AI analyses available yet — run the yt_video_analysis enrichment pipeline.
+            </div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
+              <table className="data" style={{ width: '100%' }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <tr>
+                    <th>Brand</th>
+                    <th style={{ width: '25%' }}>Video</th>
+                    <th style={{ textAlign: 'right' }}>Views</th>
+                    <th>Content type</th>
+                    <th style={{ width: '28%' }}>Performance thesis</th>
+                    <th>Product mentioned</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {analyses.map((a, i) => (
+                    <tr key={i} className={a.brand === 'joola' ? 'joola' : ''}>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span className="brand-dot" style={{ background: pgColor(a.brand) }} />
+                          <span style={{ fontWeight: 700, fontSize: 12, color: a.brand === 'joola' ? '#22c55e' : 'var(--fg)' }}>{name(a.brand)}</span>
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 11 }}>
+                        {a.url ? (
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" className="ext-link">{a.title.slice(0, 80)}</a>
+                        ) : a.title.slice(0, 80)}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(a.views)}</td>
+                      <td><span className="pill pill-ghost" style={{ fontSize: 10 }}>{a.contentType || '—'}</span></td>
+                      <td style={{ fontSize: 11, color: 'var(--fg-3)' }}>{a.performanceThesis || '—'}</td>
+                      <td style={{ fontSize: 10, color: 'var(--fg-4)' }}>
+                        {a.productsMentioned.length > 0 ? a.productsMentioned.slice(0, 3).join(', ') : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
 
       <section>
         <div className="two-col">

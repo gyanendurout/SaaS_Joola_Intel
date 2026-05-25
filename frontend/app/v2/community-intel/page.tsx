@@ -11,6 +11,10 @@ import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL, type DateRangeKey
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import {
   fetchCommunityIntel,
+  fetchComplaintMap,
+  fetchDefectionSignals,
+  fetchTopicLifecycle,
+  fetchBrandReplies,
   communityChannelLabel,
   communityChannelColor,
   type CommunityIntelData,
@@ -20,6 +24,11 @@ import {
   type SentimentStat,
   type TrendPoint,
   type HeatmapCell,
+  type ComplaintRow,
+  type DefectionRow,
+  type DefectionKpis,
+  type TopicLifecycleRow,
+  type BrandReplyRow,
 } from '@/lib/v2/communityIntel'
 import { formatCalendarDate } from '@/lib/v2/format'
 
@@ -53,6 +62,12 @@ export default function CommunityIntelPage() {
   const [data, setData] = useState<CommunityIntelData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // ─── Extended-section state ─────────────────────────────────────────
+  const [complaints, setComplaints] = useState<ComplaintRow[]>([])
+  const [defection, setDefection] = useState<{ rows: DefectionRow[]; kpis: DefectionKpis } | null>(null)
+  const [topicLifecycle, setTopicLifecycle] = useState<TopicLifecycleRow[]>([])
+  const [brandReplies, setBrandReplies] = useState<BrandReplyRow[]>([])
 
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, setRange, mode, customFrom, customTo, setCustomFrom, setCustomTo, effectiveFrom, effectiveTo } = useDateRange()
@@ -92,6 +107,18 @@ export default function CommunityIntelPage() {
         const d = await fetchCommunityIntel(b, { from: effectiveFrom, to: effectiveTo })
         if (cancelled) return
         setData(d)
+        // Fire extended fetchers in parallel — failures fall back to empty arrays.
+        const [complaintsRes, defectionRes, topicRes, repliesRes] = await Promise.all([
+          fetchComplaintMap(b, { from: effectiveFrom, to: effectiveTo }).catch(() => [] as ComplaintRow[]),
+          fetchDefectionSignals(b, { from: effectiveFrom, to: effectiveTo }).catch(() => ({ rows: [] as DefectionRow[], kpis: { joolaInflow: 0, joolaOutflow: 0, joolaNet: 0, totalSwitches: 0 } })),
+          fetchTopicLifecycle().catch(() => [] as TopicLifecycleRow[]),
+          fetchBrandReplies(b).catch(() => [] as BrandReplyRow[]),
+        ])
+        if (cancelled) return
+        setComplaints(complaintsRes)
+        setDefection(defectionRes)
+        setTopicLifecycle(topicRes)
+        setBrandReplies(repliesRes)
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[community-intel] load failed', err)
@@ -1010,6 +1037,293 @@ export default function CommunityIntelPage() {
         />
       </section>
 
+      {/* ─── Section A: Competitor Complaint Map ───────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              Competitor complaint map
+              <SectionInfo
+                title="Competitor complaint map"
+                description="Per-brand top complaint topic, crisis count, negative %, and sample comments. Built from is_crisis=true OR sentiment=negative rows across IG / YT / Reddit / TikTok comments. JOOLA opportunity rule: high competitor negative % on a topic → content angle for JOOLA."
+                source="ig_comments + yt_comments + reddit_comments + tiktok_comments (crisis_keywords[])"
+              />
+            </h2>
+            <div className="sub">Where each brand is taking heat — and where the opening sits for JOOLA.</div>
+          </div>
+        </div>
+        <div className="card" style={{ overflowX: 'auto' }}>
+          <table className="data" style={{ width: '100%', minWidth: 980 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>Brand</th>
+                <th style={{ textAlign: 'left' }}>Top complaint topic</th>
+                <th style={{ textAlign: 'right' }}>Crisis</th>
+                <th style={{ textAlign: 'right' }}>Negative %</th>
+                <th style={{ textAlign: 'left' }}>Examples</th>
+                <th style={{ textAlign: 'left' }}>JOOLA opportunity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {complaints.length === 0 && (
+                <tr><td colSpan={6} style={emptyCell}>No complaint signals in the active window.</td></tr>
+              )}
+              {complaints.map((r) => {
+                const isJoola = r.brand === 'joola'
+                return (
+                  <tr key={r.brand} style={isJoola ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}}>
+                    <td style={{ textAlign: 'left' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 999, background: pgColor(r.brand) }} />
+                        <span style={{ fontWeight: 700, color: isJoola ? '#22c55e' : 'inherit' }}>{name(r.brand)}</span>
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'left', fontStyle: r.topTopic === '(uncategorized)' ? 'italic' : 'normal', color: r.topTopic === '(uncategorized)' ? 'var(--fg-4)' : 'inherit' }}>
+                      {r.topTopic}
+                    </td>
+                    <td style={{ textAlign: 'right', color: r.crisisCount > 0 ? '#ef4444' : 'inherit', fontWeight: r.crisisCount > 0 ? 700 : 400 }}>
+                      {r.crisisCount || <span style={{ color: '#3a4150' }}>·</span>}
+                    </td>
+                    <td style={{ textAlign: 'right', color: r.negativePct >= 30 ? '#ef4444' : r.negativePct >= 15 ? '#F5E625' : 'inherit' }}>
+                      {r.negativePct}%
+                    </td>
+                    <td style={{ textAlign: 'left', maxWidth: 360 }}>
+                      {r.examples.length === 0
+                        ? <span style={{ color: '#3a4150' }}>·</span>
+                        : (
+                          <div style={{ display: 'grid', gap: 4 }}>
+                            {r.examples.map((ex, i) => (
+                              <div key={i} title={ex} style={{ fontSize: 11, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 340 }}>
+                                "{ex.slice(0, 100)}"
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      }
+                    </td>
+                    <td style={{ textAlign: 'left', fontSize: 12, color: isJoola ? 'var(--fg-3)' : '#fde68a' }}>{r.opportunity}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <ImpactCards
+          competitorMove="Competitors absorbing negative voice on durability, grip, and warranty topics."
+          businessImpact="High negative % concentrates buyer doubt on weak points — JOOLA can convert it."
+          recommendedAction="Pick the top-2 competitor weakness topics and ship comparison content + retargeting copy this week."
+        />
+      </section>
+
+      {/* ─── Section B: Defection Signals ───────────────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              Defection signals
+              <SectionInfo
+                title="Defection signals (switching intent)"
+                description="From competitor_switch_events — confirmed 'I switched from X to Y' moments. Grouped by (from, to) brand pair with avg confidence + an example quote."
+                source="competitor_switch_events"
+              />
+            </h2>
+            <div className="sub">Who is moving, where, and how confident the signal is.</div>
+          </div>
+        </div>
+        {defection && (
+          <div className="kpi-grid" style={{ marginBottom: 10 }}>
+            <MiniKpi label="JOOLA inflow" value={fmt(defection.kpis.joolaInflow)} color="#22c55e" customVs="switches into JOOLA" flavor="joola" />
+            <MiniKpi label="JOOLA outflow" value={fmt(defection.kpis.joolaOutflow)} color={defection.kpis.joolaOutflow > 0 ? '#ef4444' : '#22c55e'} customVs="switches away from JOOLA" />
+            <MiniKpi label="JOOLA net" value={(defection.kpis.joolaNet >= 0 ? '+' : '') + fmt(defection.kpis.joolaNet)} color={defection.kpis.joolaNet >= 0 ? '#22c55e' : '#ef4444'} customVs="inflow − outflow" />
+            <MiniKpi label="Total switches" value={fmt(defection.kpis.totalSwitches)} color="#06b6d4" customVs="all brand-pair moves" />
+          </div>
+        )}
+        <div className="card" style={{ overflowX: 'auto' }}>
+          <table className="data" style={{ width: '100%', minWidth: 920 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>From</th>
+                <th style={{ textAlign: 'left' }}>To</th>
+                <th style={{ textAlign: 'right' }}>Count</th>
+                <th style={{ textAlign: 'right' }}>Confidence</th>
+                <th style={{ textAlign: 'left' }}>Example</th>
+                <th style={{ textAlign: 'left' }}>Opportunity</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(!defection || defection.rows.length === 0) && (
+                <tr><td colSpan={6} style={emptyCell}>No defection signals in the window — table populates after competitor_switch.py enrichment runs.</td></tr>
+              )}
+              {defection?.rows.map((r) => {
+                const isJoolaInflow = r.toBrand === 'joola'
+                const isJoolaOutflow = r.fromBrand === 'joola'
+                return (
+                  <tr key={`${r.fromBrand}::${r.toBrand}`} style={isJoolaInflow ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : isJoolaOutflow ? { borderLeft: '3px solid #ef4444', background: 'rgba(239,68,68,0.04)' } : {}}>
+                    <td style={{ textAlign: 'left' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 999, background: pgColor(r.fromBrand) }} />
+                        <span style={{ fontWeight: 600 }}>{name(r.fromBrand)}</span>
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'left' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 999, background: pgColor(r.toBrand) }} />
+                        <span style={{ fontWeight: 700, color: r.toBrand === 'joola' ? '#22c55e' : 'inherit' }}>{name(r.toBrand)}</span>
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(r.count)}</td>
+                    <td style={{ textAlign: 'right' }}>{r.confidence.toFixed(2)}</td>
+                    <td style={{ textAlign: 'left', maxWidth: 360 }}>
+                      <span title={r.exampleText} style={{ display: 'inline-block', maxWidth: 340, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11, color: 'var(--fg-3)' }}>
+                        {r.exampleText ? `"${r.exampleText.slice(0, 140)}"` : '—'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'left', fontSize: 12, color: '#fde68a' }}>{r.opportunity}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        <ImpactCards
+          competitorMove="Real users are publicly switching brands — every row is a captured purchase decision."
+          businessImpact="Net defection is the leading indicator of share shift before sales data registers it."
+          recommendedAction="Reach out to JOOLA-inflow authors for testimonials; investigate any outflow root-cause within 7 days."
+        />
+      </section>
+
+      {/* ─── Section C: Topic Lifecycle Radar ───────────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              Topic lifecycle radar
+              <SectionInfo
+                title="Topic lifecycle radar"
+                description="From topic_lifecycle — emergent topics with first-seen channel, peak date, channels touched, crisis flag. Use to spot a trend before competitors react."
+                source="topic_lifecycle"
+              />
+            </h2>
+            <div className="sub">Earliest channel + decay state per tracked topic.</div>
+          </div>
+        </div>
+        {topicLifecycle.length === 0 ? (
+          <div className="card" style={{ padding: 18, fontSize: 13, color: '#F5E625', background: 'rgba(245,182,37,0.08)', borderColor: 'rgba(245,182,37,0.3)' }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Pipeline pending — no topic_lifecycle rows.</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 4 }}>
+              The topic_lifecycle table is empty in the active window. Known issue: <code style={{ fontSize: 11 }}>backend/scraping/facts/topic_lifecycle.py</code> currently fails with PGRST204 brand_id when populating.
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+              <strong>USER ACTION:</strong> patch topic_lifecycle.py to drop brand_id from its insert payload, then re-run the facts module.
+            </div>
+          </div>
+        ) : (
+          <div className="card" style={{ overflowX: 'auto' }}>
+            <table className="data" style={{ width: '100%', minWidth: 960 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Topic</th>
+                  <th style={{ textAlign: 'left' }}>First channel</th>
+                  <th style={{ textAlign: 'left' }}>Peak date</th>
+                  <th style={{ textAlign: 'right' }}>Peak / 24h</th>
+                  <th style={{ textAlign: 'left' }}>Channels</th>
+                  <th style={{ textAlign: 'center' }}>Crisis</th>
+                  <th style={{ textAlign: 'left' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topicLifecycle.map((r, i) => (
+                  <tr key={r.topic + i}>
+                    <td style={{ textAlign: 'left', fontWeight: 700 }}>{r.topic}</td>
+                    <td style={{ textAlign: 'left' }}>{r.firstSeenChannel}</td>
+                    <td style={{ textAlign: 'left', fontFamily: 'JetBrains Mono', fontSize: 11 }}>
+                      {r.peakDate ? formatCalendarDate(r.peakDate) : '—'}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(r.peakMentions)}</td>
+                    <td style={{ textAlign: 'left' }}>
+                      <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+                        {r.channelsTouched.length === 0
+                          ? <span style={{ color: '#3a4150' }}>·</span>
+                          : r.channelsTouched.map((c) => (
+                            <span key={c} className="pill pill-ghost" style={{ fontSize: 9 }}>{c}</span>
+                          ))}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {r.isCrisis
+                        ? <span className="pill pill-red" style={{ fontSize: 10, fontWeight: 700 }}>YES</span>
+                        : <span style={{ color: '#3a4150' }}>·</span>}
+                    </td>
+                    <td style={{ textAlign: 'left', fontSize: 12, color: r.isCrisis ? '#fb923c' : 'var(--fg-3)' }}>{r.action}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* ─── Section D: Brand Reply Advantage ───────────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              Brand reply advantage
+              <SectionInfo
+                title="Brand reply advantage"
+                description="Per-brand response-time and reply rate. Currently sourced from brand_replies — which is not in the default weekly scheduler."
+                source="brand_replies"
+              />
+            </h2>
+            <div className="sub">Who responds fast and who lets complaints sit.</div>
+          </div>
+        </div>
+        {brandReplies.length === 0 ? (
+          <div className="card" style={{ padding: 18, fontSize: 13, color: '#F5E625', background: 'rgba(245,182,37,0.08)', borderColor: 'rgba(245,182,37,0.3)' }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Pipeline pending — no brand_replies rows.</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 4 }}>
+              The brand_replies table exists but is empty because <code style={{ fontSize: 11 }}>detect_brand_replies.py</code> is not currently invoked by the weekly scheduler.
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+              <strong>USER ACTION:</strong> add <code style={{ fontSize: 11 }}>detect_brand_replies.py</code> to <code style={{ fontSize: 11 }}>scripts/scraping/run.py</code> facts module list so it runs each Monday.
+            </div>
+          </div>
+        ) : (
+          <div className="card" style={{ overflowX: 'auto' }}>
+            <table className="data" style={{ width: '100%', minWidth: 860 }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Brand</th>
+                  <th style={{ textAlign: 'right' }}>Avg response</th>
+                  <th style={{ textAlign: 'right' }}>Complaints replied</th>
+                  <th style={{ textAlign: 'right' }}>Complaints ignored</th>
+                  <th style={{ textAlign: 'center' }}>Rank</th>
+                </tr>
+              </thead>
+              <tbody>
+                {brandReplies.map((r) => {
+                  const isJoola = r.brand === 'joola'
+                  return (
+                    <tr key={r.brand} style={isJoola ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}}>
+                      <td style={{ textAlign: 'left' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 999, background: pgColor(r.brand) }} />
+                          <span style={{ fontWeight: 700, color: isJoola ? '#22c55e' : 'inherit' }}>{name(r.brand)}</span>
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>{r.avgResponseMins === null ? '—' : `${fmt(r.avgResponseMins)} min`}</td>
+                      <td style={{ textAlign: 'right', color: '#22c55e' }}>{fmt(r.complaintsReplied)}</td>
+                      <td style={{ textAlign: 'right', color: r.complaintsIgnored > 0 ? '#ef4444' : 'inherit' }}>{fmt(r.complaintsIgnored)}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 700 }}>#{r.joolaRank}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       {/* ─── Section 10: Review required ──────────────────────────── */}
       {(data.dataStatus.mentionFactsTotal === 0 || sentimentCoverage < 0.2) && (
         <section>
@@ -1067,6 +1381,41 @@ function SummaryItem({ label, value, color }: { label: string; value: string; co
     <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: 100 }}>
       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
       <span style={{ fontSize: 16, fontWeight: 800, color: color || '#fff', whiteSpace: 'nowrap' }}>{value}</span>
+    </div>
+  )
+}
+
+/**
+ * Reusable framing cards rendered below intel sections.
+ * Three cards: Competitor move / Business impact / Recommended JOOLA action.
+ */
+function ImpactCards({
+  competitorMove, businessImpact, recommendedAction,
+}: {
+  competitorMove: string; businessImpact: string; recommendedAction: string
+}) {
+  const card: React.CSSProperties = {
+    padding: 14,
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 8,
+    fontSize: 12,
+    color: 'var(--fg-2)',
+  }
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10, marginTop: 12 }}>
+      <div style={card}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#06b6d4', marginBottom: 4 }}>Competitor move</div>
+        <div>{competitorMove}</div>
+      </div>
+      <div style={card}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#F5E625', marginBottom: 4 }}>Business impact</div>
+        <div>{businessImpact}</div>
+      </div>
+      <div style={{ ...card, borderColor: 'rgba(34,197,94,0.30)', background: 'rgba(34,197,94,0.06)' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#22c55e', marginBottom: 4 }}>Recommended JOOLA action</div>
+        <div>{recommendedAction}</div>
+      </div>
     </div>
   )
 }

@@ -11,6 +11,9 @@ import { useDateRange, DATE_RANGE_LABEL, type DateRangeKey } from '@/lib/v2/Date
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import {
   fetchCampaignOfferIntel,
+  fetchCampaignStrategyMatrix,
+  buildOfferPlaybook,
+  buildMessageThemeRows,
   type CampaignOfferIntelData,
   type AdCreative,
   type ActiveOffer,
@@ -18,6 +21,12 @@ import {
   type ActivityTrendPoint,
   type PromoCadenceRow,
   type PlatformStat,
+  type CampaignStrategyMatrix,
+  type CampaignStrategyPoint,
+  type CampaignStrategyQuadrant,
+  type OfferPlaybookRow,
+  type MessageThemeRow,
+  type MessageTheme,
 } from '@/lib/v2/campaignOfferIntel'
 import { formatCalendarDate } from '@/lib/v2/format'
 
@@ -89,6 +98,7 @@ function discountBucket(d: number | null): DiscountKey {
 export default function CampaignOfferIntelPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [data, setData] = useState<CampaignOfferIntelData | null>(null)
+  const [matrix, setMatrix] = useState<CampaignStrategyMatrix | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -125,6 +135,10 @@ export default function CampaignOfferIntelPage() {
         const d = await fetchCampaignOfferIntel(b, { from: effectiveFrom, to: effectiveTo })
         if (cancelled) return
         setData(d)
+        // Strategy matrix uses the analytics marts (or falls back to the just-loaded ads/offers)
+        const m = await fetchCampaignStrategyMatrix(b, { ads: d.adCreatives, offers: d.activeOffers })
+        if (cancelled) return
+        setMatrix(m)
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[campaign-offer-intel] load failed', err)
@@ -295,6 +309,16 @@ export default function CampaignOfferIntelPage() {
     rows = sortRows(rows, adSort.key, adSort.dir)
     return rows.slice(0, 200)
   }, [filteredAds, adColFilter, adSort, brands])
+
+  // ─── New section: Offer Playbook (rule-based JOOLA response) ───────
+  const offerPlaybook = useMemo<OfferPlaybookRow[]>(() => {
+    return buildOfferPlaybook(filteredOffers)
+  }, [filteredOffers])
+
+  // ─── New section: Creative Message Intelligence ────────────────────
+  const messageThemeData = useMemo(() => {
+    return buildMessageThemeRows(filteredAds)
+  }, [filteredAds])
 
   // ─── Early returns ──────────────────────────────────────────────────
   if (loading) return <LoadingPage />
@@ -913,6 +937,167 @@ export default function CampaignOfferIntelPage() {
         </div>
       </section>
 
+      {/* ─── Section A: Campaign Strategy Matrix (2x2 quadrant) ────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              Campaign strategy matrix
+              <SectionInfo
+                title="Campaign strategy matrix"
+                description="X = ad pressure (30d avg from ad_pressure_daily.ad_pressure_score, or active-ad count fallback). Y = promotion pressure (promo_active_flag × promo_depth_pct from promotion_daily, or promo count fallback). Bubble size = total ad+promo activity. JOOLA highlighted in green. Quadrants are split at the active brand median for X and Y."
+                source={matrix?.source || 'ad_pressure_daily + promotion_daily'}
+              />
+            </h2>
+            <div className="sub">Each brand placed on the paid × promo strategy plane.</div>
+          </div>
+        </div>
+        <div className="card" style={{ padding: 16 }}>
+          {matrix && matrix.points.some((p) => p.adPressure > 0 || p.promoPressure > 0) ? (
+            <CampaignStrategyMatrixChart matrix={matrix} name={name} />
+          ) : (
+            <div style={emptyCell}>No campaign or promo data to plot in this window.</div>
+          )}
+          {matrix && (
+            <div style={{ marginTop: 12, padding: 12, fontSize: 12, color: 'var(--fg-2)', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: 6 }}>
+              <strong style={{ color: '#22c55e' }}>JOOLA position:</strong>{' '}
+              {matrix.joolaQuadrant ? (
+                <>
+                  Quadrant <em>{QUADRANT_LABEL[matrix.joolaQuadrant]}</em>.{' '}
+                  {JOOLA_COUNTER[matrix.joolaQuadrant]}
+                </>
+              ) : (
+                <>No JOOLA campaign signal in this window — start with paid + content push before considering promos.</>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ─── Section B: Competitor Offer Playbook ───────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              Competitor offer playbook
+              <SectionInfo
+                title="Competitor offer playbook"
+                description="One row per (brand, promo type) in the active filter. Discount depth = deepest discount we’ve observed. Frequency = number of promotion rows. JOOLA response is rule-based: deep discounts (>30%) get “match or differentiate”; flash sales get “counter with content”; bundles get “bundle response if margin allows”."
+                source="promotions GROUP BY (brand_id, promo_type)"
+              />
+            </h2>
+            <div className="sub">Rule-based JOOLA counter-move per competitor offer type.</div>
+          </div>
+        </div>
+        <div className="card">
+          <div style={{ padding: '10px 16px', fontSize: 11, color: '#F5E625', background: 'rgba(245,182,37,0.08)', borderBottom: '1px solid rgba(245,182,37,0.25)' }}>
+            <strong>Caveat:</strong> the promotions table has no <code>start_date</code> / <code>end_date</code> columns — promo windows are inferred from <code>detected_at</code> only. “Last detected” is the most recent scrape that surfaced this promo, not the campaign end.
+          </div>
+          <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
+            <table className="data" style={{ width: '100%', minWidth: 980 }}>
+              <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Brand</th>
+                  <th style={{ textAlign: 'center' }}>Promo type</th>
+                  <th style={{ textAlign: 'right' }}>Discount depth</th>
+                  <th style={{ textAlign: 'right' }}>Frequency</th>
+                  <th style={{ textAlign: 'right' }}>Last detected</th>
+                  <th style={{ textAlign: 'left' }}>Product affected</th>
+                  <th style={{ textAlign: 'left' }}>JOOLA response</th>
+                </tr>
+              </thead>
+              <tbody>
+                {offerPlaybook.length === 0 && (
+                  <tr><td colSpan={7} style={emptyCell}>No promotions to play-book in the active filter.</td></tr>
+                )}
+                {offerPlaybook.map((r, i) => (
+                  <tr key={`${r.brand}-${r.promoType}-${i}`} style={r.brand === 'joola' ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}}>
+                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 99, background: pgColor(r.brand) }} />
+                        <span style={{ fontWeight: 600, color: r.brand === 'joola' ? '#22c55e' : 'inherit' }}>{name(r.brand)}</span>
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}><span className="pill pill-ghost" style={{ fontSize: 10 }}>{r.promoType}</span></td>
+                    <td style={{ textAlign: 'right', color: r.discountDepth && r.discountDepth > 0 ? '#F5E625' : 'inherit', fontWeight: r.discountDepth ? 700 : 400 }}>
+                      {r.discountDepth != null && r.discountDepth > 0 ? `${r.discountDepth}%` : '—'}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{fmt(r.frequency)}</td>
+                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{r.lastDetected ? formatCalendarDate(r.lastDetected) : '—'}</td>
+                    <td style={{ textAlign: 'left', color: '#6b7280', fontSize: 11 }}>{r.productAffected || '— (no product FK)'}</td>
+                    <td style={{ textAlign: 'left', fontSize: 12 }}>{r.joolaResponse}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Section C: Creative Message Intelligence ────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              Creative message intelligence
+              <SectionInfo
+                title="Creative message intelligence"
+                description="Ad copy is classified into themes by rule-based regex matching (no LLM call). Themes: Performance/control, Power, Sale/discount, Pro endorsement, New launch, Beginner-friendly, Tournament/PPA. First matching theme wins so totals are additive. Use to see what messages competitors are testing this window."
+                source="marketing_ads.body · regex classifier"
+              />
+            </h2>
+            <div className="sub">Rule-based theme classifier across all active ad creatives.</div>
+          </div>
+        </div>
+        <div className="two-col">
+          <div className="card" style={{ padding: 16 }}>
+            <h6 style={{ marginTop: 0 }}>Themes × brands</h6>
+            <MessageThemeBarChart rows={messageThemeData.rows} name={name} />
+          </div>
+          <div className="card" style={{ padding: 16 }}>
+            <h6 style={{ marginTop: 0 }}>Theme details</h6>
+            <div className="table-wrap" style={{ maxHeight: 420, overflowY: 'auto' }}>
+              <table className="data" style={{ width: '100%' }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>Brand</th>
+                    <th style={{ textAlign: 'left' }}>Theme</th>
+                    <th style={{ textAlign: 'center' }}>CTA</th>
+                    <th style={{ textAlign: 'center' }}>Platform</th>
+                    <th style={{ textAlign: 'right' }}>Count</th>
+                    <th style={{ textAlign: 'left' }}>Example</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {messageThemeData.rows.length === 0 && (
+                    <tr><td colSpan={6} style={emptyCell}>No ad copy in the active filter.</td></tr>
+                  )}
+                  {messageThemeData.rows.slice(0, 100).map((r, i) => (
+                    <tr key={`${r.brand}-${r.theme}-${i}`} style={r.brand === 'joola' ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}}>
+                      <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: 99, background: pgColor(r.brand) }} />
+                          <span style={{ fontWeight: 600, color: r.brand === 'joola' ? '#22c55e' : 'inherit' }}>{name(r.brand)}</span>
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'left', fontSize: 12 }}>{r.themeLabel}</td>
+                      <td style={{ textAlign: 'center' }}><span className="pill pill-ghost" style={{ fontSize: 10 }}>{r.cta}</span></td>
+                      <td style={{ textAlign: 'center' }}><span className="pill pill-ghost" style={{ fontSize: 10 }}>{r.platform}</span></td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(r.count)}</td>
+                      <td style={{ textAlign: 'left', fontSize: 11, color: '#cbd1dc', maxWidth: 240 }}>
+                        <span title={r.exampleCopy} style={{ display: 'inline-block', maxWidth: 230, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.exampleCopy || '—'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─── Section 9: Review required ───────────────────────────── */}
       {(!data.dataStatus.hasAds || !data.dataStatus.hasPromos || !data.dataStatus.hasPlatform) && (
         <section>
@@ -1163,6 +1348,162 @@ function AdsVsPromosScatter({ rows, name }: { rows: CampaignPressureStat[]; name
           JOOLA has no ads or promos in the active window.
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Campaign Strategy Matrix (2×2 quadrant scatter) ──────────────────
+
+const QUADRANT_LABEL: Record<CampaignStrategyQuadrant, string> = {
+  'aggressive-growth': 'Aggressive growth push (high ads + high promos)',
+  'brand-building': 'Brand-building / premium positioning (high ads + low promos)',
+  'price-sensitive': 'Price-sensitive sales push (low ads + high promos)',
+  'quiet': 'Quiet / low activity (low ads + low promos)',
+}
+
+const JOOLA_COUNTER: Record<CampaignStrategyQuadrant, string> = {
+  'aggressive-growth': 'Don\'t match volume — focus paid spend on highest-ROAS channel and lean harder on Ben Johns + Anna Bright proof.',
+  'brand-building': 'Hold price discipline; counter with athlete-led tournament content and reviewer outreach.',
+  'price-sensitive': 'Resist discount war — bundle accessories or extend warranty instead of cutting flagship paddle pricing.',
+  'quiet': 'Take share now — run a focused ad burst on flagship SKUs while competitors are dormant.',
+}
+
+function CampaignStrategyMatrixChart({ matrix, name }: { matrix: CampaignStrategyMatrix; name: (s: string) => string }) {
+  const w = 760
+  const h = 400
+  const padL = 60, padR = 30, padT = 30, padB = 52
+  const innerW = w - padL - padR
+  const innerH = h - padT - padB
+
+  const xs = matrix.points.map((p) => p.adPressure)
+  const ys = matrix.points.map((p) => p.promoPressure)
+  const xMax = Math.max(1, ...xs)
+  const yMax = Math.max(1, ...ys)
+  const xMid = matrix.xMedian > 0 ? matrix.xMedian : xMax / 2
+  const yMid = matrix.yMedian > 0 ? matrix.yMedian : yMax / 2
+
+  const x = (v: number): number => padL + (Math.min(v, xMax) / xMax) * innerW
+  const y = (v: number): number => padT + innerH - (Math.min(v, yMax) / yMax) * innerH
+  const maxActivity = Math.max(1, ...matrix.points.map((p) => p.totalActivity))
+  const radius = (v: number): number => 6 + (v / maxActivity) * 16
+
+  const [hover, setHover] = useState<CampaignStrategyPoint | null>(null)
+
+  const visiblePoints = matrix.points.filter((p) => p.adPressure > 0 || p.promoPressure > 0)
+  if (visiblePoints.length === 0) {
+    return <div style={{ color: '#6b7280', fontSize: 13, padding: '32px 0', textAlign: 'center' }}>No campaign signal to plot.</div>
+  }
+
+  return (
+    <div className="scatter-wrap">
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
+        <rect x={padL} y={padT} width={x(xMid) - padL} height={y(yMid) - padT} fill="rgba(239,68,68,0.05)" />
+        <rect x={x(xMid)} y={padT} width={padL + innerW - x(xMid)} height={y(yMid) - padT} fill="rgba(251,146,60,0.07)" />
+        <rect x={padL} y={y(yMid)} width={x(xMid) - padL} height={padT + innerH - y(yMid)} fill="rgba(100,116,139,0.04)" />
+        <rect x={x(xMid)} y={y(yMid)} width={padL + innerW - x(xMid)} height={padT + innerH - y(yMid)} fill="rgba(129,140,248,0.05)" />
+        <line x1={x(xMid)} x2={x(xMid)} y1={padT} y2={padT + innerH} stroke="rgba(245,230,37,0.4)" strokeDasharray="4 3" strokeWidth="1.5" />
+        <line x1={padL} x2={padL + innerW} y1={y(yMid)} y2={y(yMid)} stroke="rgba(245,230,37,0.4)" strokeDasharray="4 3" strokeWidth="1.5" />
+        <text x={padL + (x(xMid) - padL) / 2} y={padT + 16} textAnchor="middle" style={{ fill: '#ef4444', fontSize: 10, fontWeight: 700 }}>PRICE-SENSITIVE SALES PUSH</text>
+        <text x={x(xMid) + (padL + innerW - x(xMid)) / 2} y={padT + 16} textAnchor="middle" style={{ fill: '#fb923c', fontSize: 10, fontWeight: 700 }}>AGGRESSIVE GROWTH PUSH</text>
+        <text x={padL + (x(xMid) - padL) / 2} y={padT + innerH - 8} textAnchor="middle" style={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}>QUIET / LOW ACTIVITY</text>
+        <text x={x(xMid) + (padL + innerW - x(xMid)) / 2} y={padT + innerH - 8} textAnchor="middle" style={{ fill: '#818cf8', fontSize: 10, fontWeight: 700 }}>BRAND-BUILDING / PREMIUM</text>
+        <text x={padL + innerW / 2} y={h - 12} textAnchor="middle" style={{ fill: '#6b7280', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>AD PRESSURE →</text>
+        <text transform={`translate(14 ${padT + innerH / 2}) rotate(-90)`} textAnchor="middle" style={{ fill: '#6b7280', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>PROMO PRESSURE →</text>
+        {visiblePoints.map((p) => {
+          const cx = x(p.adPressure)
+          const cy = y(p.promoPressure)
+          const rad = radius(p.totalActivity)
+          const isJ = p.brand === 'joola'
+          const isHov = hover?.brand === p.brand
+          return (
+            <g key={p.brand} style={{ cursor: 'pointer' }} onMouseEnter={() => setHover(p)} onMouseLeave={() => setHover(null)}>
+              <circle cx={cx} cy={cy} r={rad} fill={pgColor(p.brand)} opacity={isJ ? 0.95 : 0.6} stroke={isJ ? '#22c55e' : isHov ? '#fff' : 'transparent'} strokeWidth={isJ ? 2.5 : isHov ? 1.5 : 0}>
+                <title>{`${name(p.brand)} · ad ${p.adPressure.toFixed(1)} · promo ${p.promoPressure.toFixed(1)} · ${QUADRANT_LABEL[p.quadrant]}`}</title>
+              </circle>
+              {(isJ || isHov) && (
+                <text x={cx} y={cy - rad - 6} textAnchor="middle" style={{ fontWeight: 800, fill: isJ ? '#22c55e' : '#fff', fontSize: 11, pointerEvents: 'none' }}>
+                  {name(p.brand)}
+                </text>
+              )}
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
+// ─── Message Theme Bar Chart (themes × brands stacked) ────────────────
+
+function MessageThemeBarChart({ rows, name }: { rows: MessageThemeRow[]; name: (s: string) => string }) {
+  if (rows.length === 0) {
+    return <div style={{ color: '#6b7280', fontSize: 13, padding: '32px 0', textAlign: 'center' }}>No themes to chart.</div>
+  }
+  // Aggregate per theme
+  const themeOrder: MessageTheme[] = ['performance', 'power', 'sale', 'pro-endorsement', 'new-launch', 'beginner', 'tournament', 'other']
+  const themeLabelMap: Record<MessageTheme, string> = {
+    'performance': 'Performance',
+    'power': 'Power',
+    'sale': 'Sale',
+    'pro-endorsement': 'Pro',
+    'new-launch': 'New',
+    'beginner': 'Beginner',
+    'tournament': 'Tournament',
+    'other': 'Other',
+  }
+  const byTheme = new Map<MessageTheme, Map<string, number>>()
+  for (const r of rows) {
+    if (!byTheme.has(r.theme)) byTheme.set(r.theme, new Map())
+    const m = byTheme.get(r.theme)!
+    m.set(r.brand, (m.get(r.brand) || 0) + r.count)
+  }
+  const themes = themeOrder.filter((t) => byTheme.has(t))
+  const totalsByTheme = themes.map((t) => {
+    const m = byTheme.get(t)!
+    return Array.from(m.values()).reduce((s, v) => s + v, 0)
+  })
+  const maxTotal = Math.max(1, ...totalsByTheme)
+  const allBrands = Array.from(new Set(rows.map((r) => r.brand))).sort()
+
+  return (
+    <div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {themes.map((t, idx) => {
+          const m = byTheme.get(t)!
+          const total = totalsByTheme[idx]
+          const widthPct = (total / maxTotal) * 100
+          return (
+            <div key={t} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 60px', alignItems: 'center', gap: 10, fontSize: 12 }}>
+              <span style={{ color: '#cbd1dc', fontWeight: 600 }}>{themeLabelMap[t]}</span>
+              <div style={{ height: 18, background: 'rgba(255,255,255,0.04)', borderRadius: 4, position: 'relative', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', height: '100%', width: `${widthPct}%`, transition: 'width 200ms' }}>
+                  {allBrands.map((b) => {
+                    const v = m.get(b) || 0
+                    if (v === 0) return null
+                    const segPct = (v / total) * 100
+                    return (
+                      <div
+                        key={b}
+                        style={{ width: `${segPct}%`, background: pgColor(b), opacity: b === 'joola' ? 1 : 0.75 }}
+                        title={`${name(b)} · ${themeLabelMap[t]} · ${v}`}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+              <span style={{ color: '#fff', fontWeight: 700, textAlign: 'right' }}>{total}</span>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14, fontSize: 11, color: '#6b7280' }}>
+        {allBrands.map((b) => (
+          <span key={b} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 99, background: pgColor(b), opacity: b === 'joola' ? 1 : 0.75 }} />
+            <span>{name(b)}</span>
+          </span>
+        ))}
+      </div>
     </div>
   )
 }

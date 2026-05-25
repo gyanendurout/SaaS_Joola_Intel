@@ -96,6 +96,21 @@ Rules:
 - If the question is ambiguous or out of scope, set "clarification" and skip "plan".
 - Always set "limit" between 1 and 1000.
 
+CRITICAL — NAME-TO-UUID RESOLUTION:
+- NEVER place a product name, brand name, or athlete name into a filter value when the column is "_id" (product_id, brand_id, athlete_id, influencer_id). The executor auto-resolves names → UUIDs at runtime.
+- You MAY emit a filter like { "column": "product_id", "operator": "eq", "value": "Pro V Kosmos" } — the executor will resolve "Pro V Kosmos" against products_catalog.display_name and products_catalog.aliases[].
+- For brand_id, the executor resolves against brands.slug then brands.name.
+- For athlete_id / influencer_id, against influencers.name.
+- ALTERNATIVELY: when uncertain, you can use mention_facts with a text_snippet ilike '%<name>%' filter for fuzzy text search.
+- If the user asks about a SPECIFIC product, prefer querying product_attention_summary (period='last_30d') or product_attention_daily with product_id = '<product name>'. The executor handles the lookup.
+
+DATA SCOPE — Out of scope topics:
+- If the user asks about WEATHER, NEWS unrelated to pickleball brands, GENERAL KNOWLEDGE, or anything not in the schema below — set "clarification" with a polite scope message and skip "plan".
+- If the user asks about FUTURE data (e.g. "sales for next year", "predictions for 2027") — set "clarification" explaining we only have historical data.
+- If the user asks to DELETE, MODIFY, INSERT, DROP or UPDATE anything — set "clarification" with a read-only message.
+- If the message is empty, gibberish (no recognizable English words or product/brand names), or extremely vague (e.g. "tell me everything", "what's good", "show me data") — set "clarification" asking for a more specific question.
+- If the user asks an ambiguous comparative ("which brand is best") — set "clarification" asking "best at what? (mentions, sentiment, sales likelihood, ad spend, follower growth?)"
+
 CRITICAL — Common column-name mistakes to AVOID:
 - product_attention_summary / product_attention_daily: column is "mentions_total" (NOT "total_mentions"); column is "attention_score" (NOT "score" or "total_attention"); column is "joola_vs_competitor_gap" (NOT "gap"); column is "rank_in_brand" (NOT "rank"); product_attention_daily date column is "attention_date" (NOT "date").
 - mention_facts: column is "sentiment_label" (NOT "sentiment"); flags are "is_crisis"/"is_opportunity"/"is_purchase_intent" (NOT "crisis"/"opportunity"/"purchase_intent").
@@ -238,6 +253,8 @@ function autoCorrectAliases(input: unknown): unknown {
 
 // ─── Plan execution ────────────────────────────────────────────────────
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 /**
  * Translate slug-style brand filters (when planner emits them) into UUIDs.
  * Also resolves any "brand_slugs" array hint passed in the request body.
@@ -252,6 +269,176 @@ async function resolveBrandSlugs(
     .select('id,slug')
     .in('slug', slugs)
   return (data || []).map((r: { id: string }) => r.id)
+}
+
+/**
+ * Resolve human-readable names → UUIDs for any filter where the column ends
+ * with `_id` and the value isn't already a UUID. This compensates for the
+ * planner LLM emitting filters like { column: 'product_id', value: 'Pro V Kosmos' }
+ * (which would otherwise crash PostgREST with "invalid input syntax for type uuid").
+ *
+ * Strategy:
+ *   - brand_id  → brands.slug then brands.name (case-insensitive)
+ *   - product_id → products_catalog.display_name then any element of
+ *                  products_catalog.aliases[] (case-insensitive)
+ *   - athlete_id / influencer_id → influencers.name (case-insensitive)
+ *
+ * On no match: replace the filter with a `text_snippet ilike '%name%'`
+ * filter when the table supports it (mention_facts only); otherwise drop
+ * the offending filter and surface a warning so the user knows we
+ * gracefully degraded.
+ */
+async function resolveNameToUuidFilters(
+  plan: QueryPlan,
+  supabase: ReturnType<typeof getSupabase>,
+): Promise<{ plan: QueryPlan; warnings: string[] }> {
+  if (!plan.filters?.length) return { plan, warnings: [] }
+  const warnings: string[] = []
+  const newFilters: FilterClause[] = []
+
+  for (const f of plan.filters) {
+    const col = String(f.column)
+    const isIdCol = col === 'brand_id' || col === 'product_id' || col === 'athlete_id' || col === 'influencer_id'
+
+    if (!isIdCol) {
+      newFilters.push(f)
+      continue
+    }
+
+    // For `in` arrays, resolve each entry; for single ops, resolve the scalar.
+    const rawValues: unknown[] = Array.isArray(f.value) ? f.value : [f.value]
+    const resolvedIds: string[] = []
+    const unresolvedNames: string[] = []
+
+    for (const raw of rawValues) {
+      // Already a UUID? keep as-is.
+      if (typeof raw === 'string' && UUID_REGEX.test(raw)) {
+        resolvedIds.push(raw)
+        continue
+      }
+      // Boolean / null values on id columns are nonsense — drop and warn.
+      if (typeof raw !== 'string' || !raw.trim()) {
+        unresolvedNames.push(String(raw))
+        continue
+      }
+
+      const name = raw.trim()
+      let id: string | null = null
+
+      try {
+        if (col === 'brand_id') {
+          // Try slug first (cheap), then case-insensitive name match.
+          const slug = name.toLowerCase().replace(/\s+/g, '-')
+          const slugLookup = await supabase
+            .from('brands')
+            .select('id')
+            .eq('slug', slug)
+            .limit(1)
+          if (slugLookup.data && slugLookup.data.length > 0) {
+            id = (slugLookup.data[0] as { id: string }).id
+          } else {
+            const nameLookup = await supabase
+              .from('brands')
+              .select('id')
+              .ilike('name', name)
+              .limit(1)
+            if (nameLookup.data && nameLookup.data.length > 0) {
+              id = (nameLookup.data[0] as { id: string }).id
+            }
+          }
+        } else if (col === 'product_id') {
+          // Match against display_name (ilike) then aliases[] (cs contains).
+          const nameLookup = await supabase
+            .from('products_catalog')
+            .select('id,display_name')
+            .ilike('display_name', name)
+            .limit(1)
+          if (nameLookup.data && nameLookup.data.length > 0) {
+            id = (nameLookup.data[0] as { id: string }).id
+          } else {
+            // aliases is text[] — use cs (contains) operator with lowercase
+            // form. Also try title-case in case the array entries are mixed.
+            const candidates = Array.from(new Set([
+              name,
+              name.toLowerCase(),
+              name.toUpperCase(),
+              titleCase(name),
+            ]))
+            for (const candidate of candidates) {
+              const aliasLookup = await supabase
+                .from('products_catalog')
+                .select('id')
+                .contains('aliases', [candidate])
+                .limit(1)
+              if (aliasLookup.data && aliasLookup.data.length > 0) {
+                id = (aliasLookup.data[0] as { id: string }).id
+                break
+              }
+            }
+          }
+        } else if (col === 'athlete_id' || col === 'influencer_id') {
+          const nameLookup = await supabase
+            .from('influencers')
+            .select('id,name')
+            .ilike('name', name)
+            .limit(1)
+          if (nameLookup.data && nameLookup.data.length > 0) {
+            id = (nameLookup.data[0] as { id: string }).id
+          }
+        }
+      } catch {
+        // Network / RLS error — treat as unresolved and continue.
+      }
+
+      if (id) {
+        resolvedIds.push(id)
+      } else {
+        unresolvedNames.push(name)
+      }
+    }
+
+    if (resolvedIds.length > 0) {
+      // If multiple were requested and at least one resolved, use IN.
+      if (resolvedIds.length === 1 && f.operator === 'eq') {
+        newFilters.push({ column: col, operator: 'eq', value: resolvedIds[0] })
+      } else {
+        newFilters.push({ column: col, operator: 'in', value: resolvedIds })
+      }
+      if (unresolvedNames.length > 0) {
+        warnings.push(
+          `Could not resolve ${unresolvedNames.length} name(s) on ${col}: ${unresolvedNames.join(', ')} (using ${resolvedIds.length} match(es) instead).`,
+        )
+      }
+    } else {
+      // Total miss. If the table supports text_snippet, degrade to that.
+      const spec = WHITELISTED_TABLES[plan.table]
+      const hasSnippet = spec?.columns.some((c) => c.name === 'text_snippet')
+      const fallbackName = unresolvedNames[0] || ''
+      if (hasSnippet && fallbackName) {
+        newFilters.push({
+          column: 'text_snippet',
+          operator: 'ilike',
+          value: `%${fallbackName}%`,
+        })
+        warnings.push(
+          `Could not resolve "${fallbackName}" to a known ${col.replace('_id', '')} — fell back to text search across snippets.`,
+        )
+      } else {
+        warnings.push(
+          `Dropped filter on ${col}: could not resolve "${unresolvedNames.join(', ')}" to a known UUID and this table has no text-snippet fallback. Results may be unfiltered.`,
+        )
+      }
+    }
+  }
+
+  return { plan: { ...plan, filters: newFilters }, warnings }
+}
+
+function titleCase(s: string): string {
+  return s
+    .split(/\s+/)
+    .map((w) => (w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
+    .join(' ')
 }
 
 /**
@@ -514,9 +701,15 @@ export async function POST(req: NextRequest) {
 
   // Clarification short-circuit
   if (planner.clarification && !planner.plan) {
-    return NextResponse.json(
-      buildClarificationResponse(planner.clarification, planner, Date.now() - startedAt),
-    )
+    const clar = buildClarificationResponse(planner.clarification, planner, Date.now() - startedAt)
+    const mid = await logQaTurn(supabase, {
+      sessionId: body.conversationId,
+      question: message,
+      response: clar,
+      latencyMs: Date.now() - startedAt,
+    })
+    if (mid) clar.messageId = mid
+    return NextResponse.json(clar)
   }
 
   // ── Auto-correct common LLM column-name hallucinations ─────────────
@@ -529,12 +722,30 @@ export async function POST(req: NextRequest) {
   // ── Validate plan ────────────────────────────────────────────────────
   const validation = validateQueryPlan(correctedPlan)
   if (!validation.ok) {
-    return NextResponse.json(
-      buildErrorResponse(`Unsafe plan: ${validation.reason}`, Date.now() - startedAt),
-    )
+    const errResp = buildErrorResponse(`Unsafe plan: ${validation.reason}`, Date.now() - startedAt)
+    await logQaTurn(supabase, {
+      sessionId: body.conversationId,
+      question: message,
+      response: errResp,
+      latencyMs: Date.now() - startedAt,
+      errorMessage: `Unsafe plan: ${validation.reason}`,
+    })
+    return NextResponse.json(errResp)
   }
 
   let plan = validation.plan
+  const resolverWarnings: string[] = []
+
+  // ── Resolve human names → UUIDs for _id columns ─────────────────────
+  // The planner sometimes emits filters like { product_id: 'Pro V Kosmos' }.
+  // Without this step PostgREST returns 22P02 "invalid input syntax for type uuid".
+  try {
+    const resolved = await resolveNameToUuidFilters(plan, supabase)
+    plan = resolved.plan
+    resolverWarnings.push(...resolved.warnings)
+  } catch {
+    // non-fatal — fall through with original plan
+  }
 
   // ── Inject UI brand-filter (slugs → brand_id) ────────────────────────
   if (body.brandSlugs?.length) {
@@ -554,9 +765,15 @@ export async function POST(req: NextRequest) {
     truncated = result.truncated
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'query failed'
-    return NextResponse.json(
-      buildErrorResponse(`Query error: ${msg}`, Date.now() - startedAt),
-    )
+    const errResp = buildErrorResponse(`Query error: ${msg}`, Date.now() - startedAt)
+    await logQaTurn(supabase, {
+      sessionId: body.conversationId,
+      question: message,
+      response: errResp,
+      latencyMs: Date.now() - startedAt,
+      errorMessage: msg,
+    })
+    return NextResponse.json(errResp)
   }
 
   // ── Step 3: Answerer ─────────────────────────────────────────────────
@@ -604,6 +821,7 @@ export async function POST(req: NextRequest) {
   }
 
   const warnings: string[] = Array.isArray(answerer.warnings) ? answerer.warnings : []
+  warnings.push(...resolverWarnings)
   if (truncated) warnings.push('Result set was truncated to 200 rows before analysis.')
   if (rows.length === 0) warnings.push('No rows matched this question.')
 
@@ -621,5 +839,57 @@ export async function POST(req: NextRequest) {
     queryInfo,
   }
 
+  // ── Log Q&A turn (best-effort, fail silently) ───────────────────────
+  const messageId = await logQaTurn(supabase, {
+    sessionId: body.conversationId,
+    question: message,
+    response,
+    latencyMs: Date.now() - startedAt,
+  })
+  if (messageId) response.messageId = messageId
+
   return NextResponse.json(response)
+}
+
+// ─── QA logging (writes to ask_intel_qa_log; needs migration 017) ────
+
+async function logQaTurn(
+  supabase: ReturnType<typeof getSupabase>,
+  args: {
+    sessionId?: string
+    question: string
+    response: AskIntelResponse
+    latencyMs: number
+    errorMessage?: string
+  },
+): Promise<string | null> {
+  try {
+    const row = {
+      session_id: args.sessionId ?? null,
+      question: args.question,
+      answer_summary: (args.response.answer || '').slice(0, 1000),
+      visuals_count: Array.isArray(args.response.visuals) ? args.response.visuals.length : 0,
+      data_sources: Array.isArray(args.response.dataSources) ? args.response.dataSources : [],
+      latency_ms: args.latencyMs,
+      confidence: typeof args.response.confidence === 'number' ? args.response.confidence : null,
+      warnings: Array.isArray(args.response.warnings) ? args.response.warnings : [],
+      error_message: args.errorMessage ?? null,
+    }
+    const { data, error } = await supabase
+      .from('ask_intel_qa_log')
+      .insert(row)
+      .select('id')
+      .limit(1)
+    if (error) {
+      // Migration 017 may not be applied yet — silent failure.
+      console.warn('[ask-intel] QA log insert failed:', error.message)
+      return null
+    }
+    if (data && data.length > 0) {
+      return (data[0] as { id: string }).id
+    }
+    return null
+  } catch {
+    return null
+  }
 }

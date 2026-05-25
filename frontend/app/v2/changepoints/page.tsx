@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '@/lib/shared/supabase'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import {
   fetchChangepoints,
@@ -10,6 +11,30 @@ import {
 } from '@/lib/v2/analytics'
 import { PageHead, LoadingPage, SectionInfo, pgName, pgColor, SortTh, ColumnFilter } from '@/components/v2/PageShell'
 import { ChangepointTimeline } from '@/components/v2/charts/ChangepointTimeline'
+
+type CompetitorSignalRow = {
+  brandSlug: string
+  brandName: string
+  productName: string | null
+  target: string
+  date: string
+  likelyDriven: boolean
+}
+
+function possibleCause(seriesName: string, likelyDriven: boolean): string {
+  if (likelyDriven) return 'Likely promo/ad-driven (campaign within ±3 days)'
+  const s = (seriesName || '').toLowerCase()
+  if (s.includes('promo') || s.includes('ad')) return 'Likely promo/ad-driven'
+  return 'Organic signal shift'
+}
+
+function recommendedInvestigation(seriesName: string): string {
+  const s = (seriesName || '').toLowerCase()
+  if (s.includes('attention')) return 'Check competitor content calendar'
+  if (s.includes('price')) return 'Check competitor price changes'
+  if (s.includes('mentions')) return 'Check Reddit/IG for viral threads'
+  return 'Investigate recent promotion + ad activity'
+}
 
 type SeriesName = 'attention_score' | 'estimated_units_sold' | 'ad_pressure_score'
 
@@ -38,6 +63,7 @@ export default function ChangepointsPage() {
   const [logSortKey, setLogSortKey] = useState<string | null>('date')
   const [logSortDir, setLogSortDir] = useState<'asc' | 'desc'>('desc')
   const [logColFilter, setLogColFilter] = useState<Record<string, string>>({})
+  const [competitorSignals, setCompetitorSignals] = useState<CompetitorSignalRow[]>([])
 
   function toggleLogSort(k: string) {
     if (logSortKey === k) setLogSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -72,6 +98,55 @@ export default function ChangepointsPage() {
           }),
         )
         if (!cancelled) setSeries(seriesMap)
+
+        // Competitor Signal Detector — flatten changepoint dates + heuristic cause
+        try {
+          // Load promo + ad date markers per brand_id to detect ±3-day proximity
+          const [promosRes, adsRes] = await Promise.all([
+            supabase.from('promotions').select('brand_id,detected_at').limit(2000),
+            supabase.from('marketing_ads').select('brand_id,captured_at').limit(2000),
+          ])
+          const markersByBid = new Map<string, number[]>()
+          const addMarker = (bid: string, dateStr: string | null | undefined) => {
+            if (!bid || !dateStr) return
+            const t = new Date(dateStr).getTime()
+            if (!isFinite(t)) return
+            const arr = markersByBid.get(bid) || []
+            arr.push(t)
+            markersByBid.set(bid, arr)
+          }
+          ;(promosRes.data as Array<{ brand_id: string; detected_at: string | null }> | null)?.forEach(
+            (r) => addMarker(r.brand_id, r.detected_at),
+          )
+          ;(adsRes.data as Array<{ brand_id: string; captured_at: string | null }> | null)?.forEach(
+            (r) => addMarker(r.brand_id, r.captured_at),
+          )
+
+          const THREE_DAYS = 3 * 86400000
+          const flat: CompetitorSignalRow[] = []
+          cpRows.forEach((r) => {
+            const markers = markersByBid.get(r.brand_id) || []
+            r.changepoint_dates.forEach((d) => {
+              const t = new Date(d).getTime()
+              const likely = isFinite(t)
+                ? markers.some((m) => Math.abs(m - t) <= THREE_DAYS)
+                : false
+              flat.push({
+                brandSlug: r.brand_slug,
+                brandName: '',
+                productName: r.product_name,
+                target: r.series_name,
+                date: d,
+                likelyDriven: likely,
+              })
+            })
+          })
+          flat.sort((a, b) => b.date.localeCompare(a.date))
+          if (!cancelled) setCompetitorSignals(flat.slice(0, 30))
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('[changepoints] competitor signal detector failed', e)
+        }
       } catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[changepoints] failed to load', err)
@@ -388,6 +463,77 @@ export default function ChangepointsPage() {
           </div>
         </section>
       )}
+
+      {/* ── Competitor Signal Detector ───────────────────────────── */}
+      <section style={{ marginTop: 24 }}>
+        <div className="section-head">
+          <div>
+            <h2>
+              Competitor Signal Detector
+              <SectionInfo
+                title="Competitor Signal Detector"
+                description="Up to 30 most recent regime breaks flattened across all brands. Each row pairs the change date with a likely cause (promo/ad activity within ±3 days) and a recommended next investigation."
+                source="analysis_results · kind=changepoint · joined with promotions / marketing_ads on brand_id ±3d"
+              />
+            </h2>
+            <div className="sub">
+              Use this to triage competitor activity in priority order. "Likely promo/ad-driven" means a campaign was detected within ±3 days of the changepoint.
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          {competitorSignals.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+              No changepoints detected. Run analytics_backend to refresh.
+            </div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 520, overflowY: 'auto' }}>
+              <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <tr>
+                    <th>Brand</th>
+                    <th>Product</th>
+                    <th>Signal changed</th>
+                    <th>Date</th>
+                    <th>Possible cause</th>
+                    <th>Recommended investigation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {competitorSignals.map((r, i) => (
+                    <tr key={`cps-${r.brandSlug}-${r.date}-${i}`} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <span className="brand-dot" style={{ background: pgColor(r.brandSlug) }} />
+                          <span style={{ fontWeight: 700, color: r.brandSlug === 'joola' ? '#22c55e' : 'var(--fg)' }}>
+                            {pgName(r.brandSlug, brands)}
+                          </span>
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--fg-3)', fontSize: 12 }}>{r.productName || '—'}</td>
+                      <td style={{ color: 'var(--fg)', fontSize: 12 }}>{r.target.replace(/_/g, ' ')}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#cbd1dc', whiteSpace: 'nowrap' }}>
+                        {r.date}
+                      </td>
+                      <td style={{ fontSize: 12 }}>
+                        <span
+                          className={'pill ' + (r.likelyDriven ? 'pill-amber' : 'pill-ghost')}
+                          style={{ fontSize: 10 }}
+                        >
+                          {possibleCause(r.target, r.likelyDriven)}
+                        </span>
+                      </td>
+                      <td style={{ color: '#F5E625', fontSize: 12, fontWeight: 600 }}>
+                        {recommendedInvestigation(r.target)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
     </>
   )
 }
