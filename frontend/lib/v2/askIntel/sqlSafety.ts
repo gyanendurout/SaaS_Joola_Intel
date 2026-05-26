@@ -224,6 +224,11 @@ function columnExists(spec: TableSpec, col: string): boolean {
   return spec.columns.some((c) => c.name === col)
 }
 
+// Operators that are always safe on any column (read-only PostgREST).
+const ALWAYS_SAFE_OPERATORS: FilterOperator[] = [
+  'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'ilike', 'in', 'is', 'not.is',
+]
+
 function validateFilter(spec: TableSpec, f: unknown): ValidatedPlan {
   if (!f || typeof f !== 'object') return { ok: false, reason: 'filter entries must be objects.' }
   const fc = f as Partial<FilterClause>
@@ -231,22 +236,42 @@ function validateFilter(spec: TableSpec, f: unknown): ValidatedPlan {
   if (!columnExists(spec, fc.column)) {
     return { ok: false, reason: `filter column "${fc.column}" not in table "${spec.name}".` }
   }
-  const allowed = spec.allowedFilters[fc.column]
-  if (!allowed || allowed.length === 0) {
-    return { ok: false, reason: `filtering on "${fc.column}" is not allowed.` }
-  }
+  // Permissive: UNION the explicit allowedFilters with the always-safe
+  // operators. Explicit lists are HINTS, not restrictions — read-only
+  // PostgREST cannot be exploited by `eq`/`in`/`is` regardless of column,
+  // so blocking them creates false-negative planner failures.
+  const explicit = spec.allowedFilters[fc.column] || []
+  const allowed = Array.from(new Set([...explicit, ...ALWAYS_SAFE_OPERATORS]))
   if (!fc.operator || !allowed.includes(fc.operator)) {
     return {
       ok: false,
       reason: `operator "${fc.operator}" not allowed for "${fc.column}" (allowed: ${allowed.join(', ')}).`,
     }
   }
-  // Light value-shape sanity check.
   if (fc.operator === 'in' && !Array.isArray(fc.value)) {
-    return { ok: false, reason: `operator "in" requires array value for "${fc.column}".` }
+    // Defensive coercion: planner sometimes emits scalar value with operator='in'.
+    // Wrap it as a single-element array so the query still works.
+    fc.value = [fc.value]
   }
-  if ((fc.operator === 'is' || fc.operator === 'not.is') && fc.value !== null && fc.value !== true && fc.value !== false) {
-    return { ok: false, reason: `operator "${fc.operator}" requires null|true|false.` }
+  if (fc.operator === 'is' || fc.operator === 'not.is') {
+    // Defensive coercion: planner sometimes emits string "null" / "true" / "false"
+    // or anything else with operator='is'. Normalize before rejecting.
+    if (fc.value === 'null' || fc.value === null || fc.value === undefined) {
+      fc.value = null
+    } else if (fc.value === true || fc.value === 'true') {
+      fc.value = true
+    } else if (fc.value === false || fc.value === 'false') {
+      fc.value = false
+    } else {
+      // Any other value: assume planner meant a different operator. Convert
+      // to "eq" if it's a string/number, or drop to null otherwise.
+      const v = fc.value
+      if (typeof v === 'string' || typeof v === 'number') {
+        fc.operator = fc.operator === 'is' ? 'eq' : 'neq'
+      } else {
+        fc.value = null
+      }
+    }
   }
   return { ok: true, plan: { table: spec.name, select: '*' } }
 }

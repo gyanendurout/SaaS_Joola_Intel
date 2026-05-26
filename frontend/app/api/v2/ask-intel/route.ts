@@ -111,13 +111,26 @@ DATA SCOPE — Out of scope topics:
 - If the message is empty, gibberish (no recognizable English words or product/brand names), or extremely vague (e.g. "tell me everything", "what's good", "show me data") — set "clarification" asking for a more specific question.
 - If the user asks an ambiguous comparative ("which brand is best") — set "clarification" asking "best at what? (mentions, sentiment, sales likelihood, ad spend, follower growth?)"
 
+CRITICAL — COUNTING ROWS:
+- NEVER put "count(*)" or any aggregate function into the "select" array. The select array is a list of column names ONLY.
+- For counts, use the "aggregations" key: aggregations:[{column:"*",fn:"count",alias:"n"}]. Combine with groupBy if you want per-group counts.
+- For "how many" questions, the planner can also just set select:["id"] limit:200 and let the answerer report the row count from the executed result.
+
+CRITICAL — TABLE SELECTION (which table holds which data):
+- For "products mentioned on Reddit/IG/YT/TikTok/X" — use mention_facts WITH channel filter (eq 'reddit' / 'reddit_comment' / 'ig_comment' / 'yt_comment' / 'tiktok' / 'tiktok_comment' / 'x' / 'x_influencer'). DO NOT filter reddit_mentions / ig_comments / yt_comments / tiktok_videos / x_posts on product_id — those tables don't have product_id columns. Only mention_facts and product_attention_* have product_id.
+- For "athlete mentions" — same rule. Use mention_facts WHERE athlete_id IS NOT NULL with channel filter. Don't put athlete_id on the raw channel tables.
+- For TikTok engagement/views — use tiktok_videos (columns: like_count, comment_count, view_count, share_count). Sort by view_count or like_count desc.
+- For "top negative Reddit threads" — use reddit_mentions WHERE sentiment_label='negative' OR is_crisis=true. Order by score (upvotes) desc or velocity_per_hour desc. Do NOT use a column called 'negative' or 'sentiment'.
+- For brand sentiment rollups — use mention_facts GROUP BY brand_id, count is_crisis or sentiment_label.
+
 CRITICAL — Common column-name mistakes to AVOID:
 - product_attention_summary / product_attention_daily: column is "mentions_total" (NOT "total_mentions"); column is "attention_score" (NOT "score" or "total_attention"); column is "joola_vs_competitor_gap" (NOT "gap"); column is "rank_in_brand" (NOT "rank"); product_attention_daily date column is "attention_date" (NOT "date").
 - mention_facts: column is "sentiment_label" (NOT "sentiment"); flags are "is_crisis"/"is_opportunity"/"is_purchase_intent" (NOT "crisis"/"opportunity"/"purchase_intent").
 - products: columns are "price_usd","sale_price_usd","discount_pct","avg_rating","review_count" (NOT "price"/"rating"/"reviews"/"discount").
 - ig_posts/yt_videos/tiktok_videos: columns are "like_count","comment_count","view_count" (NOT "likes"/"comments"/"views").
 - x_posts: "like_count","retweet_count","reply_count","view_count" (NOT "likes"/"retweets"/"replies"/"views").
-- reddit_mentions: column is "score" for upvotes (NOT "upvotes"); column is "num_comments" (NOT "comments").
+- reddit_mentions: column is "upvotes" (NOT "score"); column is "post_title" (NOT "title"); column is "content_text" (NOT "body" or "text"); column is "post_url" (NOT "url"); column is "num_comments" (NOT "comments"); also has "velocity_per_hour", "is_removed", "is_crisis", "sentiment_label".
+- tiktok_videos: column for caption is "text" (NOT "caption" or "description"); column is "view_count" (NOT "play_count" or "views"); also has "like_count", "comment_count", "share_count".
 - promotions: "discount_pct","promo_type","banner_text" (NOT "discount"/"type"/"text").
 
 When using aggregations + orderBy, the orderBy can reference the aggregation alias (e.g. aggregations:[{column:"mentions_total",fn:"sum",alias:"total"}], orderBy:[{column:"total",direction:"desc"}]). The executor handles in-memory sorting for aliases.
@@ -204,13 +217,27 @@ const COLUMN_ALIAS_MAP: Record<string, Record<string, string>> = {
     text: 'banner_text',
   },
   reddit_mentions: {
-    upvotes: 'score',
+    // Schema names map: planner-friendly -> real DB column.
+    score: 'upvotes',
+    title: 'post_title',
+    body: 'content_text',
+    text: 'content_text',
+    url: 'post_url',
     comments: 'num_comments',
     sentiment: 'sentiment_label',
+    crisis: 'is_crisis',
   },
   ig_posts: { likes: 'like_count', comments: 'comment_count', views: 'view_count' },
   yt_videos: { views: 'view_count', likes: 'like_count', comments: 'comment_count' },
-  tiktok_videos: { views: 'view_count', likes: 'like_count', comments: 'comment_count' },
+  tiktok_videos: {
+    views: 'view_count',
+    likes: 'like_count',
+    comments: 'comment_count',
+    play_count: 'view_count',
+    caption: 'text',
+    description: 'text',
+    title: 'text',
+  },
   x_posts: { likes: 'like_count', retweets: 'retweet_count', replies: 'reply_count', views: 'view_count' },
 }
 
@@ -722,6 +749,24 @@ export async function POST(req: NextRequest) {
   // ── Validate plan ────────────────────────────────────────────────────
   const validation = validateQueryPlan(correctedPlan)
   if (!validation.ok) {
+    // If the planner emitted no usable plan (and no clarification of its own),
+    // auto-promote to a friendly clarification instead of a hard error. This
+    // catches "Plan.table is required" / "Plan must be an object" when the
+    // user's question is too vague or out-of-scope for the schema.
+    const reason = validation.reason || ''
+    const isMissingPlan = /Plan\.table is required|Plan must be an object/i.test(reason)
+    if (isMissingPlan) {
+      const clarification = planner.clarification
+        || "I couldn't map that to a specific data table. Try asking about a specific brand, product, channel, or metric (e.g. 'JOOLA Instagram engagement last 30 days' or 'top paddles by attention score')."
+      const clrResp = buildClarificationResponse(clarification, planner, Date.now() - startedAt)
+      await logQaTurn(supabase, {
+        sessionId: body.conversationId,
+        question: message,
+        response: clrResp,
+        latencyMs: Date.now() - startedAt,
+      })
+      return NextResponse.json(clrResp)
+    }
     const errResp = buildErrorResponse(`Unsafe plan: ${validation.reason}`, Date.now() - startedAt)
     await logQaTurn(supabase, {
       sessionId: body.conversationId,

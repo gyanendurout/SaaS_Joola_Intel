@@ -275,7 +275,11 @@ def run_all() -> list[TestResult]:
             "error": "ERR",
             "network_error": "NET",
         }.get(result.status, "?  ")
-        print(f"          → {marker} {result.latency_ms}ms · {result.visuals_count}v · {(result.answer_preview or '')[:80]}")
+        try:
+            print(f"          -> {marker} {result.latency_ms}ms | {result.visuals_count}v | {(result.answer_preview or '')[:80]}")
+        except UnicodeEncodeError:
+            preview_ascii = (result.answer_preview or '').encode('ascii', 'replace').decode('ascii')[:80]
+            print(f"          -> {marker} {result.latency_ms}ms | {result.visuals_count}v | {preview_ascii}")
 
         # Append to conversation chain history (user + assistant).
         if case.conversation:
@@ -328,9 +332,9 @@ def main() -> int:
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_PATH.write_text(json.dumps(payload, indent=2))
 
-    print("\n─── Summary ───")
+    print("\n=== Summary ===")
     print(json.dumps(summary, indent=2))
-    print(f"\nWrote {len(results)} results → {OUTPUT_PATH}")
+    print(f"\nWrote {len(results)} results -> {OUTPUT_PATH}")
     return 0
 
 
