@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   PageHead, MiniKpi, SortTh, ColumnFilter, LoadingPage, SectionInfo,
   FilterBanner, pgColor, pgName,
@@ -82,6 +82,9 @@ export default function CommunityIntelPage() {
   const [discBrand, setDiscBrand] = useState('')
   const [feedSort, setFeedSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' })
   const [feedColFilter, setFeedColFilter] = useState<Record<string, string>>({})
+  const [feedJoolaOnly, setFeedJoolaOnly] = useState(false)
+  const [feedNegativeOnly, setFeedNegativeOnly] = useState(false)
+  const [feedCommentsOnly, setFeedCommentsOnly] = useState(false)
   const [topSort, setTopSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'likes', dir: 'desc' })
   const [topColFilter, setTopColFilter] = useState<Record<string, string>>({})
   const [topJoolaOnly, setTopJoolaOnly] = useState(false)
@@ -249,6 +252,9 @@ export default function CommunityIntelPage() {
 
   const feedRows = useMemo(() => {
     let rows = [...filteredSignals]
+    if (feedJoolaOnly) rows = rows.filter((r) => r.brand === 'joola')
+    if (feedNegativeOnly) rows = rows.filter((r) => r.sentiment === 'negative')
+    if (feedCommentsOnly) rows = rows.filter((r) => r.signalType === 'comment')
     const colFilter = feedColFilter
     if (Object.keys(colFilter).length > 0) {
       rows = rows.filter((r) =>
@@ -266,7 +272,7 @@ export default function CommunityIntelPage() {
     }
     rows = sortRows(rows, feedSort.key, feedSort.dir)
     return rows.slice(0, 200)
-  }, [filteredSignals, feedColFilter, feedSort, brands])
+  }, [filteredSignals, feedColFilter, feedSort, feedJoolaOnly, feedNegativeOnly, feedCommentsOnly, brands])
 
   const topCommentsAll = useMemo(() => {
     return filteredSignals.filter((s) => s.signalType === 'comment' && s.summary && s.summary !== '(no snippet)')
@@ -346,104 +352,6 @@ export default function CommunityIntelPage() {
       <PageHead title="COMMUNITY INTEL" />
       <FilterBanner />
 
-      {/* ─── Global filter bar ─────────────────────────────────────── */}
-      <section>
-        <div
-          className="card"
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 12,
-            alignItems: 'center',
-            padding: '12px 16px',
-            marginBottom: 16,
-          }}
-        >
-          <label style={filterLabel}>Range
-            <select
-              value={range}
-              onChange={(e) => setRange(e.target.value as DateRangeKey)}
-              className="page-select"
-              aria-label="Preset date range"
-            >
-              {(Object.keys(DATE_RANGE_LABEL) as DateRangeKey[]).map((k) => (
-                <option key={k} value={k}>{DATE_RANGE_LABEL[k]}</option>
-              ))}
-            </select>
-          </label>
-          <label style={filterLabel}>From
-            <input
-              type="date"
-              value={fromInputValue}
-              onChange={(e) => {
-                const v = e.target.value
-                if (!v) return
-                setCustomFrom(new Date(v + 'T00:00:00'))
-              }}
-              className="page-select"
-              aria-label="Custom from date"
-            />
-          </label>
-          <label style={filterLabel}>To
-            <input
-              type="date"
-              value={toInputValue}
-              onChange={(e) => {
-                const v = e.target.value
-                if (!v) return
-                setCustomTo(new Date(v + 'T00:00:00'))
-              }}
-              className="page-select"
-              aria-label="Custom to date"
-            />
-          </label>
-          {mode === 'custom' && (
-            <span className="pill pill-amber" style={{ fontSize: 10 }}>Custom window</span>
-          )}
-          <span style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)' }} />
-          <label style={filterLabel}>Channel
-            <select
-              value={channelFilter}
-              onChange={(e) => setChannelFilter(e.target.value as ChannelKey)}
-              className="page-select"
-              aria-label="Channel filter"
-            >
-              <option value="all">All channels</option>
-              <option value="ig">Instagram</option>
-              <option value="yt">YouTube</option>
-              <option value="reddit">Reddit</option>
-              <option value="tiktok">TikTok</option>
-              <option value="x">X / Twitter</option>
-            </select>
-          </label>
-          <label style={filterLabel}>Sentiment
-            <select
-              value={sentimentFilter}
-              onChange={(e) => setSentimentFilter(e.target.value as SentimentKey)}
-              className="page-select"
-              aria-label="Sentiment filter"
-            >
-              <option value="all">All sentiment</option>
-              <option value="positive">Positive</option>
-              <option value="neutral">Neutral</option>
-              <option value="negative">Negative</option>
-            </select>
-          </label>
-          <label style={filterLabel}>Crisis
-            <select
-              value={crisisFilter}
-              onChange={(e) => setCrisisFilter(e.target.value as CrisisKey)}
-              className="page-select"
-              aria-label="Crisis filter"
-            >
-              <option value="all">All signals</option>
-              <option value="crisis">Crisis only</option>
-              <option value="non-crisis">Non-crisis only</option>
-            </select>
-          </label>
-        </div>
-      </section>
-
       {/* ─── Section 1: Summary strip ──────────────────────────────── */}
       <section>
         <div
@@ -493,6 +401,7 @@ export default function CommunityIntelPage() {
             color="#06b6d4"
             customVs={`${data.signals.length} pre-filter`}
             src="ig_comments + yt_comments + reddit_mentions + reddit_comments + mention_facts"
+            tip="Total community signals (mentions + comments + crisis flags) across all channels after applying the active filters at the top of the page. The 'pre-filter' number below shows the full unfiltered population."
           />
           <MiniKpi
             label="Crisis signals"
@@ -501,6 +410,7 @@ export default function CommunityIntelPage() {
             customVs={`${summary.openCrisis30d} in last 30d`}
             src="mention_facts.is_crisis"
             flavor={crisisRows.length > 0 ? 'danger' : undefined}
+            tip="Signals flagged as a CRISIS by the GPT-4o-mini classifier — recall / safety / coordinated-backlash / scandal events that need immediate brand response. Crisis is a much higher bar than 'negative sentiment'."
           />
           <MiniKpi
             label="JOOLA mentions"
@@ -509,6 +419,7 @@ export default function CommunityIntelPage() {
             customVs={`across ${filteredChannelStats.length} channels`}
             flavor="joola"
             src="Filtered JOOLA-brand signals"
+            tip="Count of community signals (mentions + comments + crisis) that are specifically about JOOLA, after applying the active filters."
           />
           <MiniKpi
             label="Negative share"
@@ -517,6 +428,7 @@ export default function CommunityIntelPage() {
             customVs={sentimentCoverage > 0
               ? `${Math.round(sentimentCoverage * 100)}% classifier coverage`
               : 'Sentiment classifier pending'}
+            tip="Share of all signals classified as negative sentiment. Formula: negative ÷ (positive + neutral + negative) × 100. Yellow >= 15%, red >= 30%. Coverage % shows how many signals have a sentiment label so far."
           />
         </div>
       </section>
@@ -535,30 +447,23 @@ export default function CommunityIntelPage() {
             </h2>
             <div className="sub">Brands with the most active community footprint. Sort, search, or click headers.</div>
           </div>
-          <div className="actions">
-            <input
-              type="text"
-              className="col-filter-input"
-              placeholder="Search brand…"
-              value={discBrand}
-              onChange={(e) => setDiscBrand(e.target.value)}
-              style={{ minWidth: 160 }}
-              aria-label="Filter brands"
-            />
-          </div>
         </div>
         <div className="card" style={{ overflowX: 'auto' }}>
           <table className="data" style={{ width: '100%', minWidth: 940 }}>
             <thead>
               <tr>
                 <SortTh col="brand" label="Brand" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'left' }} />
-                <SortTh col="total" label="Total" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} />
-                <SortTh col="ig" label="IG" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} />
-                <SortTh col="yt" label="YT" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} />
-                <SortTh col="reddit" label="Reddit" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} />
-                <SortTh col="tiktok" label="TikTok" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} />
-                <SortTh col="negativePct" label="Negative %" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} />
-                <SortTh col="crisis" label="Crisis" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} />
+                <SortTh col="total" label="Total" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
+                <SortTh col="ig" label="IG" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
+                <SortTh col="yt" label="YT" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
+                <SortTh col="reddit" label="Reddit" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
+                <SortTh col="tiktok" label="TikTok" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
+                <SortTh col="negativePct" label="Negative %" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
+                <SortTh col="crisis" label="Crisis" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
+              </tr>
+              <tr className="col-filter-row">
+                <th><ColumnFilter col="brand" value={discBrand} onChange={setDiscBrand} placeholder="search brand…" /></th>
+                <th colSpan={7} />
               </tr>
             </thead>
             <tbody>
@@ -685,14 +590,14 @@ export default function CommunityIntelPage() {
           <table className="data" style={{ width: '100%', minWidth: 880 }}>
             <thead>
               <tr>
-                <SortTh col="brand" label="Brand" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} style={{ textAlign: 'left' }} />
-                <SortTh col="total" label="Total" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} />
-                <SortTh col="positive" label="Positive" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} />
-                <SortTh col="neutral" label="Neutral" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} />
-                <SortTh col="negative" label="Negative" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} />
-                <SortTh col="crisis" label="Crisis" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} />
-                <SortTh col="negativePct" label="Negative %" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} />
-                <SortTh col="risk" label="Risk Level" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} title="Risk level considers crisis signal count, severity, recency, and negative share." />
+                <SortTh col="brand" label="Brand" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} style={{ textAlign: 'left' }} title="Paddle brand being scored. JOOLA row is highlighted in green." />
+                <SortTh col="total" label="Total" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} style={{ textAlign: 'right' }} title="Total community signals for this brand in the active window — every mention across Instagram, YouTube, Reddit, TikTok, and X combined." />
+                <SortTh col="positive" label="Positive" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} style={{ textAlign: 'right' }} title="Number of signals GPT-4o-mini classified as POSITIVE — compliments, recommendations, 'love this paddle', 'just bought, amazing'." />
+                <SortTh col="neutral" label="Neutral" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} style={{ textAlign: 'right' }} title="Signals with no clear positive or negative tone — questions, factual statements, links, casual references." />
+                <SortTh col="negative" label="Negative" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} style={{ textAlign: 'right' }} title="NEGATIVE = any everyday complaint, gripe, or unhappy comment. Examples: 'paddle cracked after 3 weeks', 'support never replied', 'didn't fit my swing', 'overpriced'. Low-severity unhappiness counted one-by-one. Most negative signals are NOT crises — they are individual user gripes." />
+                <SortTh col="crisis" label="Crisis" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} style={{ textAlign: 'right' }} title="CRISIS = a much higher bar than 'negative'. Crisis signals are viral or systemic events that demand immediate brand response: safety issue, recall, ban / illegality ruling, mass warranty failure, coordinated backlash, athlete scandal. Every crisis is negative, but most negative signals are NOT crises. Detected via GPT-4o-mini crisis-classifier on top of sentiment." />
+                <SortTh col="negativePct" label="Negative %" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} style={{ textAlign: 'right' }} title="Share of this brand's mentions that are negative. Formula: negative ÷ (positive + neutral + negative) × 100. Yellow >= 15%, red >= 30%." />
+                <SortTh col="risk" label="Risk Level" sortKey={sentimentSort.key} sortDir={sentimentSort.dir} toggle={(k) => toggleSort(sentimentSort, setSentimentSort, k)} style={{ textAlign: 'right' }} title="Overall brand-health rating combining crisis count, severity, recency, and negative share. Low / Moderate / High / Critical bands." />
               </tr>
             </thead>
             <tbody>
@@ -740,7 +645,7 @@ export default function CommunityIntelPage() {
         </div>
       </section>
 
-      {/* ─── Section 6: Live community intel feed ──────────────────── */}
+      {/* ─── Section 6: Live community intel feed (merged) ──────────── */}
       <section>
         <div className="section-head">
           <div>
@@ -748,11 +653,18 @@ export default function CommunityIntelPage() {
               Live community intel feed
               <SectionInfo
                 title="Live community intel feed"
-                description="Unified, deduped stream of every community signal in the active window. mention_facts rows take precedence over their source-table duplicates so each conversation only shows up once."
+                description="Unified, deduped stream of every community signal in the active window — mentions, comments, and crisis flags across Instagram, YouTube, Reddit, TikTok and X. Sort by Date for most-recent first; sort by Likes for highest-impact first. Use the chips to filter to JOOLA only, negative only, or comments only."
                 source="ig_comments + yt_comments + reddit_mentions + reddit_comments + mention_facts (deduped)"
               />
             </h2>
-            <div className="sub">Up to 200 most-recent signals. Click any row to open the source thread.</div>
+            <div className="sub">Up to 200 signals. Click any row to open the source thread. Sort by Likes to surface ambassadors and viral complaints.</div>
+          </div>
+          <div className="actions">
+            <div className="chip-row">
+              <button className={'chip ' + (feedJoolaOnly ? 'on' : '')} onClick={() => setFeedJoolaOnly((v) => !v)} title="Show only JOOLA-brand signals">JOOLA only</button>
+              <button className={'chip ' + (feedNegativeOnly ? 'on' : '')} onClick={() => setFeedNegativeOnly((v) => !v)} title="Show only signals classified as negative">Negative only</button>
+              <button className={'chip ' + (feedCommentsOnly ? 'on' : '')} onClick={() => setFeedCommentsOnly((v) => !v)} title="Show only comment signals (hide mentions/crisis-only rows)">Comments only</button>
+            </div>
           </div>
         </div>
         <div className="card">
@@ -760,29 +672,30 @@ export default function CommunityIntelPage() {
             Showing {feedRows.length} of {filteredSignals.length} filtered signals
           </div>
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
-            <table className="data" style={{ width: '100%', minWidth: 980 }}>
+            <table className="data" style={{ width: '100%', minWidth: 1040 }}>
               <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                 <tr>
-                  <SortTh col="sourceLabel" label="Source" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="brand" label="Brand" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="signalType" label="Type" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} />
-                  <SortTh col="summary" label="Summary" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="sentiment" label="Sentiment" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} />
-                  <SortTh col="isCrisis" label="Risk" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} />
-                  <SortTh col="date" label="Date" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} />
-                  <th>Link</th>
+                  <SortTh col="sourceLabel" label="Source" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} title="Where the signal came from — Instagram, YouTube, Reddit, TikTok, or X." />
+                  <SortTh col="brand" label="Brand" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} title="Paddle brand the signal mentions. JOOLA rows highlighted in green." />
+                  <SortTh col="signalType" label="Type" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'center' }} title="mention = brand named in a post or caption · comment = thread reply or comment · crisis = flagged as a high-risk event" />
+                  <SortTh col="summary" label="Summary" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} title="Short snippet of the signal text. Hover for full text." />
+                  <SortTh col="sentiment" label="Sentiment" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'center' }} title="GPT-4o-mini classification: positive / neutral / negative." />
+                  <SortTh col="likes" label="Likes" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'right' }} title="Engagement count — likes on IG / YT comments, upvotes on Reddit. Sort by this to surface highest-impact signals." />
+                  <SortTh col="isCrisis" label="Risk" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'center' }} title="CRISIS pill = AI flagged this as a recall / safety / coordinated-backlash event needing immediate brand response." />
+                  <SortTh col="date" label="Date" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'right' }} title="When the signal was posted. Sort descending for most-recent." />
+                  <th title="Open the original post / comment in a new tab.">Link</th>
                 </tr>
                 <tr className="col-filter-row">
-                  <th><ColumnFilter col="source" value={feedColFilter.source} onChange={(v) => setFeedColFilter((p) => ({ ...p, source: v }))} /></th>
-                  <th><ColumnFilter col="brand" value={feedColFilter.brand} onChange={(v) => setFeedColFilter((p) => ({ ...p, brand: v }))} /></th>
+                  <th><ColumnFilter col="source" value={feedColFilter.source} onChange={(v) => setFeedColFilter((p) => ({ ...p, source: v }))} placeholder="filter…" /></th>
+                  <th><ColumnFilter col="brand" value={feedColFilter.brand} onChange={(v) => setFeedColFilter((p) => ({ ...p, brand: v }))} placeholder="filter…" /></th>
                   <th />
                   <th><ColumnFilter col="summary" value={feedColFilter.summary} onChange={(v) => setFeedColFilter((p) => ({ ...p, summary: v }))} placeholder="search text…" /></th>
-                  <th colSpan={4} />
+                  <th colSpan={5} />
                 </tr>
               </thead>
               <tbody>
                 {feedRows.length === 0 && (
-                  <tr><td colSpan={8} style={emptyCell}>No community signals in this filter.</td></tr>
+                  <tr><td colSpan={9} style={emptyCell}>No community signals in this filter.</td></tr>
                 )}
                 {feedRows.map((s) => (
                   <tr key={s.uniqueKey}>
@@ -811,6 +724,9 @@ export default function CommunityIntelPage() {
                     <td style={{ textAlign: 'center' }}>
                       <span className={'pill ' + SENT_PILL[s.sentiment]} style={{ fontSize: 10 }}>{s.sentiment}</span>
                     </td>
+                    <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 11 }}>
+                      {s.likes > 0 ? `♥ ${fmt(s.likes)}` : <span style={{ color: '#3a4150' }}>·</span>}
+                    </td>
                     <td style={{ textAlign: 'center' }}>
                       {s.isCrisis
                         ? <span className="pill pill-red" style={{ fontSize: 10, fontWeight: 700 }}>CRISIS</span>
@@ -832,92 +748,7 @@ export default function CommunityIntelPage() {
         </div>
       </section>
 
-      {/* ─── Section 7: Top comments + community posts ─────────────── */}
-      <section>
-        <div className="section-head">
-          <div>
-            <h2>
-              Top comments and community posts
-              <SectionInfo
-                title="Top comments and community posts"
-                description="Per-comment voice across IG, YT, Reddit. Sort by likes or sentiment to surface ambassadors and complaints. Quick filters narrow to JOOLA-only or negative-only."
-                source="ig_comments + yt_comments + reddit_comments (deduped against mention_facts)"
-              />
-            </h2>
-            <div className="sub">Highest-impact comments. Find ambassadors. Catch complaints early.</div>
-          </div>
-          <div className="actions">
-            <div className="chip-row">
-              <button className={'chip ' + (topJoolaOnly ? 'on' : '')} onClick={() => setTopJoolaOnly((v) => !v)}>JOOLA only</button>
-              <button className={'chip ' + (topNegativeOnly ? 'on' : '')} onClick={() => setTopNegativeOnly((v) => !v)}>Negative only</button>
-            </div>
-          </div>
-        </div>
-        <div className="card">
-          <div style={{ padding: '8px 18px', fontSize: 12, color: 'var(--fg-4)' }}>
-            Showing {topCommentRows.length} of {topCommentsAll.length} comments
-          </div>
-          <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
-            <table className="data" style={{ width: '100%', minWidth: 940 }}>
-              <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
-                <tr>
-                  <SortTh col="sourceLabel" label="Channel" sortKey={topSort.key} sortDir={topSort.dir} toggle={(k) => toggleSort(topSort, setTopSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="brand" label="Brand" sortKey={topSort.key} sortDir={topSort.dir} toggle={(k) => toggleSort(topSort, setTopSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="summary" label="Comment" sortKey={topSort.key} sortDir={topSort.dir} toggle={(k) => toggleSort(topSort, setTopSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="sentiment" label="Sentiment" sortKey={topSort.key} sortDir={topSort.dir} toggle={(k) => toggleSort(topSort, setTopSort, k)} />
-                  <SortTh col="likes" label="Likes" sortKey={topSort.key} sortDir={topSort.dir} toggle={(k) => toggleSort(topSort, setTopSort, k)} />
-                  <SortTh col="date" label="Date" sortKey={topSort.key} sortDir={topSort.dir} toggle={(k) => toggleSort(topSort, setTopSort, k)} />
-                  <th>Link</th>
-                </tr>
-                <tr className="col-filter-row">
-                  <th />
-                  <th><ColumnFilter col="brand" value={topColFilter.brand} onChange={(v) => setTopColFilter((p) => ({ ...p, brand: v }))} /></th>
-                  <th><ColumnFilter col="summary" value={topColFilter.summary} onChange={(v) => setTopColFilter((p) => ({ ...p, summary: v }))} placeholder="search text…" /></th>
-                  <th colSpan={4} />
-                </tr>
-              </thead>
-              <tbody>
-                {topCommentRows.length === 0 && (
-                  <tr><td colSpan={7} style={emptyCell}>No comments match this filter.</td></tr>
-                )}
-                {topCommentRows.map((c) => (
-                  <tr key={c.uniqueKey}>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: 99, background: communityChannelColor(String(c.source)) }} />
-                        {c.sourceLabel}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: 99, background: pgColor(c.brand) }} />
-                        <span style={{ fontWeight: 600, color: c.brand === 'joola' ? '#22c55e' : 'inherit' }}>{name(c.brand)}</span>
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'left', maxWidth: 420 }}>
-                      <span title={c.summary} style={{ display: 'inline-block', maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        "{c.summary.slice(0, 180)}"
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span className={'pill ' + SENT_PILL[c.sentiment]} style={{ fontSize: 10 }}>{c.sentiment}</span>
-                    </td>
-                    <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontSize: 11 }}>♥ {fmt(c.likes)}</td>
-                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap', fontFamily: 'JetBrains Mono', fontSize: 11 }}>{formatCalendarDate(c.postedAt)}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      {c.link
-                        ? <a href={c.link} target="_blank" rel="noopener noreferrer" className="ext-link" style={{ fontSize: 11 }}>open →</a>
-                        : <span style={{ color: '#3a4150' }}>·</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── Section 8: Crisis watchlist ──────────────────────────── */}
+      {/* ─── Section 7: Crisis watchlist ──────────────────────────── */}
       <section>
         <div className="section-head">
           <div>
@@ -1428,58 +1259,136 @@ function CommunityTrendChart({ points }: { points: TrendPoint[] }) {
   const padT = 14
   const padB = 28
 
-  if (!points.length || points.every((p) => p.total === 0)) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+
+  const hasData = points.length > 0 && !points.every((p) => p.crisis === 0 && p.joola === 0 && p.negative === 0)
+  if (!hasData) {
     return <div style={{ color: '#6b7280', fontSize: 13, padding: '32px 0', textAlign: 'center' }}>No signals in the window.</div>
   }
 
-  const max = Math.max(1, ...points.map((p) => p.total))
+  // Series — Total removed per UX feedback (was visually dominant + duplicative of channel-mix view)
+  const series = [
+    { id: 'joola', label: 'JOOLA mentions', color: '#22c55e', desc: 'Conversation specifically about JOOLA' },
+    { id: 'negative', label: 'Negative sentiment', color: '#fb923c', desc: 'Signals classified as negative across all brands' },
+    { id: 'crisis', label: 'Crisis signals', color: '#ef4444', desc: 'Crisis-flagged signals (recalls, warranty issues, public complaints)' },
+  ] as const
+
+  const max = Math.max(1, ...points.flatMap((p) => series.map((s) => p[s.id as 'crisis' | 'joola' | 'negative'])))
   const N = points.length
   const x = (i: number) => padL + (i / Math.max(1, N - 1)) * (w - padL - padR)
   const y = (v: number) => padT + (h - padT - padB) * (1 - v / max)
 
-  function build(key: keyof Pick<TrendPoint, 'total' | 'crisis' | 'joola' | 'negative'>): string {
+  function build(key: 'crisis' | 'joola' | 'negative'): string {
     return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ')
   }
 
-  const series = [
-    { id: 'total', label: 'Total', color: '#06b6d4' },
-    { id: 'crisis', label: 'Crisis', color: '#ef4444' },
-    { id: 'joola', label: 'JOOLA', color: '#22c55e' },
-    { id: 'negative', label: 'Negative', color: '#fb923c' },
-  ] as const
-
   const last = points[points.length - 1]
-  const labels = series.map((s) => ({ id: s.id, color: s.color, label: s.label, y: y(last[s.id]) }))
-  labels.sort((a, b) => a.y - b.y)
+  const endLabels = series.map((s) => ({ id: s.id, color: s.color, label: s.label, y: y(last[s.id as 'crisis' | 'joola' | 'negative']) }))
+  endLabels.sort((a, b) => a.y - b.y)
   const minGap = 14
-  for (let i = 1; i < labels.length; i++) {
-    if (labels[i].y < labels[i - 1].y + minGap) labels[i].y = labels[i - 1].y + minGap
+  for (let i = 1; i < endLabels.length; i++) {
+    if (endLabels[i].y < endLabels[i - 1].y + minGap) endLabels[i].y = endLabels[i - 1].y + minGap
+  }
+
+  const hoverPoint = hoverIdx !== null ? points[hoverIdx] : null
+
+  function onMove(e: React.MouseEvent<HTMLDivElement>) {
+    const el = wrapRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    // Convert mouse x to viewBox x then to index
+    const localX = ((e.clientX - rect.left) / rect.width) * w
+    if (localX < padL || localX > w - padR) { setHoverIdx(null); return }
+    const ratio = (localX - padL) / (w - padL - padR)
+    const idx = Math.max(0, Math.min(N - 1, Math.round(ratio * (N - 1))))
+    setHoverIdx(idx)
   }
 
   return (
-    <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
-      {[0, Math.ceil(max / 2), max].map((tick) => (
-        <g key={tick}>
-          <line x1={padL} x2={w - padR} y1={y(tick)} y2={y(tick)} stroke="rgba(255,255,255,0.06)" strokeDasharray="2 4" />
-          <text x={padL - 6} y={y(tick) + 3} textAnchor="end" fontSize={10} fill="#6b7280">{tick}</text>
-        </g>
-      ))}
-      {series.map((s) => (
-        <path key={s.id} d={build(s.id)} fill="none" stroke={s.color} strokeWidth={1.7} strokeLinejoin="round" />
-      ))}
-      {labels.map((lb) => (
-        <text key={lb.id} x={w - padR + 6} y={lb.y + 3} fontSize={10} fill={lb.color} fontWeight={700}>
-          {lb.label}: {last[lb.id as 'total' | 'crisis' | 'joola' | 'negative']}
-        </text>
-      ))}
-      {[0, Math.floor(N / 2), N - 1].map((i) =>
-        points[i] ? (
-          <text key={i} x={x(i)} y={h - padB + 16} textAnchor="middle" fontSize={10} fill="#6b7280">
-            {points[i].date.slice(5)}
+    <div ref={wrapRef} style={{ position: 'relative' }} onMouseMove={onMove} onMouseLeave={() => setHoverIdx(null)}>
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8, fontSize: 11, color: 'var(--fg-2)' }}>
+        {series.map((s) => (
+          <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} title={s.desc}>
+            <span style={{ width: 14, height: 3, background: s.color, borderRadius: 2, display: 'inline-block' }} />
+            <span style={{ color: s.color, fontWeight: 700 }}>{s.label}</span>
+          </span>
+        ))}
+      </div>
+
+      <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
+        {[0, Math.ceil(max / 2), max].map((tick) => (
+          <g key={tick}>
+            <line x1={padL} x2={w - padR} y1={y(tick)} y2={y(tick)} stroke="rgba(255,255,255,0.06)" strokeDasharray="2 4" />
+            <text x={padL - 6} y={y(tick) + 3} textAnchor="end" fontSize={10} fill="#6b7280">{tick}</text>
+          </g>
+        ))}
+        {series.map((s) => (
+          <path key={s.id} d={build(s.id as 'crisis' | 'joola' | 'negative')} fill="none" stroke={s.color} strokeWidth={1.7} strokeLinejoin="round" />
+        ))}
+        {endLabels.map((lb) => (
+          <text key={lb.id} x={w - padR + 6} y={lb.y + 3} fontSize={10} fill={lb.color} fontWeight={700}>
+            {lb.label.split(' ')[0]}: {last[lb.id as 'crisis' | 'joola' | 'negative']}
           </text>
-        ) : null,
+        ))}
+        {[0, Math.floor(N / 2), N - 1].map((i) =>
+          points[i] ? (
+            <text key={i} x={x(i)} y={h - padB + 16} textAnchor="middle" fontSize={10} fill="#6b7280">
+              {points[i].date.slice(5)}
+            </text>
+          ) : null,
+        )}
+        {/* Crosshair + dots */}
+        {hoverIdx !== null && hoverPoint && (
+          <g pointerEvents="none">
+            <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={padT} y2={h - padB} stroke="rgba(255,255,255,0.25)" strokeDasharray="2 3" />
+            {series.map((s) => (
+              <circle
+                key={s.id}
+                cx={x(hoverIdx)}
+                cy={y(hoverPoint[s.id as 'crisis' | 'joola' | 'negative'])}
+                r={4}
+                fill={s.color}
+                stroke="#0d1117"
+                strokeWidth={2}
+              />
+            ))}
+          </g>
+        )}
+      </svg>
+
+      {/* Hover tooltip */}
+      {hoverIdx !== null && hoverPoint && wrapRef.current && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${Math.min(82, Math.max(2, (x(hoverIdx) / w) * 100))}%`,
+            top: 22,
+            transform: 'translateX(-50%)',
+            background: 'rgba(7,9,14,0.95)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 6,
+            padding: '8px 10px',
+            fontSize: 11,
+            color: '#cbd1dc',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            zIndex: 2,
+            boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div style={{ fontWeight: 700, color: '#fff', marginBottom: 4 }}>{hoverPoint.date}</div>
+          {series.map((s) => (
+            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 99, background: s.color, display: 'inline-block' }} />
+              <span style={{ color: s.color }}>{s.label}:</span>
+              <span style={{ color: '#fff', fontWeight: 700 }}>{hoverPoint[s.id as 'crisis' | 'joola' | 'negative']}</span>
+            </div>
+          ))}
+        </div>
       )}
-    </svg>
+    </div>
   )
 }
 

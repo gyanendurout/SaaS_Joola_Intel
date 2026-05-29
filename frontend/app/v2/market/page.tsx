@@ -323,12 +323,14 @@ export default function MarketIntelPage() {
             color="#F5E625"
             spark={[...Array(8)].map((_, i) => Math.max(2, signals.length - 4 + i))}
             customVs={rangeLabel}
+            tip="Total competitor + JOOLA 'moves' detected in the selected time window — new ads launched, promos started, crisis spikes, athlete posts, etc. A signal is any event JOOLA marketing should be aware of. Higher count = busier competitive landscape."
           />
           <MiniKpi
             label="Competitor crisis flags" flavor="danger"
             value={signals.filter((s) => s.brand !== 'joola' && (s.type === 'promo' || s.type === 'ad')).length}
             color="#ef4444"
             customVs="paid + promo activity alerts"
+            tip="How many ad-launch or promo-start signals fired from JOOLA's 10 competitors in this window. Treat each as a potential threat or opening — e.g. a competitor running a 25% off promo might be clearing inventory (opportunity to gain SoV)."
           />
         </div>
       </section>
@@ -341,24 +343,28 @@ export default function MarketIntelPage() {
             color="#06b6d4"
             spark={joolaMentionSpark}
             customVs={joolaReddit ? `JOOLA: ${fmt(joolaReddit.mentions)} ${joolaReddit.mentions === 1 ? 'mention' : 'mentions'}` : 'JOOLA: 0 mentions'}
+            tip="Total Reddit mentions of paddle brands in this window (all 11 brands combined). JOOLA's slice is shown below for quick comparison. Reddit is the most candid signal — players talk freely about real product issues here."
           />
           <MiniKpi
             label="Instagram reach" src="Instagram profiles"
             value={igTotalFollowers > 0 ? fmt(igTotalFollowers) : '—'}
             color="#ec4899"
             customVs={joolaIG ? `JOOLA: ${fmt(joolaIG.followers)} followers` : 'JOOLA: pending'}
+            tip="Combined Instagram follower count across all 11 tracked brand profiles. JOOLA's follower number is shown beneath. Big number = total addressable audience JOOLA is fighting for attention against on Instagram."
           />
           <MiniKpi
             label="YouTube reach" src="YouTube channels"
             value={ytTotalViews > 0 ? fmt(ytTotalViews) : '—'}
             color="#ef4444"
             customVs={`${displayYT.filter(y => y.subs > 0).length} channels active`}
+            tip="Total YouTube views across all tracked brand channels in this window. The '#N channels active' tag = how many brands have actually posted videos lately (some brands go dormant on YouTube)."
           />
           <MiniKpi
             label="TikTok velocity" src="TikTok videos"
             value={ttTotalVideos > 0 ? fmt(ttTotalVideos) : '—'}
             color="#a855f7"
             customVs={xTotalFollowers > 0 ? `${fmt(xTotalFollowers)} X followers tracked` : 'across tracked brands'}
+            tip="Total TikTok videos posted by all tracked paddle brands in this window. TikTok is where younger players discover paddles — high velocity here is a leading indicator of brand momentum among Gen Z / new-to-sport buyers."
           />
         </div>
       </section>

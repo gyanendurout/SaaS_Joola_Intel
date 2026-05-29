@@ -171,24 +171,28 @@ export default function RedditPage() {
             color="#22c55e"
             spark={displayTrend['joola'] || []}
             customVs={`#${displayReddit.findIndex((d) => d.brand === 'joola') + 1} of ${displayReddit.length} brands`}
+            tip="How many times 'JOOLA' (brand and product names) appeared in Reddit posts and comments during the selected time window. Source: Reddit scrape via Apify -> mention_facts table. The '#3 of 11' rank means JOOLA is the 3rd most-talked-about paddle brand right now vs the other 10 we track."
           />
           <MiniKpi
             label="JOOLA sentiment" src="net score" flavor="joola"
             value={allNeutral ? '—' : (parseFloat(netScore) >= 0 ? '+' : '') + netScore}
             color="#22c55e"
             customVs={allNeutral ? 'Sentiment classifier still calibrating — bars render 100% neutral until next enrichment pass' : `${joolaPositivePct}% positive · ${joolaNegativePct}% negative`}
+            tip="Overall mood of JOOLA mentions on Reddit. Formula: Net score = % positive − % negative. Each mention is scored by GPT-4o-mini as positive/neutral/negative. Above 0 = more love than hate; below 0 = more complaints than compliments."
           />
           <MiniKpi
             label="Total mentions" src="Reddit data"
             value={fmt(totalMentions)}
             color="#F5E625"
             customVs={`across ${displayReddit.length} brands`}
+            tip="Total paddle-brand mentions across all 11 tracked brands in this window. This is the denominator used to compute share of voice for any individual brand."
           />
           <MiniKpi
             label="Top subreddit" src="distribution"
             value={topSubreddit ? topSubreddit.name : '—'}
             color="#818cf8"
             customVs={topSubreddit ? `${fmt(topSubreddit.mentions)} mentions` : 'No subreddit data'}
+            tip="The Reddit community where paddle conversation is most concentrated right now. Useful for knowing where JOOLA community managers should focus listening and engagement."
           />
         </div>
       </section>

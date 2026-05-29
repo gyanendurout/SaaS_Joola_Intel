@@ -1319,18 +1319,18 @@ html { scroll-behavior: smooth; }
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: var(--fg-4);
+  color: #F5E625 !important;
   text-decoration: none;
   padding: 2px 7px;
   border-radius: 3px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--line);
+  background: rgba(245,230,37,0.10);
+  border: 1px solid rgba(245,230,37,0.35);
   transition: all 140ms;
   white-space: nowrap;
 }
 .v2-root .ext-link:hover {
-  color: var(--yellow);
-  background: var(--yellow-dim);
+  color: #ffffff !important;
+  background: rgba(245,230,37,0.28);
   border-color: var(--yellow-edge);
 }
 
@@ -1897,10 +1897,12 @@ html { scroll-behavior: smooth; }
 }
 .v2-root .col-filter-input {
   width: 100%;
-  background: rgba(0,0,0,0.25);
+  background: rgba(0,0,0,0.55);
   border: 1px solid var(--line);
   border-radius: 4px;
-  color: var(--fg-2);
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff;
+  caret-color: #ffffff;
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 500;
@@ -1908,10 +1910,10 @@ html { scroll-behavior: smooth; }
   outline: none;
   transition: border-color 140ms, background 140ms;
 }
-.v2-root .col-filter-input::placeholder { color: var(--fg-4); opacity: 0.6; }
+.v2-root .col-filter-input::placeholder { color: #9aa2b0; opacity: 0.85; }
 .v2-root .col-filter-input:focus {
   border-color: var(--yellow-edge);
-  background: rgba(0,0,0,0.4);
+  background: rgba(0,0,0,0.7);
 }
 
 /* ==========================================================

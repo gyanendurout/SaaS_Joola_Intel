@@ -338,84 +338,6 @@ export default function InfluencerIntelPage() {
       <PageHead title="INFLUENCER INTEL" />
       <FilterBanner />
 
-      {/* ── Global filter bar ──────────────────────────────────── */}
-      <section style={{ marginBottom: 16 }}>
-        <div style={{
-          display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center',
-          padding: '12px 14px', borderRadius: 10,
-          background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
-        }}>
-          <input
-            type="text"
-            placeholder="Search player…"
-            value={playerQuery}
-            onChange={e => setPlayerQuery(e.target.value)}
-            style={{
-              padding: '6px 10px', borderRadius: 6, fontSize: 12,
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
-              color: 'var(--fg)', minWidth: 180,
-            }}
-          />
-          <select
-            value={platformFilter}
-            onChange={e => setPlatformFilter(e.target.value as PlatformKey)}
-            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
-          >
-            {(Object.keys(PLATFORM_FILTER_LABEL) as PlatformKey[]).map(k => (
-              <option key={k} value={k}>{PLATFORM_FILTER_LABEL[k]}</option>
-            ))}
-          </select>
-          <select
-            value={range}
-            onChange={e => setRange(e.target.value as DateRangeKey)}
-            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
-          >
-            {(Object.keys(DATE_RANGE_LABEL) as DateRangeKey[]).map(k => (
-              <option key={k} value={k}>{DATE_RANGE_LABEL[k]}</option>
-            ))}
-          </select>
-          <input
-            type="date"
-            value={customFrom.toISOString().slice(0, 10)}
-            onChange={e => setCustomFrom(new Date(e.target.value))}
-            title="Custom from"
-            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
-          />
-          <input
-            type="date"
-            value={customTo.toISOString().slice(0, 10)}
-            onChange={e => setCustomTo(new Date(e.target.value))}
-            title="Custom to"
-            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
-          />
-          <select
-            value={sentimentFilter}
-            onChange={e => setSentimentFilter(e.target.value as SentimentKey)}
-            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
-          >
-            {(Object.keys(SENTIMENT_LABEL) as SentimentKey[]).map(k => (
-              <option key={k} value={k}>{SENTIMENT_LABEL[k]}</option>
-            ))}
-          </select>
-          <select
-            value={contentTypeFilter}
-            onChange={e => setContentTypeFilter(e.target.value as ContentTypeKey)}
-            style={{ padding: '6px 10px', borderRadius: 6, fontSize: 12, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: 'var(--fg)' }}
-          >
-            <option value="all">All content types</option>
-            <option value="image">Image</option>
-            <option value="video">Video</option>
-            <option value="reel">Reel</option>
-            <option value="short">Short</option>
-          </select>
-          <span style={{ fontSize: 11, color: 'var(--fg-4)', marginLeft: 'auto' }}>
-            {mode === 'custom'
-              ? `${formatCalendarDate(effectiveFrom)} → ${formatCalendarDate(effectiveTo)}`
-              : DATE_RANGE_LABEL[range]}
-          </span>
-        </div>
-      </section>
-
       {/* ── Section 1 — Summary strip ─────────────────────────── */}
       {summary && (
         <section style={{ marginBottom: 16 }}>
@@ -1449,19 +1371,74 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
     if (!moved) break
   }
 
+  // ─── Quadrant split lines: use median of the cohort so quadrants are always populated.
+  const sortedReach = [...bubbles].map(b => b.reach).sort((a, b) => a - b)
+  const sortedEr = [...bubbles].map(b => b.er).sort((a, b) => a - b)
+  const medianReach = sortedReach.length > 0 ? sortedReach[Math.floor(sortedReach.length / 2)] : 0
+  const medianEr = sortedEr.length > 0 ? sortedEr[Math.floor(sortedEr.length / 2)] : 0
+  const splitX = xScale(medianReach)
+  const splitY = yScale(medianEr)
+
+  // Quadrant counts (data-driven)
+  const counts = { stars: 0, micro: 0, vanity: 0, niche: 0 }
+  for (const b of bubbles) {
+    const hiR = b.reach >= medianReach
+    const hiE = b.er >= medianEr
+    if (hiR && hiE) counts.stars++
+    else if (!hiR && hiE) counts.micro++
+    else if (hiR && !hiE) counts.vanity++
+    else counts.niche++
+  }
+
+  // Visual quadrant rectangles (tinted backgrounds)
+  const quadrants = [
+    { x: padL,            y: padT,             w: splitX - padL,            h: splitY - padT,          fill: 'rgba(180, 140, 255, 0.05)', label: 'Micro-influencers', desc: 'High ER · low reach · best ROI per spend', count: counts.micro, anchor: 'start',  tx: padL + 8,           ty: padT + 18 },
+    { x: splitX,          y: padT,             w: padL + innerW - splitX,   h: splitY - padT,          fill: 'rgba(34, 197, 94, 0.07)',   label: 'Stars',             desc: 'High ER · high reach · brand-defining athletes', count: counts.stars, anchor: 'end',    tx: padL + innerW - 8,  ty: padT + 18 },
+    { x: padL,            y: splitY,           w: splitX - padL,            h: padT + innerH - splitY, fill: 'rgba(148, 163, 184, 0.04)', label: 'Niche / quiet',     desc: 'Low ER · low reach · deprioritize', count: counts.niche, anchor: 'start',  tx: padL + 8,           ty: padT + innerH - 10 },
+    { x: splitX,          y: splitY,           w: padL + innerW - splitX,   h: padT + innerH - splitY, fill: 'rgba(251, 146, 60, 0.05)',  label: 'Celebrity reach',   desc: 'High reach · low ER · vanity audience', count: counts.vanity, anchor: 'end',    tx: padL + innerW - 8,  ty: padT + innerH - 10 },
+  ]
+
   return (
     <div className="scatter-wrap" style={{ position: 'relative' }}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
+        {/* Quadrant tinted backgrounds */}
+        {quadrants.map((q, i) => (
+          <rect key={'qr' + i} x={q.x} y={q.y} width={q.w} height={q.h} fill={q.fill} />
+        ))}
+        {/* Grid */}
         <g className="scatter-grid">
           {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'gx' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} stroke="rgba(255,255,255,0.06)" />
+            <line key={'gx' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} stroke="rgba(255,255,255,0.04)" />
           ))}
           {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'gy' + i} y1={padT + t * innerH} y2={padT + t * innerH} x1={padL} x2={padL + innerW} stroke="rgba(255,255,255,0.06)" />
+            <line key={'gy' + i} y1={padT + t * innerH} y2={padT + t * innerH} x1={padL} x2={padL + innerW} stroke="rgba(255,255,255,0.04)" />
           ))}
         </g>
+        {/* Quadrant split lines (median reach + median ER) */}
+        <line x1={splitX} x2={splitX} y1={padT} y2={padT + innerH} stroke="rgba(245,230,37,0.45)" strokeDasharray="4 4" strokeWidth={1} />
+        <line y1={splitY} y2={splitY} x1={padL} x2={padL + innerW} stroke="rgba(245,230,37,0.45)" strokeDasharray="4 4" strokeWidth={1} />
+        {/* Median labels on the split lines */}
+        <text x={splitX + 4} y={padT + 11} fontSize={9} fill="rgba(245,230,37,0.75)" style={{ letterSpacing: '0.05em' }}>median reach</text>
+        <text x={padL + innerW - 4} y={splitY - 4} fontSize={9} fill="rgba(245,230,37,0.75)" textAnchor="end" style={{ letterSpacing: '0.05em' }}>median ER</text>
+        {/* Quadrant labels in corners */}
+        {quadrants.map((q, i) => (
+          <g key={'ql' + i}>
+            <text x={q.tx} y={q.ty} textAnchor={q.anchor as 'start' | 'end'}
+              fontSize={11} fontWeight={800} fill="#fff" opacity={0.85}
+              style={{ letterSpacing: '0.06em', textTransform: 'uppercase', paintOrder: 'stroke', stroke: 'rgba(7,9,14,0.85)', strokeWidth: 3, strokeLinejoin: 'round' }}>
+              {q.label} <tspan fontSize={10} fontWeight={600} fill="#cbd1dc" opacity={0.85}>· {q.count}</tspan>
+            </text>
+            <text x={q.tx} y={q.ty + 12} textAnchor={q.anchor as 'start' | 'end'}
+              fontSize={9} fill="#9aa2b0" opacity={0.85}
+              style={{ paintOrder: 'stroke', stroke: 'rgba(7,9,14,0.85)', strokeWidth: 2.5, strokeLinejoin: 'round' }}>
+              {q.desc}
+            </text>
+          </g>
+        ))}
+        {/* Axis titles */}
         <text x={padL + innerW / 2} y={h - 8} textAnchor="middle" style={{ fontSize: 10, fill: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>REACH (followers) {useLog ? '· log scale' : ''} →</text>
         <text transform={`translate(14 ${padT + innerH / 2}) rotate(-90)`} textAnchor="middle" style={{ fontSize: 10, fill: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>ENGAGEMENT RATE ↑</text>
+        {/* Bubbles */}
         {placed.map((p, i) => {
           const isJ = p.b.brandSlug === 'joola'
           const isHov = hov?.b === p.b
@@ -1487,8 +1464,21 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
         <div className="tip" style={{ left: (hov.cx / w) * 100 + '%', top: (hov.cy / h) * 100 + '%' }}>
           <div className="t-name">{hov.b.name}</div>
           {pgName(hov.b.brandSlug, brands)} · {fmt(hov.b.reach)} reach · {hov.b.er.toFixed(2)}% ER · {hov.b.total} signals
+          <div style={{ marginTop: 4, fontSize: 10, color: 'var(--fg-4)' }}>
+            {hov.b.reach >= medianReach && hov.b.er >= medianEr ? 'Quadrant: STAR'
+              : hov.b.reach < medianReach && hov.b.er >= medianEr ? 'Quadrant: MICRO-INFLUENCER'
+              : hov.b.reach >= medianReach && hov.b.er < medianEr ? 'Quadrant: CELEBRITY REACH'
+              : 'Quadrant: NICHE / QUIET'}
+          </div>
         </div>
       )}
+      {/* Legend below the chart */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginTop: 14, fontSize: 11, color: 'var(--fg-2)', justifyContent: 'space-between' }}>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(34, 197, 94, 0.7)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#22c55e' }}>Stars</b> — high reach + high engagement. Brand-defining athletes; protect them.</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(180, 140, 255, 0.6)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#bba0ff' }}>Micro-influencers</b> — small audience but very engaged. Best ROI per dollar.</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(251, 146, 60, 0.7)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#fb923c' }}>Celebrity reach</b> — big follower count, weak engagement. Vanity audience.</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(148, 163, 184, 0.5)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#94a3b8' }}>Niche / quiet</b> — low on both axes. Deprioritize for paid spend.</span>
+      </div>
     </div>
   )
 }

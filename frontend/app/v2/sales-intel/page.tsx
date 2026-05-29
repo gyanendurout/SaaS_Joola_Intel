@@ -477,6 +477,7 @@ export default function SalesIntelPage() {
             value={fmt(kpis.totalProducts)}
             color="#F5E625"
             customVs={`${products.length} in catalog`}
+            tip="How many distinct paddle SKUs across the 11 brands had a stock snapshot during this window. Each SKU is checked weekly on the brand's own product page (Add-to-cart button visible = in stock; 'Sold out' = out of stock)."
           />
           <MiniKpi
             label="In stock"
@@ -485,6 +486,7 @@ export default function SalesIntelPage() {
             value={kpis.inStockPct.toFixed(1) + '%'}
             color="#22c55e"
             customVs={`${Math.round((kpis.inStockPct / 100) * kpis.totalProducts)} of ${kpis.totalProducts} SKUs`}
+            tip="Share of tracked paddles currently available to buy. Formula: in_stock_pct = (SKUs in stock at most recent snapshot ÷ total SKUs tracked) × 100. Source: weekly scrape of each brand's own product page."
           />
           <MiniKpi
             label="Out of stock"
@@ -492,12 +494,14 @@ export default function SalesIntelPage() {
             value={kpis.outStockPct.toFixed(1) + '%'}
             color="#ef4444"
             customVs={`${Math.round((kpis.outStockPct / 100) * kpis.totalProducts)} SKUs unavailable`}
+            tip="Share of tracked paddles unavailable to buy right now. High out-of-stock % at a competitor = demand-transfer opportunity for JOOLA (their buyers are looking for alternatives). Source: brand product page snapshots."
           />
           <MiniKpi
             label="Brands with data"
             value={fmt(kpis.brandsWithData)}
             color="#818cf8"
             customVs={`of ${brands.length} tracked`}
+            tip="How many of the 11 tracked brands returned at least one stock snapshot this window. If this is low, scraper coverage needs a check before drawing conclusions from the page."
           />
         </div>
       </section>

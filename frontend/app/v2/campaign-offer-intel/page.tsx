@@ -372,108 +372,6 @@ export default function CampaignOfferIntelPage() {
       <PageHead title="CAMPAIGN & OFFER INTEL" />
       <FilterBanner />
 
-      {/* ─── Global filter bar ─────────────────────────────────────── */}
-      <section>
-        <div
-          className="card"
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 12,
-            alignItems: 'center',
-            padding: '12px 16px',
-            marginBottom: 16,
-          }}
-        >
-          <label style={filterLabel}>Range
-            <select
-              value={range}
-              onChange={(e) => setRange(e.target.value as DateRangeKey)}
-              className="page-select"
-              aria-label="Preset date range"
-            >
-              {(Object.keys(DATE_RANGE_LABEL) as DateRangeKey[]).map((k) => (
-                <option key={k} value={k}>{DATE_RANGE_LABEL[k]}</option>
-              ))}
-            </select>
-          </label>
-          <label style={filterLabel}>From
-            <input
-              type="date"
-              value={fromInputValue}
-              onChange={(e) => { const v = e.target.value; if (v) setCustomFrom(new Date(v + 'T00:00:00')) }}
-              className="page-select"
-              aria-label="Custom from date"
-            />
-          </label>
-          <label style={filterLabel}>To
-            <input
-              type="date"
-              value={toInputValue}
-              onChange={(e) => { const v = e.target.value; if (v) setCustomTo(new Date(v + 'T00:00:00')) }}
-              className="page-select"
-              aria-label="Custom to date"
-            />
-          </label>
-          {mode === 'custom' && (
-            <span className="pill pill-amber" style={{ fontSize: 10 }}>Custom window</span>
-          )}
-          <span style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)' }} />
-          <label style={filterLabel}>Platform
-            <select
-              value={platformFilter}
-              onChange={(e) => setPlatformFilter(e.target.value as PlatformKey)}
-              className="page-select"
-              aria-label="Platform filter"
-            >
-              <option value="all">All platforms</option>
-              <option value="google">Google</option>
-              <option value="meta">Meta</option>
-              <option value="other">Other</option>
-            </select>
-          </label>
-          <label style={filterLabel}>Promo type
-            <select
-              value={promoTypeFilter}
-              onChange={(e) => setPromoTypeFilter(e.target.value as PromoTypeKey)}
-              className="page-select"
-              aria-label="Promo type filter"
-            >
-              {(Object.keys(PROMO_TYPE_LABEL) as PromoTypeKey[]).map((k) => (
-                <option key={k} value={k}>{PROMO_TYPE_LABEL[k]}</option>
-              ))}
-            </select>
-          </label>
-          <label style={filterLabel}>Status
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusKey)}
-              className="page-select"
-              aria-label="Status filter"
-            >
-              <option value="all">All status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
-          </label>
-          <label style={filterLabel}>Discount
-            <select
-              value={discountFilter}
-              onChange={(e) => setDiscountFilter(e.target.value as DiscountKey)}
-              className="page-select"
-              aria-label="Discount filter"
-            >
-              <option value="all">All discounts</option>
-              <option value="0-10">0–10%</option>
-              <option value="10-20">10–20%</option>
-              <option value="20-30">20–30%</option>
-              <option value="30+">30%+</option>
-              <option value="unknown">Unknown</option>
-            </select>
-          </label>
-        </div>
-      </section>
-
       {/* ─── Section 1: Summary strip ──────────────────────────────── */}
       <section>
         <div
@@ -515,6 +413,7 @@ export default function CampaignOfferIntelPage() {
             color="#f59e0b"
             customVs={`${totalAds} total in window`}
             src="marketing_ads"
+            tip="Number of paddle-brand ads currently running in the selected window after applying the active filters. Source: Meta Ad Library + Google Ads Transparency scrape -> marketing_ads table."
           />
           <MiniKpi
             label="Active promos (filter)"
@@ -522,6 +421,7 @@ export default function CampaignOfferIntelPage() {
             color="#ef4444"
             customVs={`${totalPromos} total in window`}
             src="promotions"
+            tip="Number of homepage / banner / email promotions detected across the 11 brands' own websites in the active window. Source: brand homepage scrape -> promotions table."
           />
           <MiniKpi
             label="JOOLA ad share"
@@ -529,12 +429,14 @@ export default function CampaignOfferIntelPage() {
             color="#22c55e"
             customVs={joolaAd ? `${joolaAd.total} ads · #${joolaAdRank} rank` : '—'}
             flavor="joola"
+            tip="JOOLA's share of all paid ad creatives running across the 11 brands. Formula: JOOLA active ads ÷ total active ads × 100. Rank shows JOOLA's position vs the other 10 brands."
           />
           <MiniKpi
             label="Avg discount"
             value={avgDiscountAll > 0 ? `${avgDiscountAll}%` : '—'}
             color="#818cf8"
             customVs={`${brandsDiscounting} brands discounting`}
+            tip="Average % off across all active promotions in the window. High value = aggressive discounting environment. The 'brands discounting' count tells you how many of the 11 brands are running promos right now."
           />
         </div>
       </section>

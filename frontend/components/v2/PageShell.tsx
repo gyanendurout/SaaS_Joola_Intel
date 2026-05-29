@@ -69,16 +69,17 @@ export function PageHead({ eyebrow, title, accent, sub, actions }: PageHeadProps
 }
 
 export function MiniKpi({
-  label, value, delta, deltaPct, color, spark, src, customVs, flavor,
+  label, value, delta, deltaPct, color, spark, src, customVs, flavor, tip,
 }: {
   label: string; value: string | number; delta?: number | null; deltaPct?: number | null;
-  color?: string; spark?: number[]; src?: string; customVs?: string; flavor?: string
+  color?: string; spark?: number[]; src?: string; customVs?: string; flavor?: string; tip?: string
 }) {
   const c = color || '#22c55e'
   return (
-    <div className={'kpi ' + (flavor || '')}>
+    <div className={'kpi ' + (flavor || '')} title={tip}>
       <div className="label">
         <span>{label}</span>
+        {tip && <SectionInfo title={label} description={tip} source={src || 'Live data'} />}
         {src && <span className="src" title={src}>{src}</span>}
       </div>
       <div className="row">
