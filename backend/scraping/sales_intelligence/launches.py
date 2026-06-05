@@ -57,6 +57,6 @@ def run(ctx: dict[str, Any]) -> int:
             "reason_code":    "new_variant_detected",
         })
 
-    n = sb.upsert("inventory_events", events, "variant_id,event_time") if events else 0
+    n = sb.insert("inventory_events", events) if events else 0
     log.info("✓ %d new product launch events recorded", n)
     return n

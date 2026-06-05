@@ -51,7 +51,7 @@ class Checkpoint:
     def reset(self) -> None:
         prev = self._path.with_suffix(".prev")
         if self._path.exists():
-            os.rename(self._path, prev)
+            os.replace(self._path, prev)
         self._state = {"run_id": _now(), "started_at": _now(), "steps": {}}
 
     def is_done(self, step_key: str) -> bool:

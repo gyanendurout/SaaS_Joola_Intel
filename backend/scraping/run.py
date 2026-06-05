@@ -99,6 +99,13 @@ MODULE_STEPS: dict[str, Module] = {
     "reviews": [
         [("backend.scraping.sources.products.scrape_reviews",         "run")],
     ],
+    # Reviews via crawl4ai — JS-rendered widget extraction (more accurate than
+    # the collection-page widget scraping done by scrape_catalog). Run weekly
+    # after products module so URLs are fresh.
+    #   python -m backend.scraping.run --module reviews-crawl4ai
+    "reviews-crawl4ai": [
+        [("backend.scraping.sources.products.scrape_reviews_crawl4ai", "run")],
+    ],
     "news": [
         [("backend.scraping.sources.news.scrape_news",                "run")],
     ],
@@ -133,12 +140,14 @@ MODULE_STEPS: dict[str, Module] = {
         [("backend.scraping.facts.populate_product_attention",        "run")],
     ],
     "sales-intelligence": [
-        [("backend.scraping.sales_intelligence.discover",             "run")],
-        [("backend.scraping.sales_intelligence.scrape_inventory",     "run")],
+        # Pass 1: discover variants via /products.json + crawl4ai inventory scrape
+        [("backend.scraping.sales_intelligence.scrape_inventory_crawl4ai", "run")],
+        # Pass 2: estimate sales from snapshots (qty delta + availability flip)
         [("backend.scraping.sales_intelligence.estimate",             "run"),
          ("backend.scraping.sales_intelligence.restock",              "run"),
          ("backend.scraping.sales_intelligence.sellout",              "run"),
          ("backend.scraping.sales_intelligence.launches",             "run")],
+        # Pass 3: roll up to daily facts + correlation
         [("backend.scraping.sales_intelligence.revenue",              "run"),
          ("backend.scraping.sales_intelligence.correlation",          "run")],
     ],
