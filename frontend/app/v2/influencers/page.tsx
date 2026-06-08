@@ -159,6 +159,8 @@ export default function InfluencerIntelPage() {
   const [rosterSort, setRosterSort] = useState<{ key: keyof RosterRow | null; dir: 'asc' | 'desc' }>({ key: 'brandSlug', dir: 'asc' })
   const [rosterColFilter, setRosterColFilter] = useState<Record<string, string>>({})
   const [drillRoster, setDrillRoster] = useState<RosterRow | null>(null)
+  const [drillContent, setDrillContent] = useState<InfluencerPostRow | null>(null)
+  const [drillImpact, setDrillImpact] = useState<AthleteImpactRow | null>(null)
   const [attentionSort, setAttentionSort] = useState<{ key: keyof PlatformAttention | null; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' })
   const [attentionColFilter, setAttentionColFilter] = useState<Record<string, string>>({})
   const [perfSort, setPerfSort] = useState<{ key: keyof InfluencerRow | null; dir: 'asc' | 'desc' }>({ key: 'engRate', dir: 'desc' })
@@ -356,6 +358,12 @@ export default function InfluencerIntelPage() {
           onClose={() => setDrillRoster(null)}
         />
       )}
+      {drillContent && (
+        <ContentDetailDialog post={drillContent} brands={brands} onClose={() => setDrillContent(null)} />
+      )}
+      {drillImpact && (
+        <ImpactDetailDialog row={drillImpact} brands={brands} onClose={() => setDrillImpact(null)} />
+      )}
       <PageHead title="INFLUENCER INTEL" />
       <FilterBanner />
 
@@ -363,7 +371,7 @@ export default function InfluencerIntelPage() {
       {summary && (
         <section style={{ marginBottom: 16 }}>
           <div style={{
-            display: 'flex', flexWrap: 'wrap', gap: 22, alignItems: 'center',
+            display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-evenly',
             padding: '12px 16px', borderRadius: 10,
             background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.20)',
             fontSize: 12, color: 'var(--fg-2)',
@@ -453,17 +461,17 @@ export default function InfluencerIntelPage() {
         title="Player impact map"
         info="Each bubble is one athlete. X-axis: reach (Instagram followers). Y-axis: engagement rate. Bubble size: total signals (posts + mentions). JOOLA athletes outlined in white. Athletes with no engagement data are omitted."
         source="influencers + influencer_posts + mention_facts"
-        sub="X = reach, Y = engagement rate, size = signals"
+        sub="Hover any bubble to see details · Stars = protect · Micro = best ROI · Celebrity = reconsider"
       >
-        <div className="card"><div className="card-pad-lg">
+        <div className="card" style={{ padding: '20px 24px', overflow: 'visible' }}>
           <ImpactBubbleMap bubbles={bubblePool} brands={brands} />
-        </div></div>
+        </div>
       </Section>
 
       {/* ── Section 4 — Cross-platform player attention ───────── */}
       <Section id="attention"
         title="Cross-platform player attention"
-        info="Ranked roll-up of every player by total signals across all five platforms. Empty platforms display as N/A and are never invented. Sort by any column to find leaders per platform."
+        info="Ranked roll-up of every player by total signals across all five platforms. Empty platforms display as — and are never invented. Sort by any column to find leaders per platform."
         source="influencer_posts + mention_facts"
         sub={`${filteredAttention.length} players · sorted by total`}
       >
@@ -498,16 +506,21 @@ export default function InfluencerIntelPage() {
                   <td style={{ fontWeight: 700 }}>{r.player}</td>
                   <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
                   <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625', fontWeight: 700 }}>{fmt(r.total)}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.ig > 0 ? fmt(r.ig) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.yt > 0 ? fmt(r.yt) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.tiktok > 0 ? fmt(r.tiktok) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.x > 0 ? fmt(r.x) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.reddit > 0 ? fmt(r.reddit) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.ig > 0 ? fmt(r.ig) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.yt > 0 ? fmt(r.yt) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.tiktok > 0 ? fmt(r.tiktok) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.x > 0 ? fmt(r.x) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.reddit > 0 ? fmt(r.reddit) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                   <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.engagement)}</td>
                   <td>
                     <SentimentMix positive={r.positive} negative={r.negative} total={r.total} />
                   </td>
-                  <td><span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span></td>
+                  <td style={{ textAlign: 'center' }}>
+                    {r.trend === 'up'   && <span style={{ color: '#22c55e', fontWeight: 700, fontSize: 13 }} title="Trending up — more signals in the last 14 days vs prior 14 days">▲</span>}
+                    {r.trend === 'down' && <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 13 }} title="Trending down — fewer signals in the last 14 days vs prior 14 days">▼</span>}
+                    {r.trend === 'flat' && <span style={{ color: '#94a3b8', fontWeight: 700, fontSize: 11 }} title="Stable — similar signal volume over the last 28 days">▬</span>}
+                    {r.trend === 'unknown' && <span style={{ color: 'var(--fg-4)', fontSize: 11 }} title="Not enough data to determine trend">—</span>}
+                  </td>
                 </tr>
               ))}
               {filteredAttention.length === 0 && (
@@ -685,7 +698,12 @@ export default function InfluencerIntelPage() {
             </thead>
             <tbody>
               {sortBy(filteredContent, contentSort.key, contentSort.dir).slice(0, 200).map((p) => (
-                <tr key={p.id} className={p.brandSlug === 'joola' ? 'joola' : ''}>
+                <tr
+                    key={p.id}
+                    className={p.brandSlug === 'joola' ? 'joola' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; setDrillContent(p) }}
+                  >
                   <td><PlatformPill p={p.platform} /></td>
                   <td style={{ fontWeight: 700 }}>{p.athleteName}</td>
                   <td><BrandCell slug={p.brandSlug} brands={brands} /></td>
@@ -799,11 +817,11 @@ export default function InfluencerIntelPage() {
                   <tr key={j.player} className="joola">
                     <td style={{ fontWeight: 700, color: '#22c55e' }}>{j.player}</td>
                     <td className="cell-num" style={{ textAlign: 'right' }}>{j.signals > 0 ? fmt(j.signals) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.ig > 0 ? fmt(j.ig) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.yt > 0 ? fmt(j.yt) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.tiktok > 0 ? fmt(j.tiktok) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.x > 0 ? fmt(j.x) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.reddit > 0 ? fmt(j.reddit) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.ig > 0 ? fmt(j.ig) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.yt > 0 ? fmt(j.yt) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.tiktok > 0 ? fmt(j.tiktok) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.x > 0 ? fmt(j.x) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.reddit > 0 ? fmt(j.reddit) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                     <td className="cell-num" style={{ textAlign: 'right' }}>{j.reach > 0 ? fmt(j.reach) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                     <td className="cell-num" style={{ textAlign: 'right' }}>{j.engRate > 0 ? j.engRate.toFixed(2) + '%' : '—'}</td>
                     <td title={j.topContent || ''} style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -811,7 +829,15 @@ export default function InfluencerIntelPage() {
                         ? (j.topContentUrl ? <a className="ext-link" href={j.topContentUrl} target="_blank" rel="noreferrer">{j.topContent}</a> : j.topContent)
                         : <span style={{ color: 'var(--fg-4)' }}>—</span>}
                     </td>
-                    <td><span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{j.sentiment}</span></td>
+                    <td>
+                      {j.sentiment === 'no-data'
+                        ? <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span>
+                        : <span
+                            className={'pill ' + (SENT_PILL[j.sentiment as keyof typeof SENT_PILL] || (j.sentiment === 'mixed' ? 'pill-amber' : 'pill-ghost'))}
+                            style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}
+                          >{j.sentiment}</span>
+                      }
+                    </td>
                     <td>{j.relatedPaddle ? <span style={{ fontSize: 11 }}>{j.relatedPaddle}</span> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                     <td><span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span></td>
                   </tr>
@@ -942,7 +968,7 @@ export default function InfluencerIntelPage() {
                 const maxScore = athleteImpact[0]?.impactScore || 100
                 const barPct = Math.min(100, (r.impactScore / maxScore) * 100)
                 return (
-                  <tr key={r.athleteId} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                  <tr key={r.athleteId} className={r.brandSlug === 'joola' ? 'joola' : ''} style={{ cursor: 'pointer' }} onClick={() => setDrillImpact(r)}>
                     <td className="cell-num">{i + 1}</td>
                     <td style={{ fontWeight: 700 }}>{r.player}</td>
                     <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
@@ -1275,15 +1301,30 @@ function SentimentMix({ positive, negative, total }: { positive: number; negativ
   if (total === 0) return <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span>
   const pos = (positive / total) * 100
   const neg = (negative / total) * 100
+  const neutral = total - positive - negative
+  const neuPct = Math.round((neutral / total) * 100)
+  const posPct = Math.round(pos)
+  const negPct = Math.round(neg)
+  const tip = [
+    `Sentiment breakdown across ${total} signals`,
+    ``,
+    `✅ Positive  ${positive} signals (${posPct}%)`,
+    `⬜ Neutral   ${neutral} signals (${neuPct}%)`,
+    `🔴 Negative  ${negative} signals (${negPct}%)`,
+    ``,
+    `Net sentiment: ${positive - negative >= 0 ? '+' : ''}${positive - negative}`,
+  ].join('\n')
   return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, minWidth: 70 }}>
+    <div title={tip} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, minWidth: 70, cursor: 'help' }}>
       <div style={{ display: 'flex', height: 6, borderRadius: 99, overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
         <div style={{ width: pos + '%', background: '#22c55e' }} />
         <div style={{ width: (100 - pos - neg) + '%', background: '#94a3b8' }} />
         <div style={{ width: neg + '%', background: '#ef4444' }} />
       </div>
-      <div style={{ fontSize: 9, color: 'var(--fg-4)' }}>
-        +{positive} / −{negative}
+      <div style={{ fontSize: 9, display: 'flex', gap: 4 }}>
+        <span style={{ color: '#22c55e' }}>+{positive}</span>
+        <span style={{ color: '#94a3b8' }}>{neutral}</span>
+        <span style={{ color: '#ef4444' }}>−{negative}</span>
       </div>
     </div>
   )
@@ -1344,6 +1385,7 @@ interface Bubble { name: string; brandSlug: string; reach: number; er: number; t
 
 function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Brand[] }) {
   const [hov, setHov] = useState<{ b: Bubble; cx: number; cy: number } | null>(null)
+  const [drillBubble, setDrillBubble] = useState<Bubble | null>(null)
   const w = 760, h = 380
   const padL = 64, padR = 30, padT = 30, padB = 46
   const innerW = w - padL - padR
@@ -1426,6 +1468,14 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
     { x: splitX,          y: splitY,           w: padL + innerW - splitX,   h: padT + innerH - splitY, fill: 'rgba(251, 146, 60, 0.05)',  label: 'Celebrity reach',   desc: 'High reach · low ER · vanity audience', count: counts.vanity, anchor: 'end',    tx: padL + innerW - 8,  ty: padT + innerH - 10 },
   ]
 
+  const hovQuadLabel = hov
+    ? (hov.b.reach >= medianReach && hov.b.er >= medianEr ? 'STAR'
+      : hov.b.reach < medianReach && hov.b.er >= medianEr ? 'MICRO-INFLUENCER'
+      : hov.b.reach >= medianReach && hov.b.er < medianEr ? 'CELEBRITY REACH'
+      : 'NICHE / QUIET')
+    : ''
+  const hovQuadColor = hovQuadLabel === 'STAR' ? '#22c55e' : hovQuadLabel === 'MICRO-INFLUENCER' ? '#bba0ff' : hovQuadLabel === 'CELEBRITY REACH' ? '#fb923c' : '#94a3b8'
+
   return (
     <div className="scatter-wrap" style={{ position: 'relative' }}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
@@ -1471,7 +1521,7 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
           const isJ = p.b.brandSlug === 'joola'
           const isHov = hov?.b === p.b
           return (
-            <g key={i} onMouseEnter={() => setHov({ b: p.b, cx: p.cx, cy: p.cy })} onMouseLeave={() => setHov(null)}>
+            <g key={i} style={{ cursor: 'pointer' }} onMouseEnter={() => setHov({ b: p.b, cx: p.cx, cy: p.cy })} onMouseLeave={() => setHov(null)} onClick={() => { setHov(null); setDrillBubble(p.b) }}>
               <circle cx={p.cx} cy={p.cy} r={p.r + 5} fill={pgColor(p.b.brandSlug)} opacity={isHov ? 0.25 : 0.08} />
               <circle cx={p.cx} cy={p.cy} r={p.r} fill={pgColor(p.b.brandSlug)}
                 opacity={isJ ? 1 : 0.85}
@@ -1489,23 +1539,44 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
         })}
       </svg>
       {hov && (
-        <div className="tip" style={{ left: (hov.cx / w) * 100 + '%', top: (hov.cy / h) * 100 + '%' }}>
+        <div className="tip" style={{ left: (hov.cx / w) * 100 + '%', top: (hov.cy / h) * 100 + '%', whiteSpace: 'nowrap' }}>
           <div className="t-name">{hov.b.name}</div>
-          {pgName(hov.b.brandSlug, brands)} · {fmt(hov.b.reach)} reach · {hov.b.er.toFixed(2)}% ER · {hov.b.total} signals
-          <div style={{ marginTop: 4, fontSize: 10, color: 'var(--fg-4)' }}>
-            {hov.b.reach >= medianReach && hov.b.er >= medianEr ? 'Quadrant: STAR'
-              : hov.b.reach < medianReach && hov.b.er >= medianEr ? 'Quadrant: MICRO-INFLUENCER'
-              : hov.b.reach >= medianReach && hov.b.er < medianEr ? 'Quadrant: CELEBRITY REACH'
-              : 'Quadrant: NICHE / QUIET'}
+          <div style={{ color: '#94a3b8', fontSize: 10, marginBottom: 6 }}>{pgName(hov.b.brandSlug, brands)}</div>
+          <div style={{ display: 'flex', gap: 10, fontSize: 11, marginBottom: 6 }}>
+            <span>Reach: <b>{fmt(hov.b.reach)}</b></span>
+            <span>ER: <b>{hov.b.er.toFixed(2)}%</b></span>
+            <span>Signals: <b>{hov.b.total}</b></span>
           </div>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: hovQuadColor + '22', color: hovQuadColor, border: `1px solid ${hovQuadColor}44` }}>{hovQuadLabel}</span>
         </div>
       )}
-      {/* Legend below the chart */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginTop: 14, fontSize: 11, color: 'var(--fg-2)', justifyContent: 'space-between' }}>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(34, 197, 94, 0.7)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#22c55e' }}>Stars</b> — high reach + high engagement. Brand-defining athletes; protect them.</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(180, 140, 255, 0.6)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#bba0ff' }}>Micro-influencers</b> — small audience but very engaged. Best ROI per dollar.</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(251, 146, 60, 0.7)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#fb923c' }}>Celebrity reach</b> — big follower count, weak engagement. Vanity audience.</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(148, 163, 184, 0.5)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#94a3b8' }}>Niche / quiet</b> — low on both axes. Deprioritize for paid spend.</span>
+      {drillBubble && (
+        <BubbleDetailDialog
+          bubble={drillBubble}
+          brands={brands}
+          medianReach={medianReach}
+          medianEr={medianEr}
+          onClose={() => setDrillBubble(null)}
+        />
+      )}
+      {/* Legend — 4 insight cards in one row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 16 }}>
+        {[
+          { label: 'Stars', color: '#22c55e', bg: 'rgba(34,197,94,0.07)', border: 'rgba(34,197,94,0.2)', desc: 'High reach + high engagement', action: 'Protect & invest', count: counts.stars },
+          { label: 'Micro-influencers', color: '#bba0ff', bg: 'rgba(180,140,255,0.07)', border: 'rgba(180,140,255,0.2)', desc: 'Small audience, very engaged', action: 'Best ROI per dollar', count: counts.micro },
+          { label: 'Celebrity reach', color: '#fb923c', bg: 'rgba(251,146,60,0.07)', border: 'rgba(251,146,60,0.2)', desc: 'Big following, weak engagement', action: 'Reconsider spend', count: counts.vanity },
+          { label: 'Niche / quiet', color: '#94a3b8', bg: 'rgba(148,163,184,0.05)', border: 'rgba(148,163,184,0.15)', desc: 'Low reach + low engagement', action: 'Deprioritize', count: counts.niche },
+        ].map(q => (
+          <div key={q.label} style={{ background: q.bg, border: `1px solid ${q.border}`, borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: q.color, flexShrink: 0 }} />
+              <span style={{ fontWeight: 800, color: q.color, fontSize: 12 }}>{q.label}</span>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{q.count}</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{q.desc}</div>
+            <div style={{ fontSize: 11, color: 'var(--fg-2)', fontWeight: 700 }}>→ {q.action}</div>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -1591,6 +1662,211 @@ function RosterDetailDialog({ row: r, brands, onClose }: {
               ? `Last seen ${r.lastSeenDays} day${r.lastSeenDays !== 1 ? 's' : ''} ago`
               : 'Last seen: unknown'}
           </span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Bubble detail dialog ─────────────────────────────────────────────
+function BubbleDetailDialog({ bubble: b, brands, medianReach, medianEr, onClose }: {
+  bubble: Bubble; brands: V2Brand[]; medianReach: number; medianEr: number; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const brandName = pgName(b.brandSlug, brands)
+  const brandColor = pgColor(b.brandSlug)
+  const isJoola = b.brandSlug === 'joola'
+
+  const hiR = b.reach >= medianReach, hiE = b.er >= medianEr
+  const quadrant = hiR && hiE ? 'Star' : !hiR && hiE ? 'Micro-influencer' : hiR && !hiE ? 'Celebrity reach' : 'Niche / quiet'
+  const qColor = quadrant === 'Star' ? '#22c55e' : quadrant === 'Micro-influencer' ? '#bba0ff' : quadrant === 'Celebrity reach' ? '#fb923c' : '#94a3b8'
+  const qDesc: Record<string, string> = {
+    'Star': 'Large audience and high engagement — the ideal combination. Prioritize for campaigns and long-term deals.',
+    'Micro-influencer': 'Smaller audience but highly engaged followers. Best return on sponsorship investment.',
+    'Celebrity reach': 'Very large following but low engagement. Great for visibility, but monitor conversions carefully.',
+    'Niche / quiet': 'Low reach and low engagement currently. Review content quality before investing.',
+  }
+  const metrics = [
+    { label: 'Followers', value: fmt(b.reach), sub: b.reach >= medianReach ? 'Above median' : 'Below median', color: b.reach >= medianReach ? '#22c55e' : '#94a3b8' },
+    { label: 'Engagement rate', value: b.er.toFixed(2) + '%', sub: b.er >= medianEr ? 'Above median' : 'Below median', color: b.er >= medianEr ? '#22c55e' : '#94a3b8' },
+    { label: 'Total signals', value: fmt(b.total), sub: 'Posts + mentions', color: '#60a5fa' },
+  ]
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0, border: isJoola ? '2px solid #fff' : 'none' }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{b.name}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Sponsored by {brandName}</div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: qColor + '22', color: qColor, border: `1px solid ${qColor}44` }}>{quadrant}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: qColor + '08' }}>
+          <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.6 }}>{qDesc[quadrant]}</div>
+        </div>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          {metrics.map(m => (
+            <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+              <div style={{ fontSize: 11, color: '#fff', fontWeight: 600, marginTop: 2 }}>{m.label}</div>
+              <div style={{ fontSize: 10, color: m.color, marginTop: 2 }}>{m.sub}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Player Impact Map</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Content post detail dialog ──────────────────────────────────────
+function ContentDetailDialog({ post: p, brands, onClose }: {
+  post: InfluencerPostRow; brands: V2Brand[]; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const brandName = pgName(p.brandSlug, brands)
+  const isJoola = p.brandSlug === 'joola'
+  const SENT_COLOR: Record<string, string> = { positive: '#22c55e', negative: '#ef4444', neutral: '#94a3b8', unknown: '#6b7280' }
+  const sentColor = SENT_COLOR[p.sentiment] || '#6b7280'
+  const PLAT_COLOR: Record<string, string> = { ig: '#e1306c', yt: '#ff0000', tiktok: '#69c9d0', x: '#1d9bf0', reddit: '#ff4500' }
+  const platColor = PLAT_COLOR[p.platform] || '#6b7280'
+
+  const metrics = [
+    { label: 'Views',      value: p.views > 0 ? fmt(p.views) : '—',      color: '#94a3b8' },
+    { label: 'Likes',      value: fmt(p.likes),                            color: '#22c55e' },
+    { label: 'Comments',   value: fmt(p.comments),                         color: '#60a5fa' },
+    { label: 'Shares',     value: p.shares > 0 ? fmt(p.shares) : '—',     color: '#a78bfa' },
+    { label: 'Engagement', value: fmt(p.engagement),                       color: '#F5E625' },
+    { label: 'Eng. Rate',  value: p.engRate > 0 ? p.engRate.toFixed(2) + '%' : '—', color: p.engRate > 8 ? '#F5E625' : '#94a3b8' },
+  ]
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 580, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: platColor + '22', color: platColor, border: `1px solid ${platColor}44`, textTransform: 'uppercase' }}>{p.platform}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: sentColor + '18', color: sentColor, border: `1px solid ${sentColor}33` }}>{p.sentiment}</span>
+          {p.type && <span style={{ fontSize: 10, color: '#6b7280' }}>{p.type}</span>}
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>{p.postedAt ? formatCalendarDate(p.postedAt) : '—'}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 8 }}>×</button>
+        </div>
+
+        {/* Athlete + Brand */}
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: isJoola ? '#22c55e' : pgColor(p.brandSlug), flexShrink: 0 }} />
+          <span style={{ fontWeight: 800, fontSize: 14, color: isJoola ? '#22c55e' : '#fff' }}>{p.athleteName}</span>
+          <span style={{ color: '#6b7280', fontSize: 12 }}>· {brandName}</span>
+          {p.athleteHandle && <span style={{ fontSize: 11, color: '#60a5fa' }}>@{p.athleteHandle}</span>}
+        </div>
+
+        {/* Caption */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Caption</div>
+          <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.65, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {p.caption || '(no caption)'}
+          </div>
+        </div>
+
+        {/* Metrics */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {metrics.map(m => (
+            <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+          {p.url
+            ? <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', textDecoration: 'none', padding: '5px 14px', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 6, background: 'rgba(96,165,250,0.08)' }}>View original post →</a>
+            : <span style={{ fontSize: 11, color: '#3a4150' }}>No source link</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Athlete Impact Score detail dialog ──────────────────────────────
+function ImpactDetailDialog({ row: r, brands, onClose }: {
+  row: AthleteImpactRow; brands: V2Brand[]; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const isJoola = r.brandSlug === 'joola'
+  const clsColor = r.classification === 'rising' ? '#22c55e' : r.classification === 'underperforming' ? '#ef4444' : '#94a3b8'
+  const clsBg = r.classification === 'rising' ? 'rgba(34,197,94,0.10)' : r.classification === 'underperforming' ? 'rgba(239,68,68,0.10)' : 'rgba(148,163,184,0.10)'
+
+  const CLS_DESC: Record<string, string> = {
+    rising: 'This athlete is showing strong and growing momentum — high posts, strong engagement, and increasing mentions. A priority for continued investment.',
+    steady: 'Consistent performer with stable activity and engagement. Not surging but not declining. Good baseline sponsorship value.',
+    underperforming: 'Low activity or declining engagement relative to peers. Consider reviewing the sponsorship terms or activating more campaigns.',
+  }
+
+  const metrics = [
+    { label: 'Posts (30d)',       value: r.posts30d > 0 ? String(r.posts30d) : '—',                    color: '#60a5fa',  tip: 'Sponsored posts published in the last 30 days' },
+    { label: 'Avg engagement',    value: r.avgEngagement > 0 ? fmt(r.avgEngagement) : '—',              color: '#F5E625',  tip: 'Average likes + comments + shares per post' },
+    { label: 'Mentions',          value: r.mentions > 0 ? fmt(r.mentions) : '—',                        color: '#a78bfa',  tip: 'Times mentioned across all community channels' },
+    { label: 'Product mentions',  value: r.productMentions > 0 ? String(r.productMentions) : '—',       color: '#fb923c',  tip: 'Times a specific paddle/product was mentioned alongside this athlete' },
+    { label: 'Positive %',        value: r.positivePct > 0 ? r.positivePct.toFixed(0) + '%' : '—',      color: r.positivePct >= 60 ? '#22c55e' : '#94a3b8', tip: 'Share of signals about this athlete with positive sentiment' },
+    { label: 'Impact score',      value: r.impactScore.toFixed(1),                                      color: clsColor,   tip: 'Composite ROI proxy: weighted sum of posts, engagement, mentions, product pulls, and sentiment' },
+  ]
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: pgColor(r.brandSlug), flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{r.player}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{pgName(r.brandSlug, brands)}</div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: clsBg, color: clsColor, border: `1px solid ${clsColor}44`, textTransform: 'uppercase' }}>{r.classification}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+
+        {/* Classification explanation */}
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: clsColor + '08' }}>
+          <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.6 }}>{CLS_DESC[r.classification]}</div>
+        </div>
+
+        {/* Metrics grid */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {metrics.map(m => (
+            <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Athlete Impact Score</span>
           <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
         </div>
       </div>

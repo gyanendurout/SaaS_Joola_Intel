@@ -484,7 +484,7 @@ export async function fetchInfluencerIntel(
   // ── 3. Mention facts (cross-channel player mentions when athlete_id set)
   const mentionsRaw = await safeSelect<any>(() =>
     supabase.from('mention_facts')
-      .select('id,channel,source_id,brand_id,product_id,athlete_id,sentiment_label,text_snippet,posted_at')
+      .select('id,channel,source_id,brand_id,product_id,athlete_id,sentiment_label,text_snippet,posted_at,engagement,link_url')
       .not('athlete_id', 'is', null)
       .order('posted_at', { ascending: false })
       .limit(5000),
@@ -595,7 +595,9 @@ export async function fetchInfluencerIntel(
 
   // ── 5. Platform attention per player ───────────────────────────────
   const attentionByPlayer = new Map<string, PlatformAttention>()
-  function bumpAttention(playerName: string, brandSlug: string, platform: IntelPlatform, sentiment: IntelSentiment, engagement: number) {
+  const trendCounts = new Map<string, { recent: number; older: number }>()
+
+  function bumpAttention(playerName: string, brandSlug: string, platform: IntelPlatform, sentiment: IntelSentiment, engagement: number, days: number) {
     const key = `${playerName}::${brandSlug}`
     let row = attentionByPlayer.get(key)
     if (!row) {
@@ -612,10 +614,15 @@ export async function fetchInfluencerIntel(
     row.engagement += engagement
     if (sentiment === 'positive') row.positive++
     else if (sentiment === 'negative') row.negative++
+    // Track recent (0–14 days) vs older (15–28 days) for trend
+    const tc = trendCounts.get(key) || { recent: 0, older: 0 }
+    if (days <= 14) tc.recent++
+    else if (days <= 28) tc.older++
+    trendCounts.set(key, tc)
   }
 
   influencerPosts.forEach(p => {
-    bumpAttention(p.athleteName, p.brandSlug, p.platform, p.sentiment, p.engagement)
+    bumpAttention(p.athleteName, p.brandSlug, p.platform, p.sentiment, p.engagement, p.days)
   })
   playerMentions.forEach(m => {
     // Translate community channel into one of the 5 platforms.
@@ -629,7 +636,18 @@ export async function fetchInfluencerIntel(
     else if (ch === 'tiktok' || ch === 'tiktok_comment') plat = 'tiktok'
     else if (ch === 'x' || ch === 'x_influencer' || ch === 'unknown') plat = 'x'
     else plat = 'ig'
-    bumpAttention(m.player, m.brandSlug, plat, m.sentiment, 0)
+    bumpAttention(m.player, m.brandSlug, plat, m.sentiment, 0, m.days)
+  })
+
+  // Compute trend: compare last 14 days vs prior 14 days
+  attentionByPlayer.forEach((row, key) => {
+    const tc = trendCounts.get(key)
+    if (!tc || (tc.recent === 0 && tc.older === 0)) { row.trend = 'unknown'; return }
+    if (tc.older === 0) { row.trend = tc.recent > 0 ? 'up' : 'unknown'; return }
+    const ratio = tc.recent / tc.older
+    if (ratio >= 1.2) row.trend = 'up'
+    else if (ratio <= 0.8) row.trend = 'down'
+    else row.trend = 'flat'
   })
 
   const platformStats = Array.from(attentionByPlayer.values()).sort((a, b) => b.total - a.total)

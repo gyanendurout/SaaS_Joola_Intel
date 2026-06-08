@@ -82,6 +82,7 @@ def run(ctx: dict[str, Any]) -> int:
             "comment_text":         (item.get("text") or "")[:2000],
             "comment_likes":        item.get("likesCount", 0),
             "posted_at":            item.get("timestamp"),
+            "post_url":             post.get("post_url", ""),
         })
 
     n = sb.upsert("ig_comments", rows, "instagram_comment_id")
