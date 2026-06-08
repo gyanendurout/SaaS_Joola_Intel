@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import {
   PageHead, MiniKpi, SortTh, ColumnFilter, LoadingPage, SectionInfo,
   FilterBanner, pgColor, pgName,
@@ -92,6 +92,9 @@ export default function CommunityIntelPage() {
   const [crisisSort, setCrisisSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' })
   const [crisisColFilter, setCrisisColFilter] = useState<Record<string, string>>({})
   const [sentimentSort, setSentimentSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'crisis', dir: 'desc' })
+  const [topicSort, setTopicSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'peakMentions', dir: 'desc' })
+  const [drillBrand, setDrillBrand] = useState<string | null>(null)
+  const [drillSignal, setDrillSignal] = useState<import('@/lib/v2/communityIntel').CommunitySignal | null>(null)
 
   useEffect(() => {
     document.title = 'JOOLA INTEL — Community Intel'
@@ -324,6 +327,19 @@ export default function CommunityIntelPage() {
     return sortRows(filteredSentimentStats, sentimentSort.key, sentimentSort.dir)
   }, [filteredSentimentStats, sentimentSort])
 
+  const sortedTopicLifecycle = useMemo(() => {
+    const arr = [...topicLifecycle]
+    const { key, dir } = topicSort
+    arr.sort((a, b) => {
+      const av: unknown = key === 'channelCount' ? a.channelsTouched.length : (a as Record<string, unknown>)[key]
+      const bv: unknown = key === 'channelCount' ? b.channelsTouched.length : (b as Record<string, unknown>)[key]
+      if (typeof av === 'number' && typeof bv === 'number') return dir === 'asc' ? av - bv : bv - av
+      if (typeof av === 'boolean' && typeof bv === 'boolean') return dir === 'asc' ? (av === bv ? 0 : av ? 1 : -1) : (av === bv ? 0 : av ? -1 : 1)
+      return dir === 'asc' ? String(av ?? '').localeCompare(String(bv ?? '')) : String(bv ?? '').localeCompare(String(av ?? ''))
+    })
+    return arr
+  }, [topicLifecycle, topicSort])
+
   // ─── Early returns ──────────────────────────────────────────────────
 
   if (loading) return <LoadingPage />
@@ -342,6 +358,41 @@ export default function CommunityIntelPage() {
   const summary = data.summary
   const sentimentCoverage = data.dataStatus.sentimentCoverage
   const showSentimentLowCoverage = sentimentCoverage < 0.2 && filteredSignals.length > 0
+
+  // ── Filter-aware KPI values (recomputed from filteredSignals so the top
+  //    strip and MiniKpi cards always reflect the active date + brand filter)
+  const filteredJoolaMentions = filteredSignals.filter((s) => s.brand === 'joola').length
+  const filteredCommentsCount = filteredSignals.filter((s) => s.signalType === 'comment').length
+  const filteredWithSentiment = filteredSignals.filter(
+    (s) => s.sentiment === 'positive' || s.sentiment === 'neutral' || s.sentiment === 'negative',
+  )
+  const filteredNegCount = filteredWithSentiment.filter((s) => s.sentiment === 'negative').length
+  const filteredNegativePct = filteredWithSentiment.length > 0
+    ? Math.round(filteredNegCount / filteredWithSentiment.length * 100)
+    : summary.negativePct
+  const filteredSentimentCoverage = filteredSignals.length > 0
+    ? Math.round(filteredWithSentiment.length / filteredSignals.length * 100)
+    : Math.round(sentimentCoverage * 100)
+  const filteredOpenCrisis30d = crisisRows.filter((c) => c.days <= 30).length
+  const filteredTopChannel = filteredChannelStats[0]?.channel || summary.topChannel
+  const filteredTopBrand = (() => {
+    const counts = new Map<string, number>()
+    for (const s of filteredSignals) {
+      if (s.brand) counts.set(s.brand, (counts.get(s.brand) || 0) + 1)
+    }
+    let top = '', topN = 0
+    counts.forEach((n, b) => { if (n > topN) { top = b; topN = n } })
+    return top || summary.topBrand
+  })()
+  const filteredTopBrandAtRisk = (() => {
+    const counts = new Map<string, number>()
+    for (const s of filteredSignals) {
+      if (s.brand && s.isCrisis) counts.set(s.brand, (counts.get(s.brand) || 0) + 1)
+    }
+    let top = '', topN = 0
+    counts.forEach((n, b) => { if (n > topN) { top = b; topN = n } })
+    return top || summary.topBrandAtRisk
+  })()
   const negativeAvailable = filteredSentimentStats.some((r) => r.negative > 0 || r.positive > 0)
 
   const fromInputValue = effectiveFrom.toISOString().slice(0, 10)
@@ -349,6 +400,17 @@ export default function CommunityIntelPage() {
 
   return (
     <>
+      {drillSignal && (
+        <SignalDetailDialog signal={drillSignal} brandName={name(drillSignal.brand)} onClose={() => setDrillSignal(null)} />
+      )}
+      {drillBrand && (
+        <SignalDialog
+          brand={drillBrand}
+          brandName={name(drillBrand)}
+          signals={filteredSignals}
+          onClose={() => setDrillBrand(null)}
+        />
+      )}
       <PageHead title="COMMUNITY INTEL" />
       <FilterBanner />
 
@@ -367,30 +429,51 @@ export default function CommunityIntelPage() {
             marginBottom: 18,
           }}
         >
-          <SummaryItem label="Community signals" value={fmt(filteredSignals.length)} />
-          <SummaryItem label="Comments analyzed" value={fmt(summary.commentsAnalyzed)} />
+          <SummaryItem
+            label="Community signals"
+            value={fmt(filteredSignals.length)}
+            tip="Total community signals (mentions, comments, and crisis flags) across all channels within the selected date range and brand filter."
+          />
+          <SummaryItem
+            label="Comments analyzed"
+            value={fmt(filteredCommentsCount)}
+            tip="Comment-type signals (Instagram comments, YouTube comments, Reddit comments) within the current filters — a subset of total community signals."
+          />
           <SummaryItem
             label="Open crisis (30d)"
-            value={fmt(crisisRows.filter((c) => c.days <= 30).length || summary.openCrisis30d)}
-            color={summary.openCrisis30d > 0 ? '#ef4444' : undefined}
+            value={fmt(filteredOpenCrisis30d)}
+            color={filteredOpenCrisis30d > 0 ? '#ef4444' : undefined}
+            tip="Crisis-flagged signals from the last 30 days. Crisis signals are GPT-4o-mini events: recalls, safety issues, coordinated backlash, or scandals — a higher bar than negative sentiment."
           />
           <SummaryItem
             label="Top brand"
-            value={summary.topBrand ? name(summary.topBrand) : '—'}
-            color={summary.topBrand ? pgColor(summary.topBrand) : undefined}
+            value={filteredTopBrand ? name(filteredTopBrand) : '—'}
+            color={filteredTopBrand ? pgColor(filteredTopBrand) : undefined}
+            tip="Brand with the highest total community signal count in the current date and brand filter."
           />
           <SummaryItem
             label="Top brand at risk"
-            value={summary.topBrandAtRisk ? name(summary.topBrandAtRisk) : '—'}
-            color={summary.topBrandAtRisk ? pgColor(summary.topBrandAtRisk) : '#94a3b8'}
+            value={filteredTopBrandAtRisk ? name(filteredTopBrandAtRisk) : '—'}
+            color={filteredTopBrandAtRisk ? pgColor(filteredTopBrandAtRisk) : '#94a3b8'}
+            tip="Brand with the most crisis-flagged signals in the current filter window — the most urgent reputation risk."
           />
           <SummaryItem
             label="Top channel"
-            value={summary.topChannel ? communityChannelLabel(summary.topChannel) : '—'}
-            color={summary.topChannel ? communityChannelColor(summary.topChannel) : undefined}
+            value={filteredTopChannel ? communityChannelLabel(filteredTopChannel) : '—'}
+            color={filteredTopChannel ? communityChannelColor(filteredTopChannel) : undefined}
+            tip="Most active community channel by signal volume in the current date range."
           />
-          <SummaryItem label="JOOLA mentions" value={fmt(summary.joolaMentions)} color="#22c55e" />
-          <SummaryItem label="Negative %" value={`${summary.negativePct}%`} />
+          <SummaryItem
+            label="JOOLA mentions"
+            value={fmt(filteredJoolaMentions)}
+            color="#22c55e"
+            tip="Count of community signals specifically about JOOLA within the current date and brand filters."
+          />
+          <SummaryItem
+            label="Negative %"
+            value={`${filteredNegativePct}%`}
+            tip="Share of sentiment-classified signals that are negative: negative ÷ (positive + neutral + negative) × 100. Only signals with a sentiment label are counted — coverage shown on the Negative Share card below."
+          />
         </div>
 
         {/* KPI grid for accessibility — reuses MiniKpi visuals */}
@@ -407,28 +490,28 @@ export default function CommunityIntelPage() {
             label="Crisis signals"
             value={fmt(crisisRows.length)}
             color={crisisRows.length > 0 ? '#ef4444' : '#22c55e'}
-            customVs={`${summary.openCrisis30d} in last 30d`}
+            customVs={`${filteredOpenCrisis30d} in last 30d`}
             src="mention_facts.is_crisis"
             flavor={crisisRows.length > 0 ? 'danger' : undefined}
-            tip="Signals flagged as a CRISIS by the GPT-4o-mini classifier — recall / safety / coordinated-backlash / scandal events that need immediate brand response. Crisis is a much higher bar than 'negative sentiment'."
+            tip="Signals flagged as a CRISIS by the GPT-4o-mini classifier — recall / safety / coordinated-backlash / scandal events that need immediate brand response. Crisis is a much higher bar than negative sentiment. The sub-label shows how many of these fall within the last 30 days."
           />
           <MiniKpi
             label="JOOLA mentions"
-            value={fmt(summary.joolaMentions)}
+            value={fmt(filteredJoolaMentions)}
             color="#22c55e"
             customVs={`across ${filteredChannelStats.length} channels`}
             flavor="joola"
             src="Filtered JOOLA-brand signals"
-            tip="Count of community signals (mentions + comments + crisis) that are specifically about JOOLA, after applying the active filters."
+            tip="Count of community signals (mentions + comments + crisis flags) specifically about JOOLA within the active date range and brand filter. The sub-label shows how many distinct channels contributed."
           />
           <MiniKpi
             label="Negative share"
-            value={`${summary.negativePct}%`}
-            color={summary.negativePct >= 30 ? '#ef4444' : '#F5E625'}
-            customVs={sentimentCoverage > 0
-              ? `${Math.round(sentimentCoverage * 100)}% classifier coverage`
+            value={`${filteredNegativePct}%`}
+            color={filteredNegativePct >= 30 ? '#ef4444' : '#F5E625'}
+            customVs={filteredSentimentCoverage > 0
+              ? `${filteredSentimentCoverage}% classifier coverage`
               : 'Sentiment classifier pending'}
-            tip="Share of all signals classified as negative sentiment. Formula: negative ÷ (positive + neutral + negative) × 100. Yellow >= 15%, red >= 30%. Coverage % shows how many signals have a sentiment label so far."
+            tip="Share of sentiment-classified signals that are negative: negative ÷ (positive + neutral + negative) × 100. Yellow ≥ 15%, red ≥ 30%. The sub-label shows what percentage of signals have received a sentiment label so far."
           />
         </div>
       </section>
@@ -458,17 +541,18 @@ export default function CommunityIntelPage() {
                 <SortTh col="yt" label="YT" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
                 <SortTh col="reddit" label="Reddit" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
                 <SortTh col="tiktok" label="TikTok" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
+                <SortTh col="x" label="X" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
                 <SortTh col="negativePct" label="Negative %" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
                 <SortTh col="crisis" label="Crisis" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
               </tr>
               <tr className="col-filter-row">
                 <th><ColumnFilter col="brand" value={discBrand} onChange={setDiscBrand} placeholder="search brand…" /></th>
-                <th colSpan={7} />
+                <th colSpan={8} />
               </tr>
             </thead>
             <tbody>
               {discussionRows.length === 0 && (
-                <tr><td colSpan={8} style={emptyCell}>No discussion data for this filter.</td></tr>
+                <tr><td colSpan={9} style={emptyCell}>No discussion data for this filter.</td></tr>
               )}
               {discussionRows.map((r) => {
                 const isJoola = r.brand === 'joola'
@@ -494,6 +578,7 @@ export default function CommunityIntelPage() {
                     <td style={{ textAlign: 'right' }}>{r.yt > 0 ? fmt(r.yt) : <span style={{ color: '#3a4150' }}>·</span>}</td>
                     <td style={{ textAlign: 'right' }}>{r.reddit > 0 ? fmt(r.reddit) : <span style={{ color: '#3a4150' }}>·</span>}</td>
                     <td style={{ textAlign: 'right' }}>{r.tiktok > 0 ? fmt(r.tiktok) : <span style={{ color: '#3a4150' }}>·</span>}</td>
+                    <td style={{ textAlign: 'right' }}>{r.x > 0 ? fmt(r.x) : <span style={{ color: '#3a4150' }}>·</span>}</td>
                     <td style={{ textAlign: 'right', color: r.negativePct >= 30 ? '#ef4444' : r.negativePct >= 15 ? '#F5E625' : 'inherit', fontWeight: r.negativePct >= 15 ? 700 : 400 }}>
                       {r.total > 0 ? `${r.negativePct}%` : '—'}
                     </td>
@@ -536,7 +621,7 @@ export default function CommunityIntelPage() {
       {/* ─── Section 4: Channel + heatmap two-up ──────────────────── */}
       <section>
         <div className="two-col">
-          <div className="card" style={{ padding: 16 }}>
+          <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column' }}>
             <h6 style={{ marginTop: 0 }}>
               Channel mix
               <SectionInfo
@@ -545,7 +630,9 @@ export default function CommunityIntelPage() {
                 source="Filtered community signals · grouped by source"
               />
             </h6>
-            <ChannelMixDonut rows={filteredChannelStats} />
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <ChannelMixDonut rows={filteredChannelStats} />
+            </div>
           </div>
           <div className="card" style={{ padding: 16 }}>
             <h6 style={{ marginTop: 0 }}>
@@ -606,8 +693,40 @@ export default function CommunityIntelPage() {
               )}
               {sentimentRows.map((r) => {
                 const isJoola = r.brand === 'joola'
+                const rank = sentimentRows.filter(x => x.total > r.total).length + 1
+                const positivePct = r.total > 0 ? Math.round(r.positive / r.total * 100) : 0
+                const neutralPct  = r.total > 0 ? Math.round(r.neutral  / r.total * 100) : 0
+                const avgNegPct = sentimentRows.length > 0
+                  ? Math.round(sentimentRows.reduce((s, x) => s + x.negativePct, 0) / sentimentRows.length)
+                  : 0
+                const RISK_DESC: Record<string, string> = {
+                  critical: 'Immediate response required — viral or systemic issue in play.',
+                  high:     'Elevated risk — monitor closely and prepare a response.',
+                  moderate: 'Watch list — sentiment is trending negative.',
+                  low:      'Brand health stable — no urgent action needed.',
+                }
+                const rowTip = [
+                  `${name(r.brand).toUpperCase()}  ·  ${RISK_LABEL[r.risk].toUpperCase()} RISK`,
+                  RISK_DESC[r.risk],
+                  '',
+                  `Volume: ${r.total.toLocaleString()} signals  (ranked #${rank} of ${sentimentRows.length} by volume)`,
+                  r.total > 0
+                    ? `Sentiment:  ${r.positive} positive (${positivePct}%)  ·  ${r.neutral} neutral (${neutralPct}%)  ·  ${r.negative} negative (${r.negativePct}%)`
+                    : 'No signals with sentiment labels.',
+                  r.total > 0
+                    ? `Negative share ${r.negativePct}% vs ${avgNegPct}% category avg  ${r.negativePct > avgNegPct ? '▲ above average' : r.negativePct < avgNegPct ? '▼ below average' : '= at average'}`
+                    : '',
+                  r.crisis > 0
+                    ? `⚠  ${r.crisis} crisis signal${r.crisis !== 1 ? 's' : ''} — viral/systemic events needing immediate brand response`
+                    : '✓  No crisis signals detected',
+                ].filter(s => s !== undefined).join('\n')
                 return (
-                  <tr key={r.brand} style={isJoola ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}}>
+                  <tr
+                    key={r.brand}
+                    title={rowTip}
+                    style={{ ...(isJoola ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}), cursor: 'pointer' }}
+                    onClick={() => setDrillBrand(r.brand)}
+                  >
                     <td style={{ textAlign: 'left' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ width: 8, height: 8, borderRadius: 999, background: pgColor(r.brand) }} />
@@ -667,16 +786,16 @@ export default function CommunityIntelPage() {
             </div>
           </div>
         </div>
-        <div className="card">
+        <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '8px 18px', fontSize: 12, color: 'var(--fg-4)' }}>
             Showing {feedRows.length} of {filteredSignals.length} filtered signals
           </div>
-          <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
+          <div style={{ maxHeight: 480, overflowY: 'auto', overflowX: 'auto' }}>
             <table className="data" style={{ width: '100%', minWidth: 1040 }}>
-              <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+              <thead>
                 <tr>
-                  <SortTh col="sourceLabel" label="Source" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} title="Where the signal came from — Instagram, YouTube, Reddit, TikTok, or X." />
                   <SortTh col="brand" label="Brand" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} title="Paddle brand the signal mentions. JOOLA rows highlighted in green." />
+                  <SortTh col="sourceLabel" label="Source" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} title="Where the signal came from — Instagram, YouTube, Reddit, TikTok, or X." />
                   <SortTh col="signalType" label="Type" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'center' }} title="mention = brand named in a post or caption · comment = thread reply or comment · crisis = flagged as a high-risk event" />
                   <SortTh col="summary" label="Summary" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'left' }} title="Short snippet of the signal text. Hover for full text." />
                   <SortTh col="sentiment" label="Sentiment" sortKey={feedSort.key} sortDir={feedSort.dir} toggle={(k) => toggleSort(feedSort, setFeedSort, k)} style={{ textAlign: 'center' }} title="GPT-4o-mini classification: positive / neutral / negative." />
@@ -686,8 +805,8 @@ export default function CommunityIntelPage() {
                   <th title="Open the original post / comment in a new tab.">Link</th>
                 </tr>
                 <tr className="col-filter-row">
-                  <th><ColumnFilter col="source" value={feedColFilter.source} onChange={(v) => setFeedColFilter((p) => ({ ...p, source: v }))} placeholder="filter…" /></th>
                   <th><ColumnFilter col="brand" value={feedColFilter.brand} onChange={(v) => setFeedColFilter((p) => ({ ...p, brand: v }))} placeholder="filter…" /></th>
+                  <th><ColumnFilter col="source" value={feedColFilter.source} onChange={(v) => setFeedColFilter((p) => ({ ...p, source: v }))} placeholder="filter…" /></th>
                   <th />
                   <th><ColumnFilter col="summary" value={feedColFilter.summary} onChange={(v) => setFeedColFilter((p) => ({ ...p, summary: v }))} placeholder="search text…" /></th>
                   <th colSpan={5} />
@@ -698,17 +817,25 @@ export default function CommunityIntelPage() {
                   <tr><td colSpan={9} style={emptyCell}>No community signals in this filter.</td></tr>
                 )}
                 {feedRows.map((s) => (
-                  <tr key={s.uniqueKey}>
-                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: 99, background: communityChannelColor(String(s.source)) }} />
-                        {s.sourceLabel}
-                      </span>
-                    </td>
+                  <tr
+                    key={s.uniqueKey}
+                    style={{ cursor: s.link ? 'pointer' : 'default' }}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest('a')) return
+                      setDrillSignal(s)
+                    }}
+                    title={s.link ? 'Click to open source' : undefined}
+                  >
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ width: 6, height: 6, borderRadius: 99, background: pgColor(s.brand) }} />
                         <span style={{ fontWeight: 600, color: s.brand === 'joola' ? '#22c55e' : 'inherit' }}>{name(s.brand)}</span>
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: 99, background: communityChannelColor(String(s.source)) }} />
+                        {s.sourceLabel}
                       </span>
                     </td>
                     <td style={{ textAlign: 'center' }}>
@@ -1049,21 +1176,21 @@ export default function CommunityIntelPage() {
             </div>
           </div>
         ) : (
-          <div className="card" style={{ overflowX: 'auto' }}>
+          <div className="card" style={{ overflowX: 'auto', maxHeight: 420, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%', minWidth: 960 }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left' }}>Topic</th>
-                  <th style={{ textAlign: 'left' }}>First channel</th>
-                  <th style={{ textAlign: 'left' }}>Peak date</th>
-                  <th style={{ textAlign: 'right' }}>Peak / 24h</th>
-                  <th style={{ textAlign: 'left' }}>Channels</th>
-                  <th style={{ textAlign: 'center' }}>Crisis</th>
-                  <th style={{ textAlign: 'left' }}>Action</th>
+                  <SortTh col="topic" label="Topic" sortKey={topicSort.key} sortDir={topicSort.dir} toggle={(k) => toggleSort(topicSort, setTopicSort, k)} style={{ textAlign: 'left' }} title="Topic name detected across community signals." />
+                  <SortTh col="firstSeenChannel" label="First Channel" sortKey={topicSort.key} sortDir={topicSort.dir} toggle={(k) => toggleSort(topicSort, setTopicSort, k)} style={{ textAlign: 'left' }} title="The channel where this topic was first detected." />
+                  <SortTh col="peakDate" label="Peak Date" sortKey={topicSort.key} sortDir={topicSort.dir} toggle={(k) => toggleSort(topicSort, setTopicSort, k)} style={{ textAlign: 'left' }} title="Date when mentions peaked." />
+                  <SortTh col="peakMentions" label="Peak / 24h" sortKey={topicSort.key} sortDir={topicSort.dir} toggle={(k) => toggleSort(topicSort, setTopicSort, k)} style={{ textAlign: 'right' }} title="Highest mention count in a single 24-hour window." />
+                  <SortTh col="channelCount" label="Channels" sortKey={topicSort.key} sortDir={topicSort.dir} toggle={(k) => toggleSort(topicSort, setTopicSort, k)} style={{ textAlign: 'left' }} title="Number of distinct channels the topic has spread to." />
+                  <SortTh col="isCrisis" label="Crisis" sortKey={topicSort.key} sortDir={topicSort.dir} toggle={(k) => toggleSort(topicSort, setTopicSort, k)} style={{ textAlign: 'center' }} title="AI-flagged as a crisis-level topic." />
+                  <SortTh col="action" label="Action" sortKey={topicSort.key} sortDir={topicSort.dir} toggle={(k) => toggleSort(topicSort, setTopicSort, k)} style={{ textAlign: 'left' }} title="Recommended action based on topic decay state and crisis flag." />
                 </tr>
               </thead>
               <tbody>
-                {topicLifecycle.map((r, i) => (
+                {sortedTopicLifecycle.map((r, i) => (
                   <tr key={r.topic + i}>
                     <td style={{ textAlign: 'left', fontWeight: 700 }}>{r.topic}</td>
                     <td style={{ textAlign: 'left' }}>{r.firstSeenChannel}</td>
@@ -1207,9 +1334,9 @@ const emptyCell: React.CSSProperties = {
   fontSize: 13,
 }
 
-function SummaryItem({ label, value, color }: { label: string; value: string; color?: string }) {
+function SummaryItem({ label, value, color, tip }: { label: string; value: string; color?: string; tip?: string }) {
   return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: 100 }}>
+    <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: 100 }} title={tip}>
       <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
       <span style={{ fontSize: 16, fontWeight: 800, color: color || '#fff', whiteSpace: 'nowrap' }}>{value}</span>
     </div>
@@ -1393,13 +1520,14 @@ function CommunityTrendChart({ points }: { points: TrendPoint[] }) {
 }
 
 function ChannelMixDonut({ rows }: { rows: { channel: string; label: string; color: string; total: number; crisis: number }[] }) {
+  const [centerHov, setCenterHov] = useState(false)
   const total = rows.reduce((s, r) => s + r.total, 0)
   if (total === 0) {
     return <div style={{ color: '#6b7280', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>No data</div>
   }
-  const size = 160
-  const r = 60
-  const inner = 36
+  const size = 260
+  const r = 100
+  const inner = 58
   const cx = size / 2
   const cy = size / 2
   let acc = 0
@@ -1417,22 +1545,39 @@ function ChannelMixDonut({ rows }: { rows: { channel: string; label: string; col
   })
   return (
     <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {arcs.map((a) => (
-          <path key={a.channel} d={a.d} fill={a.color}>
-            <title>{`${a.label}: ${a.total} signals · ${a.crisis} crisis`}</title>
-          </path>
-        ))}
-        <text x={cx} y={cy + 4} textAnchor="middle" fontSize={18} fontWeight={800} fill="#fff">{total}</text>
-      </svg>
-      <div style={{ display: 'grid', gap: 6, fontSize: 12, flex: 1, minWidth: 0 }}>
-        {arcs.map((a) => (
-          <div key={a.channel} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{ width: 10, height: 10, background: a.color, borderRadius: 2, flexShrink: 0 }} />
-            <span style={{ color: '#cbd1dc', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.label}</span>
-            <span style={{ color: '#fff', fontWeight: 700 }}>{a.total}</span>
-            {a.crisis > 0 && <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 10 }}>· {a.crisis} crisis</span>}
+      <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          {arcs.map((a) => (
+            <path key={a.channel} d={a.d} fill={a.color}>
+              <title>{`${a.label}: ${a.total} signals · ${a.crisis} crisis`}</title>
+            </path>
+          ))}
+          <text x={cx} y={cy + 4} textAnchor="middle" fontSize={18} fontWeight={800} fill="#fff">{total}</text>
+          <circle
+            cx={cx} cy={cy} r={inner - 2}
+            fill="transparent"
+            style={{ cursor: 'default' }}
+            onMouseEnter={() => setCenterHov(true)}
+            onMouseLeave={() => setCenterHov(false)}
+          />
+        </svg>
+        {centerHov && (
+          <div className="tip" style={{ left: '50%', top: '50%' }}>
+            <div className="t-name">{rows.length} channel{rows.length !== 1 ? 's' : ''}</div>
+            {total.toLocaleString()} total signals
           </div>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '10px 1fr auto auto', alignItems: 'center', columnGap: 8, rowGap: 7, fontSize: 12, flex: 1, minWidth: 0 }}>
+        {arcs.map((a) => (
+          <Fragment key={a.channel}>
+            <span style={{ width: 10, height: 10, background: a.color, borderRadius: 2, justifySelf: 'center' }} />
+            <span style={{ color: '#cbd1dc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.label}</span>
+            <span style={{ color: '#fff', fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{a.total.toLocaleString()}</span>
+            <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 10, whiteSpace: 'nowrap', paddingLeft: 2 }}>
+              {a.crisis > 0 ? `· ${a.crisis}` : ''}
+            </span>
+          </Fragment>
         ))}
       </div>
     </div>
@@ -1645,4 +1790,202 @@ function sortRows<T extends Record<string, unknown>>(rows: T[], key: string, dir
     const bs = String(bv ?? '')
     return dir === 'asc' ? as.localeCompare(bs) : bs.localeCompare(as)
   })
+}
+
+// ─── Single-signal detail dialog ─────────────────────────────────────
+function SignalDetailDialog({
+  signal: s, brandName, onClose,
+}: {
+  signal: import('@/lib/v2/communityIntel').CommunitySignal
+  brandName: string
+  onClose: () => void
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const SENT_COLOR: Record<string, string> = { positive: '#22c55e', negative: '#ef4444', neutral: '#94a3b8', unknown: '#6b7280' }
+  const sentColor = SENT_COLOR[s.sentiment] || '#6b7280'
+  const chColor = { ig: '#e1306c', yt: '#ff0000', reddit: '#ff4500', tiktok: '#69c9d0', x: '#1d9bf0' }[String(s.source).split('_')[0]] || '#6b7280'
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 99, background: `${chColor}22`, color: chColor, border: `1px solid ${chColor}44` }}>
+            {s.sourceLabel}
+          </span>
+          {s.isCrisis && (
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 99, background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+              ⚠ CRISIS
+            </span>
+          )}
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 99, background: `${sentColor}18`, color: sentColor, border: `1px solid ${sentColor}33` }}>
+            {s.sentiment}
+          </span>
+          <span style={{ marginLeft: 'auto', color: '#6b7280', fontSize: 11, fontFamily: 'JetBrains Mono' }}>{formatCalendarDate(s.postedAt)}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 20, cursor: 'pointer', lineHeight: 1, marginLeft: 8 }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Brand + type */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: pgColor(s.brand), flexShrink: 0 }} />
+            <span style={{ fontWeight: 700, color: s.brand === 'joola' ? '#22c55e' : '#fff' }}>{brandName}</span>
+            <span style={{ color: '#6b7280' }}>·</span>
+            <span style={{ color: '#94a3b8', textTransform: 'capitalize' }}>{s.signalType}</span>
+            {s.likes > 0 && (
+              <>
+                <span style={{ color: '#6b7280' }}>·</span>
+                <span style={{ color: '#94a3b8' }}>♥ {fmt(s.likes)} likes</span>
+              </>
+            )}
+          </div>
+
+          {/* Full text */}
+          <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.7, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '14px 16px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {s.summary || '(no content)'}
+          </div>
+
+          {/* Meta row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
+            {[
+              ['Source', s.sourceLabel],
+              ['Signal type', s.signalType],
+              ['Posted', formatCalendarDate(s.postedAt)],
+              ['Days ago', `${s.days} day${s.days !== 1 ? 's' : ''}`],
+            ].map(([label, val]) => (
+              <div key={label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: '8px 12px' }}>
+                <div style={{ color: '#6b7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>{label}</div>
+                <div style={{ color: '#cbd1dc' }}>{val}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '12px 24px', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+          {s.link
+            ? <a href={s.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', textDecoration: 'none', padding: '6px 14px', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 6, background: 'rgba(96,165,250,0.08)' }}>
+                View original source →
+              </a>
+            : <span style={{ fontSize: 11, color: '#3a4150' }}>No source link available</span>
+          }
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Signal drill-down dialog ─────────────────────────────────────────
+function SignalDialog({
+  brand, brandName, signals, onClose,
+}: {
+  brand: string; brandName: string
+  signals: import('@/lib/v2/communityIntel').CommunitySignal[]
+  onClose: () => void
+}) {
+  const [tab, setTab] = useState<'crisis' | 'negative'>('crisis')
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const crisis   = signals.filter(s => s.brand === brand && s.isCrisis)
+  const negative = signals.filter(s => s.brand === brand && s.sentiment === 'negative' && !s.isCrisis)
+  const list     = tab === 'crisis' ? crisis : negative
+  const empty    = tab === 'crisis' ? 'No crisis signals for this brand in the current window.' : 'No negative signals for this brand in the current window.'
+
+  const CHANNEL_COLOR: Record<string, string> = {
+    ig: '#e1306c', yt: '#ff0000', reddit: '#ff4500',
+    tiktok: '#69c9d0', x: '#1d9bf0', default: '#6b7280',
+  }
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.72)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '82vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', letterSpacing: 0.3 }}>{brandName}</div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Negative &amp; Crisis signal breakdown</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 20, cursor: 'pointer', lineHeight: 1, padding: '0 4px' }}>×</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          {([['crisis', `⚠ Crisis (${crisis.length})`, '#ef4444'], ['negative', `▼ Negative (${negative.length})`, '#f97316']] as const).map(([t, label, color]) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                flex: 1, padding: '10px 0', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                background: 'none', border: 'none', borderBottom: tab === t ? `2px solid ${color}` : '2px solid transparent',
+                color: tab === t ? color : '#6b7280', transition: 'all 150ms',
+              }}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* Signal list */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {list.length === 0 ? (
+            <div style={{ color: '#6b7280', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>{empty}</div>
+          ) : list.map(s => {
+            const chKey = String(s.source).split('_')[0]
+            const chColor = CHANNEL_COLOR[chKey] || CHANNEL_COLOR.default
+            return (
+              <div key={s.uniqueKey} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${s.isCrisis ? 'rgba(239,68,68,0.25)' : 'rgba(249,115,22,0.18)'}`, borderRadius: 8, padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: `${chColor}22`, color: chColor, border: `1px solid ${chColor}44` }}>
+                    {s.sourceLabel}
+                  </span>
+                  {s.isCrisis && (
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' }}>
+                      CRISIS
+                    </span>
+                  )}
+                  <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 'auto', fontFamily: 'JetBrains Mono' }}>{formatCalendarDate(s.postedAt)}</span>
+                  {s.likes > 0 && <span style={{ fontSize: 10, color: '#6b7280', fontFamily: 'JetBrains Mono' }}>♥ {fmt(s.likes)}</span>}
+                </div>
+                <div style={{ fontSize: 13, color: '#cbd1dc', lineHeight: 1.55 }}>{s.summary}</div>
+                {s.link && (
+                  <a href={s.link} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 8, fontSize: 11, color: '#60a5fa', textDecoration: 'none' }}>
+                    View source →
+                  </a>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 20px', borderTop: '1px solid rgba(255,255,255,0.07)', fontSize: 11, color: '#6b7280', display: 'flex', justifyContent: 'space-between' }}>
+          <span>Showing signals from the active filter window</span>
+          <span>Press Esc to close</span>
+        </div>
+      </div>
+    </div>
+  )
 }

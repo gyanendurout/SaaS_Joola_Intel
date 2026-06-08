@@ -100,6 +100,19 @@ const STATUS_LABEL: Record<RosterRow['status'], string> = {
   'roster-not-confirmed': 'Roster not confirmed',
 }
 
+const STATUS_DESC: Record<RosterRow['status'], string> = {
+  'business-mapping': 'We know this player is sponsored by this brand based on our records, but we haven\'t yet seen it confirmed on their social media posts or official roster pages.',
+  'confirmed-from-data': 'This sponsorship has been confirmed — the player has publicly posted or been listed as a sponsored athlete for this brand on social media.',
+  'needs-verification': 'This player may be linked to more than one brand, or there\'s conflicting information. Someone should manually check which brand actually sponsors them.',
+  'roster-not-confirmed': 'This player is in our records as a sponsored athlete, but we couldn\'t find them on the brand\'s public influencer or athlete pages. The deal may have ended, or their profile name may have changed.',
+}
+
+const VERIFICATION_DESC: Record<string, string> = {
+  'verified': 'We found this player\'s social media account and it matches our records exactly. You can trust the profile links shown here.',
+  'matched': 'We found a social media account that looks like this player, but the name was slightly different. The links are probably correct — worth a quick check.',
+  'unmatched': 'We couldn\'t find a confirmed social media account for this player. The profile links shown (if any) are our best guess and may not be accurate.',
+}
+
 function tierFromFollowers(n: number): { label: string; color: string } {
   if (n >= 500_000) return { label: 'MEGA', color: '#F5E625' }
   if (n >= 100_000) return { label: 'MACRO', color: '#22c55e' }
@@ -145,6 +158,7 @@ export default function InfluencerIntelPage() {
   // ── Sort state per table ───────────────────────────────────────────
   const [rosterSort, setRosterSort] = useState<{ key: keyof RosterRow | null; dir: 'asc' | 'desc' }>({ key: 'brandSlug', dir: 'asc' })
   const [rosterColFilter, setRosterColFilter] = useState<Record<string, string>>({})
+  const [drillRoster, setDrillRoster] = useState<RosterRow | null>(null)
   const [attentionSort, setAttentionSort] = useState<{ key: keyof PlatformAttention | null; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' })
   const [attentionColFilter, setAttentionColFilter] = useState<Record<string, string>>({})
   const [perfSort, setPerfSort] = useState<{ key: keyof InfluencerRow | null; dir: 'asc' | 'desc' }>({ key: 'engRate', dir: 'desc' })
@@ -335,6 +349,13 @@ export default function InfluencerIntelPage() {
 
   return (
     <>
+      {drillRoster && (
+        <RosterDetailDialog
+          row={drillRoster}
+          brands={brands}
+          onClose={() => setDrillRoster(null)}
+        />
+      )}
       <PageHead title="INFLUENCER INTEL" />
       <FilterBanner />
 
@@ -365,9 +386,9 @@ export default function InfluencerIntelPage() {
         source="lib/v2/playerRoster.ts (business mapping) + influencers (scraped)"
         sub={`${filteredRoster.length} rows · ${data.dataStatus.activeBrands} brands`}
       >
-        <ScrollTable>
+        <ScrollTable maxHeight={580}>
           <table className="data">
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#141821' }}>
               <tr>
                 <SortTh col="brandSlug" label="Brand" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <SortTh col="player" label="Player" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
@@ -388,22 +409,28 @@ export default function InfluencerIntelPage() {
             </thead>
             <tbody>
               {sortBy(filteredRoster, rosterSort.key, rosterSort.dir).map((r, i) => (
-                <tr key={`${r.brandSlug}-${r.player}-${i}`} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                <tr
+                    key={`${r.brandSlug}-${r.player}-${i}`}
+                    className={r.brandSlug === 'joola' ? 'joola' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; setDrillRoster(r) }}
+                  >
                   <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
                   <td style={{ fontWeight: 700 }}>{r.player}</td>
-                  <td>
-                    <span className="pill" style={{ background: STATUS_COLOR[r.status] + '22', color: STATUS_COLOR[r.status], border: `1px solid ${STATUS_COLOR[r.status]}55`, fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}>
+                  <td title={STATUS_DESC[r.status]}>
+                    <span className="pill" style={{ background: STATUS_COLOR[r.status] + '22', color: STATUS_COLOR[r.status], border: `1px solid ${STATUS_COLOR[r.status]}55`, fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'pointer' }}>
                       {STATUS_LABEL[r.status]}
                     </span>
                   </td>
-                  <td>{r.igHandle ? <a className="ext-link" href={`https://instagram.com/${r.igHandle}`} target="_blank" rel="noreferrer">@{r.igHandle}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td>{r.igHandle ? <a className="ext-link" href={`https://www.instagram.com/${r.igHandle.replace(/^@/, '')}/`} target="_blank" rel="noopener noreferrer">@{r.igHandle.replace(/^@/, '')}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                   <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
                   <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
                   <td>{r.xHandle ? <a className="ext-link" href={`https://x.com/${r.xHandle}`} target="_blank" rel="noreferrer">@{r.xHandle}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                   <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
-                  <td>
+                  <td title={VERIFICATION_DESC[r.verification] ?? `Verification status: ${r.verification}`}>
                     <span style={{
-                      fontSize: 10, fontWeight: 700, color: r.verification === 'verified' ? '#22c55e' : r.verification === 'matched' ? '#F5E625' : '#94a3b8',
+                      fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                      color: r.verification === 'verified' ? '#22c55e' : r.verification === 'matched' ? '#F5E625' : '#94a3b8',
                     }}>{r.verification}</span>
                   </td>
                   <td className="cell-num" style={{ textAlign: 'right' }}>
@@ -1195,10 +1222,11 @@ function Section({ id, title, info, source, sub, children }: {
 
 function ScrollTable({ children, maxHeight }: { children: React.ReactNode; maxHeight?: number }) {
   return (
-    <div className="card">
-      <div className="table-wrap" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
-        {children}
-      </div>
+    <div
+      className="card"
+      style={maxHeight ? { maxHeight, overflowX: 'auto', overflowY: 'auto' } : undefined}
+    >
+      {children}
     </div>
   )
 }
@@ -1478,6 +1506,93 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(180, 140, 255, 0.6)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#bba0ff' }}>Micro-influencers</b> — small audience but very engaged. Best ROI per dollar.</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(251, 146, 60, 0.7)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#fb923c' }}>Celebrity reach</b> — big follower count, weak engagement. Vanity audience.</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(148, 163, 184, 0.5)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#94a3b8' }}>Niche / quiet</b> — low on both axes. Deprioritize for paid spend.</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Roster row detail dialog ─────────────────────────────────────────
+function RosterDetailDialog({ row: r, brands, onClose }: {
+  row: RosterRow; brands: V2Brand[]; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const brandName = brands.find(b => b.id === r.brandSlug)?.name || r.brandSlug
+  const brandColor = pgColor(r.brandSlug)
+
+  const platforms: { label: string; handle: string | null; url: string }[] = [
+    { label: 'Instagram', handle: r.igHandle, url: r.igHandle ? `https://www.instagram.com/${r.igHandle.replace(/^@/, '')}/` : '' },
+    { label: 'X (Twitter)', handle: r.xHandle, url: r.xHandle ? `https://x.com/${r.xHandle.replace(/^@/, '')}` : '' },
+    { label: 'YouTube', handle: r.ytHandle, url: r.ytHandle ? `https://www.youtube.com/@${r.ytHandle.replace(/^@/, '')}` : '' },
+    { label: 'TikTok', handle: r.tiktokHandle, url: r.tiktokHandle ? `https://www.tiktok.com/@${r.tiktokHandle.replace(/^@/, '')}` : '' },
+    { label: 'Reddit', handle: r.redditHandle, url: r.redditHandle ? `https://www.reddit.com/user/${r.redditHandle.replace(/^u\//, '')}` : '' },
+  ]
+
+  const verColor = r.verification === 'verified' ? '#22c55e' : r.verification === 'matched' ? '#F5E625' : '#94a3b8'
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: brandColor, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>{r.player}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{brandName}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Status + Verification */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', gap: 24 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Status</div>
+            <span className="pill" style={{ background: STATUS_COLOR[r.status] + '22', color: STATUS_COLOR[r.status], border: `1px solid ${STATUS_COLOR[r.status]}55`, fontSize: 11, padding: '3px 10px', borderRadius: 99, fontWeight: 700 }}>
+              {STATUS_LABEL[r.status]}
+            </span>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8, maxWidth: 220, lineHeight: 1.5 }}>{STATUS_DESC[r.status]}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Verification</div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: verColor, textTransform: 'capitalize' }}>{r.verification}</span>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8, maxWidth: 220, lineHeight: 1.5 }}>{VERIFICATION_DESC[r.verification]}</div>
+          </div>
+        </div>
+
+        {/* Social Handles */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Social Handles</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {platforms.map(p => (
+              <div key={p.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 12px' }}>
+                <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4 }}>{p.label}</div>
+                {p.handle
+                  ? <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: '#60a5fa', textDecoration: 'none' }}>@{p.handle.replace(/^@/, '')}</a>
+                  : <span style={{ fontSize: 12, color: '#3a4150' }}>—</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Last Seen */}
+        <div style={{ padding: '12px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>
+            {r.lastSeenDays !== null
+              ? `Last seen ${r.lastSeenDays} day${r.lastSeenDays !== 1 ? 's' : ''} ago`
+              : 'Last seen: unknown'}
+          </span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+        </div>
       </div>
     </div>
   )

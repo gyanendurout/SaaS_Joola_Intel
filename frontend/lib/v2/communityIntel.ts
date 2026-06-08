@@ -65,6 +65,7 @@ export type BrandDiscussionRow = {
   yt: number
   reddit: number
   tiktok: number
+  x: number
   positive: number
   neutral: number
   negative: number
@@ -256,7 +257,7 @@ export async function fetchCommunityIntel(
   brands: V2Brand[],
   opts: FetchOpts,
 ): Promise<CommunityIntelData> {
-  const perSourceLimit = opts.perSourceLimit ?? 2000
+  const perSourceLimit = opts.perSourceLimit ?? 5000
   const fromIso = opts.from.toISOString()
   const toIso = opts.to.toISOString()
 
@@ -571,6 +572,7 @@ function computeBrandDiscussion(
         yt: 0,
         reddit: 0,
         tiktok: 0,
+        x: 0,
         positive: 0,
         neutral: 0,
         negative: 0,
@@ -580,11 +582,12 @@ function computeBrandDiscussion(
     }
     const row = acc.get(s.brand)!
     row.total += 1
-    const src = String(s.source)
-    if (src === 'ig') row.ig += 1
-    else if (src === 'yt') row.yt += 1
-    else if (src === 'reddit') row.reddit += 1
-    else if (src === 'tiktok') row.tiktok += 1
+    const norm = normalizeChannel(String(s.source))
+    if (norm === 'ig') row.ig += 1
+    else if (norm === 'yt') row.yt += 1
+    else if (norm === 'reddit') row.reddit += 1
+    else if (norm === 'tiktok') row.tiktok += 1
+    else if (norm === 'x') row.x += 1
     if (s.sentiment === 'positive') row.positive += 1
     else if (s.sentiment === 'negative') row.negative += 1
     else if (s.sentiment === 'neutral') row.neutral += 1
@@ -602,6 +605,7 @@ function computeBrandDiscussion(
         yt: 0,
         reddit: 0,
         tiktok: 0,
+        x: 0,
         positive: 0,
         neutral: 0,
         negative: 0,
@@ -613,7 +617,8 @@ function computeBrandDiscussion(
 
   const rows = Array.from(acc.values())
   for (const r of rows) {
-    r.negativePct = r.total > 0 ? Math.round((r.negative / r.total) * 100) : 0
+    const sentimentTotal = r.positive + r.neutral + r.negative
+    r.negativePct = sentimentTotal > 0 ? Math.round((r.negative / sentimentTotal) * 100) : 0
   }
   return rows.sort((a, b) => b.total - a.total)
 }

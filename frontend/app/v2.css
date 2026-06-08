@@ -260,6 +260,10 @@
   position: relative;
   overflow: hidden;
 }
+.v2-root .card h6 {
+  font-family: var(--font-sans); font-weight: 800; font-size: 13px;
+  margin: 0 0 12px; color: var(--fg); letter-spacing: 0.01em;
+}
 .v2-root .card-pad { padding: 18px; }
 .v2-root .card-pad-lg { padding: 22px; }
 .v2-root .card-head {
@@ -525,8 +529,9 @@
   font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--fg-3);
   border-bottom: 1px solid var(--line);
-  background: rgba(255,255,255,0.015);
+  background: var(--surface);
   white-space: nowrap;
+  position: sticky; top: 0; z-index: 2;
 }
 .v2-root table.data tbody td {
   padding: 12px 14px; border-bottom: 1px solid var(--line-2);
@@ -707,6 +712,11 @@
   cursor: pointer;
 }
 
+@keyframes tooltip-appear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* Tooltips (simple) */
 .v2-root .tip {
   position: absolute; pointer-events: none;
@@ -717,6 +727,7 @@
   white-space: nowrap;
   z-index: 50;
   transform: translate(-50%, -120%);
+  animation: tooltip-appear 0.15s ease 0.5s both;
 }
 .v2-root .tip .t-name { font-family: var(--font-sans); font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--yellow); font-size: 10px; margin-bottom: 2px; }
 
@@ -888,24 +899,24 @@ html { scroll-behavior: smooth; }
   color: var(--yellow);
 }
 .v2-root .si-popup {
-  display: none;
-  position: absolute;
-  left: 50%; top: calc(100% + 10px);
-  transform: translateX(-50%);
+  position: fixed;
   background: rgba(7,9,14,0.98);
   border: 1px solid rgba(245,230,37,0.28);
   border-radius: 10px;
   padding: 12px 14px;
   width: 268px;
-  z-index: 300;
+  z-index: 9999;
   box-shadow: 0 16px 48px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.03);
   backdrop-filter: blur(16px);
   text-align: left;
-  pointer-events: none;
+  pointer-events: auto;
   font-style: normal;
+  animation: tooltip-appear 0.15s ease 0.5s both;
 }
-.v2-root .section-info:hover .si-popup,
-.v2-root .section-info.is-pinned .si-popup { display: block; pointer-events: auto; }
+/* Pinned (clicked) tooltips appear immediately — no delay */
+.v2-root .section-info.is-pinned .si-popup {
+  animation-delay: 0s;
+}
 .v2-root .section-info.is-pinned {
   background: var(--yellow-dim);
   border-color: var(--yellow-edge);
@@ -1891,9 +1902,10 @@ html { scroll-behavior: smooth; }
    11. Column filter input (under sortable table headers)
    ---------------------------------------------------------- */
 .v2-root .col-filter-row th {
-  background: rgba(255,255,255,0.015) !important;
+  background: var(--surface) !important;
   padding: 4px 8px !important;
   border-bottom: 1px solid var(--line);
+  position: sticky; top: 37px; z-index: 2;
 }
 .v2-root .col-filter-input {
   width: 100%;

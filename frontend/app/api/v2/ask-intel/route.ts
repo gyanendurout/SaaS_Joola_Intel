@@ -170,6 +170,8 @@ Rules:
 - Cite tables you actually used in dataSources.
 - Trust the is_crisis flag over raw sentiment_label coverage (which is still calibrating).
 - Sales-related metrics (sales_likelihood_score) are MODELLED likelihoods, NOT confirmed sales — add a warning to that effect.
+- Rows from brand-linked tables include a nested "brands" object: { slug, name }. Use brands.name as the display label in visuals and narratives. Example row: { brand_id: "uuid", followers: 50000, brands: { slug: "joola", name: "JOOLA" } } → use label "JOOLA", value 50000.
+- For ranking / comparison queries (top brands by X), ALWAYS generate a bar_chart or kpi_cards visual — do not return visuals:[] when ranked data is available.
 
 Brand color map (for visualization tinting): joola=#22c55e selkirk=#F5E625 crbn=#818cf8 franklin=#ec4899 engage=#06b6d4 paddletek=#f59e0b six-zero=#a855f7 onix=#ef4444 wilson=#14b8a6 gamma=#60a5fa head=#0ea5e9
 `
@@ -548,7 +550,9 @@ async function executePlan(
 
   // When aggregating in-memory we need to over-fetch so the post-groupBy
   // sort + limit produces correct results. Cap server-side at 1000.
-  const willAggregate = !!(plan.groupBy?.length && plan.aggregations?.length)
+  // Note: aggregations without groupBy are valid (e.g. count(*) over all rows
+  // — treated as a single-bucket aggregation).
+  const willAggregate = !!(plan.aggregations?.length)
   const userCap = Math.min(plan.limit ?? 200, 1000)
   const serverCap = willAggregate ? 1000 : userCap
   q = q.limit(serverCap)
@@ -559,7 +563,7 @@ async function executePlan(
   let rows: Record<string, unknown>[] = (data || []) as unknown as Record<string, unknown>[]
 
   if (willAggregate) {
-    rows = applyGroupBy(rows, plan.groupBy!, plan.aggregations!)
+    rows = applyGroupBy(rows, plan.groupBy || [], plan.aggregations!)
     // Apply deferred orderBy (now that aggregation aliases exist as keys).
     for (const o of deferredOrderBy) {
       rows.sort((a, b) => {

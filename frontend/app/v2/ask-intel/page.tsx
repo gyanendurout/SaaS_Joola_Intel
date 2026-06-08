@@ -131,7 +131,7 @@ export default function AskIntelPage() {
         height: 'calc(100vh - 280px)', minHeight: 540,
       }}>
         {/* LEFT — chat thread + input */}
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
           <ChatThread turns={turns} onFollowup={handleFollowup} />
           <ChatInput
             value={input}

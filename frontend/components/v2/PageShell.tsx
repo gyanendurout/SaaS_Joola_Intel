@@ -80,7 +80,7 @@ export function MiniKpi({
       <div className="label">
         <span>{label}</span>
         {tip && <SectionInfo title={label} description={tip} source={src || 'Live data'} />}
-        {src && <span className="src" title={src}>{src}</span>}
+        {src && !tip && <span className="src" title={src}>{src}</span>}
       </div>
       <div className="row">
         <div className="value">{value}</div>
@@ -132,7 +132,11 @@ export function SectionInfo({ title, description, source }: {
   title: string; description: string; source: string
 }) {
   const [pinned, setPinned] = useState(false)
+  const [hovered, setHovered] = useState(false)
+  const [pos, setPos] = useState({ left: 0, top: 0 })
   const ref = useRef<HTMLSpanElement | null>(null)
+
+  const visible = pinned || hovered
 
   useEffect(() => {
     if (!pinned) return
@@ -150,22 +154,48 @@ export function SectionInfo({ title, description, source }: {
     }
   }, [pinned])
 
+  function calcPos() {
+    if (!ref.current) return
+    const r = ref.current.getBoundingClientRect()
+    const popupW = 268
+    // Center popup on the icon, then clamp so it never overflows viewport edges
+    const left = Math.max(8, Math.min(
+      r.left + r.width / 2 - popupW / 2,
+      window.innerWidth - popupW - 8,
+    ))
+    setPos({ left, top: r.bottom + 10 })
+  }
+
   return (
     <span
       ref={ref}
-      className={'section-info' + (pinned ? ' is-pinned' : '')}
+      className={'section-info' + (visible ? ' is-pinned' : '')}
       aria-label={title}
       role="button"
       tabIndex={0}
-      onClick={(e) => { e.stopPropagation(); setPinned(p => !p) }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPinned(p => !p) } }}
+      onMouseEnter={() => { calcPos(); setHovered(true) }}
+      onMouseLeave={() => setHovered(false)}
+      onClick={(e) => { e.stopPropagation(); calcPos(); setPinned(p => !p) }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          calcPos()
+          setPinned(p => !p)
+        }
+      }}
     >
       ?
-      <span className="si-popup" onClick={(e) => e.stopPropagation()}>
-        <div className="si-title">{title}</div>
-        <div className="si-body">{description}</div>
-        <div className="si-source">Source: {source}</div>
-      </span>
+      {visible && (
+        <span
+          className="si-popup"
+          style={{ position: 'fixed', left: pos.left, top: pos.top, transform: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="si-title">{title}</div>
+          <div className="si-body">{description}</div>
+          <div className="si-source">Source: {source}</div>
+        </span>
+      )}
     </span>
   )
 }
@@ -310,7 +340,7 @@ export function FilterBanner() {
 
 // ─── Toast helper ─────────────────────────────────────────────────────
 export function Toast({ msg, onDone, err }: { msg: string; onDone: () => void; err?: boolean }) {
-  setTimeout(onDone, 2800)
+  setTimeout(onDone, 1500)
   return (
     <div className={'toast' + (err ? ' toast-err' : '')}>
       <span className="toast-dot" />
