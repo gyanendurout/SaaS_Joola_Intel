@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   PageHead, MiniKpi, SortTh, ColumnFilter, LoadingPage, SectionInfo,
   FilterBanner, pgColor, pgName,
@@ -101,6 +101,11 @@ export default function CampaignOfferIntelPage() {
   const [matrix, setMatrix] = useState<CampaignStrategyMatrix | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [drillScatter, setDrillScatter] = useState<CampaignPressureStat | null>(null)
+  const [drillOffer, setDrillOffer] = useState<ActiveOffer | null>(null)
+  const [drillAd, setDrillAd] = useState<AdCreative | null>(null)
+  const [drillStrategy, setDrillStrategy] = useState<{ point: import('@/lib/v2/campaignOfferIntel').CampaignStrategyPoint; stat: CampaignPressureStat | null } | null>(null)
+  const [drillPlaybook, setDrillPlaybook] = useState<OfferPlaybookRow | null>(null)
 
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, setRange, mode, customFrom, customTo, setCustomFrom, setCustomTo, effectiveFrom, effectiveTo } = useDateRange()
@@ -369,6 +374,21 @@ export default function CampaignOfferIntelPage() {
 
   return (
     <>
+      {drillScatter && (
+        <ScatterBubbleDialog row={drillScatter} brands={brands} onClose={() => setDrillScatter(null)} />
+      )}
+      {drillOffer && (
+        <OfferDetailDialog offer={drillOffer} brands={brands} onClose={() => setDrillOffer(null)} />
+      )}
+      {drillAd && (
+        <AdCreativeDialog ad={drillAd} brands={brands} onClose={() => setDrillAd(null)} />
+      )}
+      {drillPlaybook && (
+        <PlaybookRowDialog row={drillPlaybook} brands={brands} onClose={() => setDrillPlaybook(null)} />
+      )}
+      {drillStrategy && (
+        <StrategyBubbleDialog point={drillStrategy.point} stat={drillStrategy.stat} brands={brands} onClose={() => setDrillStrategy(null)} />
+      )}
       <PageHead title="CAMPAIGN & OFFER INTEL" />
       <FilterBanner />
 
@@ -406,39 +426,6 @@ export default function CampaignOfferIntelPage() {
           <SummaryItem label="Avg discount" value={avgDiscountAll > 0 ? `${avgDiscountAll}%` : '—'} />
         </div>
 
-        <div className="kpi-grid" style={{ marginBottom: 6 }}>
-          <MiniKpi
-            label="Active ads (filter)"
-            value={fmt(activeAds)}
-            color="#f59e0b"
-            customVs={`${totalAds} total in window`}
-            src="marketing_ads"
-            tip="Number of paddle-brand ads currently running in the selected window after applying the active filters. Source: Meta Ad Library + Google Ads Transparency scrape -> marketing_ads table."
-          />
-          <MiniKpi
-            label="Active promos (filter)"
-            value={fmt(activePromos)}
-            color="#ef4444"
-            customVs={`${totalPromos} total in window`}
-            src="promotions"
-            tip="Number of homepage / banner / email promotions detected across the 11 brands' own websites in the active window. Source: brand homepage scrape -> promotions table."
-          />
-          <MiniKpi
-            label="JOOLA ad share"
-            value={`${joolaAdShare.toFixed(1)}%`}
-            color="#22c55e"
-            customVs={joolaAd ? `${joolaAd.total} ads · #${joolaAdRank} rank` : '—'}
-            flavor="joola"
-            tip="JOOLA's share of all paid ad creatives running across the 11 brands. Formula: JOOLA active ads ÷ total active ads × 100. Rank shows JOOLA's position vs the other 10 brands."
-          />
-          <MiniKpi
-            label="Avg discount"
-            value={avgDiscountAll > 0 ? `${avgDiscountAll}%` : '—'}
-            color="#818cf8"
-            customVs={`${brandsDiscounting} brands discounting`}
-            tip="Average % off across all active promotions in the window. High value = aggressive discounting environment. The 'brands discounting' count tells you how many of the 11 brands are running promos right now."
-          />
-        </div>
       </section>
 
       {/* ─── Section 2: Brand campaign pressure ───────────────────── */}
@@ -560,7 +547,7 @@ export default function CampaignOfferIntelPage() {
           </div>
         </div>
         <div className="card" style={{ padding: 16 }}>
-          <AdsVsPromosScatter rows={recomputedPressure} name={name} />
+          <AdsVsPromosScatter rows={recomputedPressure} name={name} onBubbleClick={setDrillScatter} />
         </div>
       </section>
 
@@ -668,7 +655,7 @@ export default function CampaignOfferIntelPage() {
                   <tr><td colSpan={7} style={emptyCell}>No offers match this filter.</td></tr>
                 )}
                 {offerRows.map((p) => (
-                  <tr key={p.id} style={p.brand === 'joola' ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}}>
+                  <tr key={p.id} style={{ ...(p.brand === 'joola' ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}), cursor: 'pointer' }} onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; setDrillOffer(p) }}>
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ width: 6, height: 6, borderRadius: 99, background: pgColor(p.brand) }} />
@@ -746,7 +733,7 @@ export default function CampaignOfferIntelPage() {
                   <tr><td colSpan={7} style={emptyCell}>No ad creatives match this filter.</td></tr>
                 )}
                 {adRows.map((a) => (
-                  <tr key={a.id} style={a.brand === 'joola' ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}}>
+                  <tr key={a.id} style={{ ...(a.brand === 'joola' ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}), cursor: 'pointer' }} onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; setDrillAd(a) }}>
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ width: 6, height: 6, borderRadius: 99, background: pgColor(a.brand) }} />
@@ -856,7 +843,7 @@ export default function CampaignOfferIntelPage() {
         </div>
         <div className="card" style={{ padding: 16 }}>
           {matrix && matrix.points.some((p) => p.adPressure > 0 || p.promoPressure > 0) ? (
-            <CampaignStrategyMatrixChart matrix={matrix} name={name} />
+            <CampaignStrategyMatrixChart matrix={matrix} name={name} pressureStats={recomputedPressure} onBubbleClick={(p, stat) => setDrillStrategy({ point: p, stat })} />
           ) : (
             <div style={emptyCell}>No campaign or promo data to plot in this window.</div>
           )}
@@ -913,7 +900,7 @@ export default function CampaignOfferIntelPage() {
                   <tr><td colSpan={7} style={emptyCell}>No promotions to play-book in the active filter.</td></tr>
                 )}
                 {offerPlaybook.map((r, i) => (
-                  <tr key={`${r.brand}-${r.promoType}-${i}`} style={r.brand === 'joola' ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}}>
+                  <tr key={`${r.brand}-${r.promoType}-${i}`} style={{ ...(r.brand === 'joola' ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}), cursor: 'pointer' }} onClick={() => setDrillPlaybook(r)}>
                     <td style={{ textAlign: 'left', whiteSpace: 'nowrap' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ width: 6, height: 6, borderRadius: 99, background: pgColor(r.brand) }} />
@@ -1050,83 +1037,154 @@ function SummaryItem({ label, value, color }: { label: string; value: string; co
 }
 
 function CampaignTrendChart({ points, name }: { points: ActivityTrendPoint[]; name: (s: string) => string }) {
-  const w = 920
-  const h = 240
-  const padL = 36
-  const padR = 110
-  const padT = 14
-  const padB = 28
+  const [tab, setTab] = useState<'bar' | 'heatmap' | 'sparkline'>('bar')
+  const [hovBrand, setHovBrand] = useState<string | null>(null)
 
-  // Aggregate per-brand totals across all weeks to pick top series
   const brandTotals = new Map<string, number>()
   for (const p of points) {
     for (const [b, v] of Object.entries(p.perBrandAds)) {
       brandTotals.set(b, (brandTotals.get(b) || 0) + v)
     }
   }
-  const topBrands = Array.from(brandTotals.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
-    .map(([b]) => b)
+  const brands = Array.from(brandTotals.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8)
+  const maxTotal = Math.max(1, ...brands.map(([, v]) => v))
+  const totalAll = brands.reduce((s, [, v]) => s + v, 0)
 
-  if (points.length === 0 || topBrands.length === 0) {
+  if (brands.length === 0) {
     return <div style={{ color: '#6b7280', fontSize: 13, padding: '32px 0', textAlign: 'center' }}>No ad activity in the window.</div>
   }
 
-  // Stacked totals per week (using top brands only)
-  const stackTotals = points.map((p) => topBrands.reduce((s, b) => s + (p.perBrandAds[b] || 0), 0))
-  const max = Math.max(1, ...stackTotals)
-  const N = points.length
-  const x = (i: number) => padL + (i / Math.max(1, N - 1)) * (w - padL - padR)
-  const y = (v: number) => padT + (h - padT - padB) * (1 - v / max)
-
-  // Build stacked paths (bottom-up)
-  let stacks: { brand: string; color: string; path: string }[] = []
-  const prevTop = points.map(() => 0)
-  for (const b of topBrands) {
-    const color = pgColor(b)
-    const top: number[] = []
-    const bot: number[] = prevTop.slice()
-    for (let i = 0; i < N; i++) {
-      top.push(prevTop[i] + (points[i].perBrandAds[b] || 0))
-    }
-    const upper = top.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')
-    const lower = bot.slice().reverse().map((v, i) => `L ${x(N - 1 - i).toFixed(1)} ${y(v).toFixed(1)}`).join(' ')
-    stacks.push({ brand: b, color, path: `${upper} ${lower} Z` })
-    for (let i = 0; i < N; i++) prevTop[i] = top[i]
-  }
-
-  const lastTotals = topBrands.map((b) => ({ brand: b, total: brandTotals.get(b) || 0, color: pgColor(b) }))
+  const TABS = [
+    { key: 'bar', label: 'Ranked Bars' },
+    { key: 'heatmap', label: 'Activity Heatmap' },
+    { key: 'sparkline', label: 'Sparklines' },
+  ] as const
 
   return (
     <div>
-      <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
-        {[0, Math.ceil(max / 2), max].map((tick) => (
-          <g key={tick}>
-            <line x1={padL} x2={w - padR} y1={y(tick)} y2={y(tick)} stroke="rgba(255,255,255,0.06)" strokeDasharray="2 4" />
-            <text x={padL - 6} y={y(tick) + 3} textAnchor="end" fontSize={10} fill="#6b7280">{tick}</text>
-          </g>
-        ))}
-        {stacks.map((s) => (
-          <path key={s.brand} d={s.path} fill={s.color} opacity={s.brand === 'joola' ? 0.85 : 0.55} stroke={s.color} strokeWidth={0.8} />
-        ))}
-        {[0, Math.floor(N / 2), N - 1].map((i) =>
-          points[i] ? (
-            <text key={i} x={x(i)} y={h - padB + 16} textAnchor="middle" fontSize={10} fill="#6b7280">
-              {points[i].weekLabel}
-            </text>
-          ) : null,
-        )}
-      </svg>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 10, fontSize: 11 }}>
-        {lastTotals.map((b) => (
-          <span key={b.brand} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 10, height: 10, background: b.color, borderRadius: 2, opacity: b.brand === 'joola' ? 0.95 : 0.7 }} />
-            <span style={{ color: '#cbd1dc' }}>{name(b.brand)}</span>
-            <span style={{ color: '#fff', fontWeight: 700 }}>{b.total}</span>
-          </span>
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+        {TABS.map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            background: tab === t.key ? 'rgba(255,255,255,0.08)' : 'none',
+            border: `1px solid ${tab === t.key ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.07)'}`,
+            color: tab === t.key ? '#fff' : '#6b7280',
+            borderRadius: 6, padding: '5px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 150ms',
+          }}>{t.label}</button>
         ))}
       </div>
+
+      {/* ─── Option A: Ranked horizontal bars ─────────────────── */}
+      {tab === 'bar' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {brands.map(([b, total], idx) => {
+            const color = pgColor(b), isJ = b === 'joola', isHov = hovBrand === b
+            const pct = Math.round((total / totalAll) * 100)
+            return (
+              <div key={b} onMouseEnter={() => setHovBrand(b)} onMouseLeave={() => setHovBrand(null)}
+                style={{ display: 'grid', gridTemplateColumns: '160px 1fr 52px 44px', alignItems: 'center', gap: 12,
+                  opacity: hovBrand && !isHov ? 0.4 : 1, transition: 'opacity 150ms' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 10, color: '#4b5563', fontWeight: 700, minWidth: 14, textAlign: 'right' }}>#{idx + 1}</span>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: isHov ? `0 0 6px ${color}` : 'none', transition: 'box-shadow 150ms' }} />
+                  <span style={{ fontSize: 13, fontWeight: isJ ? 800 : 600, color: isJ ? '#22c55e' : '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name(b)}</span>
+                </div>
+                <div style={{ height: 10, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${(total / maxTotal) * 100}%`,
+                    background: isHov ? `linear-gradient(90deg, ${color}, ${color}cc)` : `linear-gradient(90deg, ${color}cc, ${color}66)`,
+                    borderRadius: 99, transition: 'width 400ms cubic-bezier(0.16,1,0.3,1), background 150ms',
+                    boxShadow: isHov ? `0 0 8px ${color}88` : 'none' }} />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{total}</span>
+                <span style={{ fontSize: 11, color: isHov ? color : '#6b7280', textAlign: 'right', fontWeight: 600, transition: 'color 150ms' }}>{pct}%</span>
+              </div>
+            )
+          })}
+          <div style={{ marginTop: 4, fontSize: 11, color: '#4b5563', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
+            {brands.length} brands · {totalAll} total ads · hover to highlight
+          </div>
+        </div>
+      )}
+
+      {/* ─── Option B: Activity heatmap ───────────────────────── */}
+      {tab === 'heatmap' && (
+        <div style={{ overflowX: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: `140px repeat(${points.length}, 1fr)`, gap: 3, minWidth: 600 }}>
+            {/* Header row */}
+            <div style={{ fontSize: 10, color: '#4b5563', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', alignSelf: 'center' }}>Brand</div>
+            {points.map((p) => (
+              <div key={p.weekLabel} style={{ fontSize: 9, color: '#6b7280', textAlign: 'center', paddingBottom: 4 }}>{p.weekLabel}</div>
+            ))}
+            {/* Brand rows */}
+            {brands.map(([b]) => {
+              const color = pgColor(b), isJ = b === 'joola'
+              const weekMax = Math.max(1, ...points.map(p => p.perBrandAds[b] || 0))
+              return [
+                <div key={`lbl-${b}`} style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 8 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, fontWeight: isJ ? 800 : 500, color: isJ ? '#22c55e' : '#cbd1dc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name(b)}</span>
+                </div>,
+                ...points.map((p) => {
+                  const val = p.perBrandAds[b] || 0
+                  const intensity = val / weekMax
+                  return (
+                    <div key={`${b}-${p.weekLabel}`}
+                      title={`${name(b)} · ${p.weekLabel}: ${val} ads`}
+                      style={{ height: 32, borderRadius: 4, cursor: 'default',
+                        background: val === 0 ? 'rgba(255,255,255,0.04)' : color,
+                        opacity: val === 0 ? 1 : Math.max(0.18, intensity),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'opacity 150ms' }}>
+                      {val > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#fff', textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}>{val}</span>}
+                    </div>
+                  )
+                }),
+              ]
+            })}
+          </div>
+          <div style={{ marginTop: 10, fontSize: 11, color: '#4b5563' }}>Darker cell = more ads that week · hover cell for details</div>
+        </div>
+      )}
+
+      {/* ─── Option C: Sparkline table ─────────────────────────── */}
+      {tab === 'sparkline' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {brands.map(([b, total], idx) => {
+            const color = pgColor(b), isJ = b === 'joola', isHov = hovBrand === b
+            const vals = points.map(p => p.perBrandAds[b] || 0)
+            const weekMax = Math.max(1, ...vals)
+            const sparkW = 120, sparkH = 32
+            const sparkX = (i: number) => (i / Math.max(1, vals.length - 1)) * sparkW
+            const sparkY = (v: number) => sparkH - (v / weekMax) * sparkH * 0.9 - 2
+            const sparkPath = vals.map((v, i) => `${i === 0 ? 'M' : 'L'} ${sparkX(i).toFixed(1)} ${sparkY(v).toFixed(1)}`).join(' ')
+            const pct = Math.round((total / totalAll) * 100)
+            return (
+              <div key={b} onMouseEnter={() => setHovBrand(b)} onMouseLeave={() => setHovBrand(null)}
+                style={{ display: 'grid', gridTemplateColumns: '28px 150px 56px 56px 130px', alignItems: 'center', gap: 12,
+                  padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  opacity: hovBrand && !isHov ? 0.4 : 1, transition: 'opacity 150ms' }}>
+                <span style={{ fontSize: 10, color: '#4b5563', fontWeight: 700, textAlign: 'right' }}>#{idx + 1}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13, fontWeight: isJ ? 800 : 600, color: isJ ? '#22c55e' : '#e2e8f0' }}>{name(b)}</span>
+                </div>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{total}</span>
+                <span style={{ fontSize: 11, color: '#6b7280', textAlign: 'right' }}>{pct}% share</span>
+                <svg width={sparkW} height={sparkH} style={{ overflow: 'visible' }}>
+                  <path d={sparkPath} fill="none" stroke={color} strokeWidth={isHov ? 2 : 1.5} strokeLinecap="round" strokeLinejoin="round"
+                    style={{ filter: isHov ? `drop-shadow(0 0 4px ${color}88)` : 'none', transition: 'filter 150ms' }} />
+                  {vals[vals.length - 1] > 0 && (
+                    <circle cx={sparkX(vals.length - 1)} cy={sparkY(vals[vals.length - 1])} r={3} fill={color} />
+                  )}
+                </svg>
+              </div>
+            )
+          })}
+          <div style={{ marginTop: 8, fontSize: 11, color: '#4b5563' }}>
+            Sparklines show weekly ad volume trend · latest value marked with dot
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1182,7 +1240,7 @@ function PromoCadenceHeatmap({ rows, name }: { rows: PromoCadenceRow[]; name: (s
   )
 }
 
-function AdsVsPromosScatter({ rows, name }: { rows: CampaignPressureStat[]; name: (s: string) => string }) {
+function AdsVsPromosScatter({ rows, name, onBubbleClick }: { rows: CampaignPressureStat[]; name: (s: string) => string; onBubbleClick: (r: CampaignPressureStat) => void }) {
   const w = 760
   const h = 380
   const padL = 60, padR = 30, padT = 30, padB = 52
@@ -1232,9 +1290,9 @@ function AdsVsPromosScatter({ rows, name }: { rows: CampaignPressureStat[]; name
           const rad = radius(r.avgDiscount)
           const isJ = r.brand === 'joola'
           return (
-            <g key={r.brand}>
+            <g key={r.brand} style={{ cursor: 'pointer' }} onClick={() => onBubbleClick(r)}>
               <circle cx={cx} cy={cy} r={rad} fill={pgColor(r.brand)} opacity={isJ ? 0.95 : 0.6} stroke={isJ ? '#22c55e' : 'transparent'} strokeWidth={isJ ? 2 : 0}>
-                <title>{`${name(r.brand)} · ${r.ads} ads · ${r.promos} promos · avg discount ${r.avgDiscount}%`}</title>
+                <title>{`${name(r.brand)} · ${r.ads} ads · ${r.promos} promos · avg discount ${r.avgDiscount}% · Click for details`}</title>
               </circle>
               {isJ && (
                 <text x={cx} y={cy - rad - 6} textAnchor="middle" style={{ fontWeight: 800, fill: '#22c55e', fontSize: 11, pointerEvents: 'none' }}>
@@ -1270,7 +1328,7 @@ const JOOLA_COUNTER: Record<CampaignStrategyQuadrant, string> = {
   'quiet': 'Take share now — run a focused ad burst on flagship SKUs while competitors are dormant.',
 }
 
-function CampaignStrategyMatrixChart({ matrix, name }: { matrix: CampaignStrategyMatrix; name: (s: string) => string }) {
+function CampaignStrategyMatrixChart({ matrix, name, pressureStats, onBubbleClick }: { matrix: CampaignStrategyMatrix; name: (s: string) => string; pressureStats: CampaignPressureStat[]; onBubbleClick: (p: import('@/lib/v2/campaignOfferIntel').CampaignStrategyPoint, stat: CampaignPressureStat | null) => void }) {
   const w = 760
   const h = 400
   const padL = 60, padR = 30, padT = 30, padB = 52
@@ -1318,7 +1376,7 @@ function CampaignStrategyMatrixChart({ matrix, name }: { matrix: CampaignStrateg
           const isJ = p.brand === 'joola'
           const isHov = hover?.brand === p.brand
           return (
-            <g key={p.brand} style={{ cursor: 'pointer' }} onMouseEnter={() => setHover(p)} onMouseLeave={() => setHover(null)}>
+            <g key={p.brand} style={{ cursor: 'pointer' }} onMouseEnter={() => setHover(p)} onMouseLeave={() => setHover(null)} onClick={() => onBubbleClick(p, pressureStats.find(s => s.brand === p.brand) || null)}>
               <circle cx={cx} cy={cy} r={rad} fill={pgColor(p.brand)} opacity={isJ ? 0.95 : 0.6} stroke={isJ ? '#22c55e' : isHov ? '#fff' : 'transparent'} strokeWidth={isJ ? 2.5 : isHov ? 1.5 : 0}>
                 <title>{`${name(p.brand)} · ad ${p.adPressure.toFixed(1)} · promo ${p.promoPressure.toFixed(1)} · ${QUADRANT_LABEL[p.quadrant]}`}</title>
               </circle>
@@ -1338,73 +1396,524 @@ function CampaignStrategyMatrixChart({ matrix, name }: { matrix: CampaignStrateg
 // ─── Message Theme Bar Chart (themes × brands stacked) ────────────────
 
 function MessageThemeBarChart({ rows, name }: { rows: MessageThemeRow[]; name: (s: string) => string }) {
+  const [hovTheme, setHovTheme] = useState<string | null>(null)
+  const [hovBrand, setHovBrand] = useState<{ theme: string; brand: string; value: number } | null>(null)
+
   if (rows.length === 0) {
     return <div style={{ color: '#6b7280', fontSize: 13, padding: '32px 0', textAlign: 'center' }}>No themes to chart.</div>
   }
-  // Aggregate per theme
-  const themeOrder: MessageTheme[] = ['performance', 'power', 'sale', 'pro-endorsement', 'new-launch', 'beginner', 'tournament', 'other']
-  const themeLabelMap: Record<MessageTheme, string> = {
-    'performance': 'Performance',
-    'power': 'Power',
-    'sale': 'Sale',
-    'pro-endorsement': 'Pro',
-    'new-launch': 'New',
-    'beginner': 'Beginner',
-    'tournament': 'Tournament',
-    'other': 'Other',
+
+  const themeOrder = ['performance','power','sale','pro-endorsement','new-launch','beginner','tournament','other']
+  const themeLabelMap: Record<string, string> = {
+    'performance': 'Performance', 'power': 'Power', 'sale': 'Sale',
+    'pro-endorsement': 'Pro Endorsement', 'new-launch': 'New Launch',
+    'beginner': 'Beginner', 'tournament': 'Tournament', 'other': 'Other',
   }
-  const byTheme = new Map<MessageTheme, Map<string, number>>()
+  const byTheme = new Map<string, Map<string, number>>()
   for (const r of rows) {
     if (!byTheme.has(r.theme)) byTheme.set(r.theme, new Map())
     const m = byTheme.get(r.theme)!
     m.set(r.brand, (m.get(r.brand) || 0) + r.count)
   }
-  const themes = themeOrder.filter((t) => byTheme.has(t))
-  const totalsByTheme = themes.map((t) => {
-    const m = byTheme.get(t)!
-    return Array.from(m.values()).reduce((s, v) => s + v, 0)
-  })
+  const themes = themeOrder.filter(t => byTheme.has(t))
+  const totalsByTheme = themes.map(t => Array.from(byTheme.get(t)!.values()).reduce((s, v) => s + v, 0))
   const maxTotal = Math.max(1, ...totalsByTheme)
-  const allBrands = Array.from(new Set(rows.map((r) => r.brand))).sort()
+  const allBrands = Array.from(new Set(rows.map(r => r.brand))).sort()
 
   return (
     <div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {themes.map((t, idx) => {
           const m = byTheme.get(t)!
           const total = totalsByTheme[idx]
-          const widthPct = (total / maxTotal) * 100
+          const isHov = hovTheme === t
+          const barW = (total / maxTotal) * 100
           return (
-            <div key={t} style={{ display: 'grid', gridTemplateColumns: '110px 1fr 60px', alignItems: 'center', gap: 10, fontSize: 12 }}>
-              <span style={{ color: '#cbd1dc', fontWeight: 600 }}>{themeLabelMap[t]}</span>
-              <div style={{ height: 18, background: 'rgba(255,255,255,0.04)', borderRadius: 4, position: 'relative', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', height: '100%', width: `${widthPct}%`, transition: 'width 200ms' }}>
-                  {allBrands.map((b) => {
+            <div key={t}
+              onMouseEnter={() => setHovTheme(t)}
+              onMouseLeave={() => { setHovTheme(null); setHovBrand(null) }}
+              style={{ opacity: hovTheme && !isHov ? 0.45 : 1, transition: 'opacity 150ms' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: isHov ? 700 : 500, color: isHov ? '#fff' : '#cbd1dc', transition: 'color 150ms' }}>{themeLabelMap[t]}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{total}</span>
+              </div>
+              <div style={{ height: 28, background: 'rgba(255,255,255,0.04)', borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
+                <div style={{ display: 'flex', height: '100%', width: `${barW}%`, transition: 'width 500ms cubic-bezier(0.16,1,0.3,1)', borderRadius: 6, overflow: 'hidden' }}>
+                  {allBrands.map(b => {
                     const v = m.get(b) || 0
                     if (v === 0) return null
                     const segPct = (v / total) * 100
+                    const isSegHov = hovBrand?.theme === t && hovBrand?.brand === b
                     return (
-                      <div
-                        key={b}
-                        style={{ width: `${segPct}%`, background: pgColor(b), opacity: b === 'joola' ? 1 : 0.75 }}
-                        title={`${name(b)} · ${themeLabelMap[t]} · ${v}`}
+                      <div key={b}
+                        onMouseEnter={e => { e.stopPropagation(); setHovBrand({ theme: t, brand: b, value: v }) }}
+                        onMouseLeave={() => setHovBrand(null)}
+                        title={`${name(b)}: ${v} ads`}
+                        style={{
+                          width: `${segPct}%`,
+                          background: pgColor(b),
+                          opacity: isSegHov ? 1 : b === 'joola' ? 0.9 : 0.65,
+                          transition: 'opacity 120ms',
+                          boxShadow: isSegHov ? `inset 0 0 0 1px rgba(255,255,255,0.4)` : 'none',
+                          cursor: 'default',
+                        }}
                       />
                     )
                   })}
                 </div>
               </div>
-              <span style={{ color: '#fff', fontWeight: 700, textAlign: 'right' }}>{total}</span>
+              {hovBrand?.theme === t && (
+                <div style={{ marginTop: 4, fontSize: 11, color: pgColor(hovBrand.brand), fontWeight: 600 }}>
+                  {name(hovBrand.brand)}: {hovBrand.value} ads ({Math.round((hovBrand.value / total) * 100)}%)
+                </div>
+              )}
             </div>
           )
         })}
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14, fontSize: 11, color: '#6b7280' }}>
-        {allBrands.map((b) => (
-          <span key={b} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 8, height: 8, borderRadius: 99, background: pgColor(b), opacity: b === 'joola' ? 1 : 0.75 }} />
-            <span>{name(b)}</span>
+      {/* Brand legend */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
+        {allBrands.map(b => (
+          <span key={b} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#94a3b8' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: pgColor(b), flexShrink: 0, opacity: b === 'joola' ? 1 : 0.75 }} />
+            {name(b)}
           </span>
         ))}
+      </div>
+    </div>
+  )
+}
+
+
+// ─── Scatter bubble detail dialog ────────────────────────────────────
+function ScatterBubbleDialog({ row: r, brands, onClose }: {
+  row: CampaignPressureStat; brands: import('@/lib/v2/data').V2Brand[]; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const isJoola = r.brand === 'joola'
+  const brandColor = pgColor(r.brand)
+  const brandName = pgName(r.brand, brands)
+
+  // Determine quadrant
+  const highAds = r.adShare >= 50, highPromos = r.promoShare >= 50
+  const quadrant = highAds && highPromos ? 'Both Levers (High Pressure)'
+    : !highAds && highPromos ? 'Discount-Focused'
+    : highAds && !highPromos ? 'Paid-Focused'
+    : 'Quiet'
+  const qColor = quadrant === 'Both Levers (High Pressure)' ? '#fb923c'
+    : quadrant === 'Discount-Focused' ? '#ef4444'
+    : quadrant === 'Paid-Focused' ? '#818cf8'
+    : '#64748b'
+
+  const QUADRANT_DESC: Record<string, string> = {
+    'Both Levers (High Pressure)': 'This brand is spending heavily on both paid ads AND running active promotions. They are applying maximum competitive pressure — high risk for JOOLA if they are a direct competitor.',
+    'Discount-Focused': 'High promotion activity but low paid ad spend. This brand is competing on price and deals rather than paid reach. Watch for price-sensitive customers being pulled away.',
+    'Paid-Focused': 'High paid ad spend but few promotions. This brand is investing in brand awareness and paid reach without discounting. A sign of confidence in their product pricing.',
+    'Quiet': 'Low activity on both paid ads and promotions. Either dormant, saving budget, or shifting to organic/athlete-led marketing.',
+  }
+
+  const metrics = [
+    { label: 'Active ads', value: String(r.ads), color: '#818cf8', tip: 'Number of paid ad creatives currently running' },
+    { label: 'Active promos', value: String(r.promos), color: '#ef4444', tip: 'Number of active discounts or promotional offers' },
+    { label: 'Ad share', value: `${r.adShare.toFixed(1)}%`, color: '#60a5fa', tip: 'Share of total ads across all tracked brands' },
+    { label: 'Promo share', value: `${r.promoShare.toFixed(1)}%`, color: '#f97316', tip: 'Share of total promos across all tracked brands' },
+    { label: 'Avg discount', value: r.avgDiscount > 0 ? `${r.avgDiscount}%` : '—', color: '#F5E625', tip: 'Average % discount across active promotions' },
+    { label: 'Pressure score', value: r.pressure.toFixed(1), color: r.pressure >= 50 ? '#ef4444' : r.pressure >= 25 ? '#F5E625' : '#22c55e', tip: 'Composite score 0–100: 50×(ads/max) + 50×(promos/max)' },
+  ]
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 540, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{brandName}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Campaign & Offer Activity</div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: qColor + '22', color: qColor, border: `1px solid ${qColor}44` }}>{quadrant}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+
+        {/* Quadrant explanation */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: qColor + '08' }}>
+          <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.65 }}>{QUADRANT_DESC[quadrant]}</div>
+        </div>
+
+        {/* Metrics */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {metrics.map(m => (
+            <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Ads vs Promotions Matrix</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Offer / Promotion detail dialog ─────────────────────────────────
+function OfferDetailDialog({ offer: p, brands, onClose }: {
+  offer: ActiveOffer; brands: import('@/lib/v2/data').V2Brand[]; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const isJoola = p.brand === 'joola'
+  const brandColor = pgColor(p.brand)
+
+  const TYPE_DESC: Record<string, string> = {
+    DISCOUNT:      'A percentage or fixed-amount discount off the regular price.',
+    FREE_SHIPPING: 'Free shipping offer — reduces purchase friction and incentivises larger basket sizes.',
+    LAUNCH:        'New product launch promotion — typically an introductory offer or announcement.',
+    BUNDLE:        'Bundle deal — multiple products sold together at a combined price.',
+    OTHER:         'Other promotional content detected on the brand homepage or storefront.',
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: isJoola ? '#22c55e' : '#fff' }}>{pgName(p.brand, brands)}</div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Promotion · {p.type}</div>
+          </div>
+          <span className={'pill ' + (p.active ? 'pill-green' : 'pill-ghost')} style={{ fontSize: 10, fontWeight: 700 }}>{p.active ? 'ACTIVE' : 'INACTIVE'}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+
+        {/* Promo text */}
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Promotion Text</div>
+          <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.65, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '12px 16px', wordBreak: 'break-word' }}>
+            {p.text || '(no text)'}
+          </div>
+        </div>
+
+        {/* Type explanation */}
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>
+          <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>
+            <b style={{ color: '#cbd1dc' }}>{p.type}</b> — {TYPE_DESC[p.type] || 'Promotional content detected on the brand storefront.'}
+          </div>
+        </div>
+
+        {/* Meta grid */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {[
+            { label: 'Discount', value: p.discount != null && p.discount > 0 ? `${p.discount}%` : '—', color: p.discount ? '#F5E625' : '#3a4150' },
+            { label: 'Detected', value: p.detectedAt ? formatCalendarDate(p.detectedAt) : '—', color: '#94a3b8' },
+            { label: 'Status', value: p.active ? 'Active' : 'Inactive', color: p.active ? '#22c55e' : '#6b7280' },
+          ].map(m => (
+            <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+          {p.sourceUrl
+            ? <a href={p.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', textDecoration: 'none', padding: '5px 14px', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 6, background: 'rgba(96,165,250,0.08)' }}>
+                View source →
+              </a>
+            : <span style={{ fontSize: 11, color: '#3a4150' }}>No source URL</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Ad Creative detail dialog ────────────────────────────────────────
+function AdCreativeDialog({ ad: a, brands, onClose }: {
+  ad: AdCreative; brands: import('@/lib/v2/data').V2Brand[]; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const isJoola = a.brand === 'joola'
+  const brandColor = pgColor(a.brand)
+  const platColor = a.rawPlatform === 'meta' ? '#1877f2' : a.rawPlatform === 'google' ? '#fbbc05' : '#6b7280'
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: isJoola ? '#22c55e' : '#fff' }}>{pgName(a.brand, brands)}</div>
+            {a.pageName && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{a.pageName}</div>}
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: platColor + '22', color: platColor, border: `1px solid ${platColor}44` }}>{a.platform}</span>
+          <span className={'pill ' + (a.active ? 'pill-green' : 'pill-ghost')} style={{ fontSize: 10, fontWeight: 700 }}>{a.active ? 'ACTIVE' : 'ENDED'}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+
+        {/* Ad copy */}
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Ad Copy</div>
+          {a.copy
+            ? <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.65, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '12px 16px', wordBreak: 'break-word' }}>{a.copy}</div>
+            : <div style={{ fontSize: 12, color: '#4b5563', fontStyle: 'italic' }}>No copy available — {a.rawPlatform === 'google' ? 'Google Ads Transparency does not expose ad text.' : 'Ad copy not scraped for this creative.'}</div>}
+        </div>
+
+        {/* CTA + creative image */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: a.creativeUrl ? '1fr 1fr' : '1fr', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Call to Action</div>
+            {a.cta
+              ? <span className="pill pill-ghost" style={{ fontSize: 12, fontWeight: 700, padding: '4px 12px' }}>{a.cta}</span>
+              : <span style={{ fontSize: 12, color: '#4b5563' }}>—</span>}
+          </div>
+          {a.creativeUrl && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Creative</div>
+              <img src={a.creativeUrl} alt="Ad creative" style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', objectFit: 'contain' }} onError={e => (e.currentTarget.style.display = 'none')} />
+            </div>
+          )}
+        </div>
+
+        {/* Meta row */}
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+          {[
+            { label: 'First seen', value: a.startedAt ? formatCalendarDate(a.startedAt) : '—' },
+            { label: 'Platform', value: a.platform },
+          ].map(m => (
+            <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 14px' }}>
+              <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3 }}>{m.label}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{m.value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+          {a.sourceUrl
+            ? <a href={a.sourceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', textDecoration: 'none', padding: '5px 14px', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 6, background: 'rgba(96,165,250,0.08)' }}>
+                View in Ad Library →
+              </a>
+            : <span style={{ fontSize: 11, color: '#3a4150' }}>No source URL</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Strategy Matrix bubble detail dialog ────────────────────────────
+function StrategyBubbleDialog({ point: p, stat, brands, onClose }: {
+  point: import('@/lib/v2/campaignOfferIntel').CampaignStrategyPoint
+  stat: CampaignPressureStat | null
+  brands: import('@/lib/v2/data').V2Brand[]
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const isJoola = p.brand === 'joola'
+  const brandColor = pgColor(p.brand)
+
+  const QUADRANT_COLOR: Record<string, string> = {
+    'aggressive-growth': '#fb923c',
+    'brand-building':    '#818cf8',
+    'price-sensitive':   '#ef4444',
+    'quiet':             '#64748b',
+  }
+  const QUADRANT_DESC: Record<string, string> = {
+    'aggressive-growth': 'This brand is pushing hard on both paid ads and promotions simultaneously. Maximum competitive pressure — they are spending to grow market share quickly.',
+    'brand-building':    'High paid ad spend but few promotions. This brand is investing in reach and awareness while holding price integrity. A sign of confidence in their product value.',
+    'price-sensitive':   'High promotion activity but low paid ads. This brand is competing on price and discounts rather than paid reach. Watch for price-sensitive customers being attracted.',
+    'quiet':             'Low activity on both axes. Either conserving budget, shifting to organic/athlete marketing, or simply not active in this window.',
+  }
+
+  const qColor = QUADRANT_COLOR[p.quadrant] || '#6b7280'
+  const qDesc = QUADRANT_DESC[p.quadrant] || ''
+  const joolaCounter = JOOLA_COUNTER[p.quadrant] || ''
+
+  const metrics = [
+    { label: 'Ad pressure',    value: p.adPressure.toFixed(1),                                     color: '#818cf8',  tip: 'Normalised paid advertising pressure score — ad volume relative to all brands' },
+    { label: 'Promo pressure', value: p.promoPressure.toFixed(1),                                  color: '#ef4444',  tip: 'Normalised promotional pressure score — promo frequency and depth relative to all brands' },
+    { label: 'Total activity', value: String(p.totalActivity),                                      color: '#F5E625',  tip: 'Combined ad + promo activity count used to size the bubble' },
+    { label: 'Active ads',     value: stat ? String(stat.ads) : '—',                               color: '#60a5fa',  tip: 'Number of paid ad creatives currently running' },
+    { label: 'Active promos',  value: stat ? String(stat.promos) : '—',                            color: '#f97316',  tip: 'Number of active discount or promotional offers' },
+    { label: 'Avg discount',   value: stat && stat.avgDiscount > 0 ? `${stat.avgDiscount}%` : '—', color: '#F5E625',  tip: 'Average % discount across all active promotions' },
+    { label: 'Ad share',       value: stat ? `${stat.adShare.toFixed(1)}%` : '—',                  color: '#a78bfa',  tip: 'This brand share of all tracked paid ads' },
+    { label: 'Promo share',    value: stat ? `${stat.promoShare.toFixed(1)}%` : '—',               color: '#fb923c',  tip: 'This brand share of all tracked promotions' },
+    { label: 'Pressure score', value: stat ? stat.pressure.toFixed(1) : '—',                       color: stat && stat.pressure >= 50 ? '#ef4444' : stat && stat.pressure >= 25 ? '#F5E625' : '#22c55e', tip: 'Composite 0–100 score: 50×(ads/max) + 50×(promos/max). Higher = more competitive pressure.' },
+  ]
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 540, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{pgName(p.brand, brands)}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Campaign Strategy Position</div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: qColor + '22', color: qColor, border: `1px solid ${qColor}44`, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {QUADRANT_LABEL[p.quadrant]?.split('(')[0].trim()}
+          </span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+
+        {/* Quadrant description */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: qColor + '08' }}>
+          <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.65 }}>{qDesc}</div>
+        </div>
+
+        {/* Metrics */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
+            {metrics.slice(0, 3).map(m => (
+              <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+                <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {metrics.slice(3).map(m => (
+              <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+                <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* JOOLA counter-strategy (if not JOOLA itself) */}
+        {!isJoola && joolaCounter && (
+          <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(34,197,94,0.05)' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>JOOLA Counter-Strategy</div>
+            <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.6 }}>{joolaCounter}</div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Campaign Strategy Matrix</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Competitor Offer Playbook row detail dialog ──────────────────────
+function PlaybookRowDialog({ row: r, brands, onClose }: {
+  row: OfferPlaybookRow; brands: import('@/lib/v2/data').V2Brand[]; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const isJoola = r.brand === 'joola'
+  const brandColor = pgColor(r.brand)
+
+  const TYPE_EXPLAIN: Record<string, string> = {
+    DISCOUNT:      'A price reduction — either a flat dollar amount or percentage off. Signals willingness to compete on price.',
+    FREE_SHIPPING: 'Removes shipping cost to lower purchase barrier. Common tactic to increase conversion without cutting paddle price.',
+    LAUNCH:        'New product introduction — often paired with early-bird pricing or a limited-time offer.',
+    BUNDLE:        'Multiple products sold together at a lower combined price. Aims to increase average order value.',
+    GENERAL:       'General promotional content — banners or messaging without a specific discount or type.',
+    OTHER:         'Other promotion type detected on the brand storefront.',
+  }
+
+  const RESPONSE_EXPLAIN: Record<string, string> = {
+    'Monitor only': 'This promotion does not require an immediate JOOLA counter. Keep it on the watchlist but hold your pricing strategy.',
+    'Match selectively': 'Consider matching on a non-flagship SKU or with an accessory bundle to neutralise without degrading flagship value.',
+    'No discount needed': 'JOOLA value messaging and athlete proof is stronger than a direct price match. Lean on quality differentiation.',
+    'Match free-shipping': 'Quietly match the free shipping threshold — customers expect it, and not offering it is a competitive disadvantage.',
+  }
+
+  const responseKey = Object.keys(RESPONSE_EXPLAIN).find(k => r.joolaResponse.startsWith(k)) || ''
+  const responseExplain = RESPONSE_EXPLAIN[responseKey] || ''
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{pgName(r.brand, brands)}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Competitor Offer Playbook</div>
+          </div>
+          <span className="pill pill-ghost" style={{ fontSize: 11, fontWeight: 700 }}>{r.promoType}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+
+        {/* Promo type explanation */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>What this promo type means</div>
+          <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.65 }}>{TYPE_EXPLAIN[r.promoType] || 'Promotional activity detected on this brand storefront.'}</div>
+        </div>
+
+        {/* Metrics */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {[
+            { label: 'Discount depth', value: r.discountDepth && r.discountDepth > 0 ? `${r.discountDepth}%` : '—', color: r.discountDepth ? '#F5E625' : '#3a4150', tip: 'Average % discount across promotions of this type from this brand' },
+            { label: 'Frequency', value: String(r.frequency), color: '#60a5fa', tip: 'Number of times this promo type was detected across all scrapes' },
+            { label: 'Last detected', value: r.lastDetected ? formatCalendarDate(r.lastDetected) : '—', color: '#94a3b8', tip: 'Most recent scrape that surfaced this promotion' },
+          ].map(m => (
+            <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Product affected */}
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Product Affected</div>
+          <div style={{ fontSize: 13, color: r.productAffected ? '#e2e8f0' : '#4b5563' }}>
+            {r.productAffected || 'No specific product linked — promotion applies to the full storefront or product was not matched in the catalog.'}
+          </div>
+        </div>
+
+        {/* JOOLA Response */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(34,197,94,0.05)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Recommended JOOLA Response</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: responseExplain ? 6 : 0 }}>{r.joolaResponse}</div>
+          {responseExplain && <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>{responseExplain}</div>}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Competitor Offer Playbook</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+        </div>
       </div>
     </div>
   )

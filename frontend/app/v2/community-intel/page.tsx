@@ -422,7 +422,7 @@ export default function CommunityIntelPage() {
             padding: '14px 18px',
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 22,
+            justifyContent: 'space-evenly',
             alignItems: 'center',
             fontSize: 12,
             color: 'var(--fg-2)',
@@ -476,44 +476,6 @@ export default function CommunityIntelPage() {
           />
         </div>
 
-        {/* KPI grid for accessibility — reuses MiniKpi visuals */}
-        <div className="kpi-grid" style={{ marginBottom: 6 }}>
-          <MiniKpi
-            label="Total signals (filter)"
-            value={fmt(filteredSignals.length)}
-            color="#06b6d4"
-            customVs={`${data.signals.length} pre-filter`}
-            src="ig_comments + yt_comments + reddit_mentions + reddit_comments + mention_facts"
-            tip="Total community signals (mentions + comments + crisis flags) across all channels after applying the active filters at the top of the page. The 'pre-filter' number below shows the full unfiltered population."
-          />
-          <MiniKpi
-            label="Crisis signals"
-            value={fmt(crisisRows.length)}
-            color={crisisRows.length > 0 ? '#ef4444' : '#22c55e'}
-            customVs={`${filteredOpenCrisis30d} in last 30d`}
-            src="mention_facts.is_crisis"
-            flavor={crisisRows.length > 0 ? 'danger' : undefined}
-            tip="Signals flagged as a CRISIS by the GPT-4o-mini classifier — recall / safety / coordinated-backlash / scandal events that need immediate brand response. Crisis is a much higher bar than negative sentiment. The sub-label shows how many of these fall within the last 30 days."
-          />
-          <MiniKpi
-            label="JOOLA mentions"
-            value={fmt(filteredJoolaMentions)}
-            color="#22c55e"
-            customVs={`across ${filteredChannelStats.length} channels`}
-            flavor="joola"
-            src="Filtered JOOLA-brand signals"
-            tip="Count of community signals (mentions + comments + crisis flags) specifically about JOOLA within the active date range and brand filter. The sub-label shows how many distinct channels contributed."
-          />
-          <MiniKpi
-            label="Negative share"
-            value={`${filteredNegativePct}%`}
-            color={filteredNegativePct >= 30 ? '#ef4444' : '#F5E625'}
-            customVs={filteredSentimentCoverage > 0
-              ? `${filteredSentimentCoverage}% classifier coverage`
-              : 'Sentiment classifier pending'}
-            tip="Share of sentiment-classified signals that are negative: negative ÷ (positive + neutral + negative) × 100. Yellow ≥ 15%, red ≥ 30%. The sub-label shows what percentage of signals have received a sentiment label so far."
-          />
-        </div>
       </section>
 
       {/* ─── Section 2: Brand discussion volume ────────────────────── */}
@@ -1336,9 +1298,16 @@ const emptyCell: React.CSSProperties = {
 
 function SummaryItem({ label, value, color, tip }: { label: string; value: string; color?: string; tip?: string }) {
   return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: 100 }} title={tip}>
-      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</span>
-      <span style={{ fontSize: 16, fontWeight: 800, color: color || '#fff', whiteSpace: 'nowrap' }}>{value}</span>
+    <div
+      title={tip}
+      style={{
+        display: 'inline-flex', flexDirection: 'column', minWidth: 80,
+        padding: '2px 16px',
+        cursor: tip ? 'help' : 'default',
+      }}
+    >
+      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 3 }}>{label}</span>
+      <span style={{ fontSize: 15, fontWeight: 800, color: color || '#fff', whiteSpace: 'nowrap' }}>{value}</span>
     </div>
   )
 }
@@ -1521,6 +1490,7 @@ function CommunityTrendChart({ points }: { points: TrendPoint[] }) {
 
 function ChannelMixDonut({ rows }: { rows: { channel: string; label: string; color: string; total: number; crisis: number }[] }) {
   const [centerHov, setCenterHov] = useState(false)
+  const [hovArc, setHovArc] = useState<string | null>(null)
   const total = rows.reduce((s, r) => s + r.total, 0)
   if (total === 0) {
     return <div style={{ color: '#6b7280', fontSize: 13, padding: '24px 0', textAlign: 'center' }}>No data</div>
@@ -1536,30 +1506,53 @@ function ChannelMixDonut({ rows }: { rows: { channel: string; label: string; col
     acc += row.total
     const end = (acc / total) * Math.PI * 2 - Math.PI / 2
     const large = row.total / total > 0.5 ? 1 : 0
+    const rH = r + 4, iH = inner - 2
     const x0 = cx + r * Math.cos(start), y0 = cy + r * Math.sin(start)
     const x1 = cx + r * Math.cos(end), y1 = cy + r * Math.sin(end)
     const x2 = cx + inner * Math.cos(end), y2 = cy + inner * Math.sin(end)
     const x3 = cx + inner * Math.cos(start), y3 = cy + inner * Math.sin(start)
     const d = `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1} L ${x2} ${y2} A ${inner} ${inner} 0 ${large} 0 ${x3} ${y3} Z`
-    return { ...row, d }
+    const xH0 = cx + rH * Math.cos(start), yH0 = cy + rH * Math.sin(start)
+    const xH1 = cx + rH * Math.cos(end), yH1 = cy + rH * Math.sin(end)
+    const xH2 = cx + iH * Math.cos(end), yH2 = cy + iH * Math.sin(end)
+    const xH3 = cx + iH * Math.cos(start), yH3 = cy + iH * Math.sin(start)
+    const dH = `M ${xH0} ${yH0} A ${rH} ${rH} 0 ${large} 1 ${xH1} ${yH1} L ${xH2} ${yH2} A ${iH} ${iH} 0 ${large} 0 ${xH3} ${yH3} Z`
+    return { ...row, d, dH }
   })
+  const anyHov = hovArc !== null
   return (
     <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
       <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          {arcs.map((a) => (
-            <path key={a.channel} d={a.d} fill={a.color}>
-              <title>{`${a.label}: ${a.total} signals · ${a.crisis} crisis`}</title>
-            </path>
-          ))}
-          <text x={cx} y={cy + 4} textAnchor="middle" fontSize={18} fontWeight={800} fill="#fff">{total}</text>
-          <circle
-            cx={cx} cy={cy} r={inner - 2}
-            fill="transparent"
-            style={{ cursor: 'default' }}
-            onMouseEnter={() => setCenterHov(true)}
-            onMouseLeave={() => setCenterHov(false)}
-          />
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ overflow: 'visible' }}>
+          {arcs.map((a) => {
+            const isHov = hovArc === a.channel
+            return (
+              <g key={a.channel} style={{ cursor: 'pointer' }}
+                onMouseEnter={() => { setHovArc(a.channel); setCenterHov(false) }}
+                onMouseLeave={() => setHovArc(null)}>
+                <path d={a.d} fill={a.color}
+                  opacity={anyHov && !isHov ? 0.5 : 1}
+                  style={{ transition: 'opacity 200ms ease' }} />
+                {isHov && (
+                  <path d={a.dH} fill={a.color} opacity={0.95}
+                    style={{ filter: `drop-shadow(0 0 6px ${a.color}88)` }} />
+                )}
+              </g>
+            )
+          })}
+          <text x={cx} y={cy - 4} textAnchor="middle"
+            fontSize={hovArc ? 13 : 18} fontWeight={800} fill="#fff"
+            style={{ transition: 'font-size 150ms ease', pointerEvents: 'none' }}>
+            {hovArc ? (arcs.find(a => a.channel === hovArc)?.total.toLocaleString() ?? total) : total}
+          </text>
+          {hovArc && (
+            <text x={cx} y={cy + 14} textAnchor="middle" fontSize={9} fill="#94a3b8"
+              style={{ pointerEvents: 'none' }}>
+              {arcs.find(a => a.channel === hovArc)?.label}
+            </text>
+          )}
+          <circle cx={cx} cy={cy} r={inner - 2} fill="transparent"
+            onMouseEnter={() => setCenterHov(true)} onMouseLeave={() => setCenterHov(false)} />
         </svg>
         {centerHov && (
           <div className="tip" style={{ left: '50%', top: '50%' }}>
@@ -1569,21 +1562,23 @@ function ChannelMixDonut({ rows }: { rows: { channel: string; label: string; col
         )}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '10px 1fr auto auto', alignItems: 'center', columnGap: 8, rowGap: 7, fontSize: 12, flex: 1, minWidth: 0 }}>
-        {arcs.map((a) => (
-          <Fragment key={a.channel}>
-            <span style={{ width: 10, height: 10, background: a.color, borderRadius: 2, justifySelf: 'center' }} />
-            <span style={{ color: '#cbd1dc', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.label}</span>
-            <span style={{ color: '#fff', fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{a.total.toLocaleString()}</span>
-            <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 10, whiteSpace: 'nowrap', paddingLeft: 2 }}>
-              {a.crisis > 0 ? `· ${a.crisis}` : ''}
-            </span>
-          </Fragment>
-        ))}
+        {arcs.map((a) => {
+          const isHov = hovArc === a.channel
+          return (
+            <Fragment key={a.channel}>
+              <span style={{ width: 10, height: 10, background: a.color, borderRadius: 2, justifySelf: 'center', opacity: anyHov && !isHov ? 0.5 : 1, transition: 'opacity 200ms' }} />
+              <span style={{ color: isHov ? '#fff' : '#cbd1dc', fontWeight: isHov ? 700 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', transition: 'color 150ms' }}>{a.label}</span>
+              <span style={{ color: isHov ? a.color : '#fff', fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums', transition: 'color 150ms' }}>{a.total.toLocaleString()}</span>
+              <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 10, whiteSpace: 'nowrap', paddingLeft: 2 }}>
+                {a.crisis > 0 ? `· ${a.crisis}` : ''}
+              </span>
+            </Fragment>
+          )
+        })}
       </div>
     </div>
   )
 }
-
 function BrandChannelHeatmap({
   rows, brands, name,
 }: {
