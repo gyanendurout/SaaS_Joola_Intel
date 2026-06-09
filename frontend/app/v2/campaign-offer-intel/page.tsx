@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   PageHead, MiniKpi, SortTh, ColumnFilter, LoadingPage, SectionInfo,
   FilterBanner, pgColor, pgName,
@@ -97,6 +98,7 @@ function discountBucket(d: number | null): DiscountKey {
 
 export default function CampaignOfferIntelPage() {
   const [brands, setBrands] = useState<V2Brand[]>([])
+  const router = useRouter()
   const [data, setData] = useState<CampaignOfferIntelData | null>(null)
   const [matrix, setMatrix] = useState<CampaignStrategyMatrix | null>(null)
   const [loading, setLoading] = useState(true)
@@ -476,7 +478,7 @@ export default function CampaignOfferIntelPage() {
                 const maxPressure = Math.max(1, ...pressureRows.map((x) => x.pressure))
                 const barPct = (r.pressure / maxPressure) * 100
                 return (
-                  <tr key={r.brand} style={isJoola ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}}>
+                  <tr key={r.brand} style={{ ...(isJoola ? { borderLeft: '3px solid #22c55e', background: 'rgba(34,197,94,0.04)' } : {}), cursor: 'pointer' }} onClick={() => router.push(`/v2/campaign-offer-intel/brand/${encodeURIComponent(r.brand)}`)}>
                     <td style={{ textAlign: 'left' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ width: 8, height: 8, borderRadius: 999, background: pgColor(r.brand) }} />

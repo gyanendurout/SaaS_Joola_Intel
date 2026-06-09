@@ -24,6 +24,7 @@ export interface RawCatalogProduct {
   id: string
   brand_id: string
   name: string
+  url: string | null
   price_usd: number | null
   sale_price_usd: number | null
   discount_pct: number | null
@@ -405,7 +406,7 @@ export async function fetchProductIntel(brands: V2Brand[]): Promise<ProductIntel
   const [catalogRes, curatedRes, dailyRes, summaryRes, tsRows, scanRows] = await Promise.all([
     supabase
       .from('products')
-      .select('id,brand_id,name,price_usd,sale_price_usd,discount_pct,avg_rating,review_count,category,in_stock,last_scraped_at')
+      .select('id,brand_id,name,url,price_usd,sale_price_usd,discount_pct,avg_rating,review_count,category,in_stock,last_scraped_at')
       .limit(2000),
     supabase
       .from('products_catalog')
@@ -597,7 +598,7 @@ export async function fetchCompetitorAttackMap(brands: V2Brand[], topN = 20): Pr
       .limit(5000),
     supabase
       .from('products')
-      .select('id,brand_id,name,price_usd,sale_price_usd,category,in_stock')
+      .select('id,brand_id,name,url,price_usd,sale_price_usd,category,in_stock')
       .limit(2000),
     supabase
       .from('products_catalog')
@@ -1295,7 +1296,7 @@ export async function fetchPricePressure(brands: V2Brand[], topN = 30): Promise<
       .limit(5000),
     supabase
       .from('products')
-      .select('id,brand_id,name,price_usd,sale_price_usd,discount_pct,category')
+      .select('id,brand_id,name,url,price_usd,sale_price_usd,discount_pct,category')
       .limit(2000),
     supabase
       .from('products_catalog')

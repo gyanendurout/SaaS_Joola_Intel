@@ -730,7 +730,7 @@
   transform: translate(-50%, -120%);
   box-shadow: 0 8px 24px rgba(0,0,0,0.6);
   backdrop-filter: blur(8px);
-  animation: tooltip-appear 0.15s ease 0.5s both;
+  animation: tooltip-appear 0.1s ease 0s both;
 }
 .v2-root .tip .t-name { font-family: var(--font-sans); font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--yellow); font-size: 10px; margin-bottom: 3px; }
 
@@ -914,11 +914,7 @@ html { scroll-behavior: smooth; }
   text-align: left;
   pointer-events: auto;
   font-style: normal;
-  animation: tooltip-appear 0.15s ease 0.5s both;
-}
-/* Pinned (clicked) tooltips appear immediately — no delay */
-.v2-root .section-info.is-pinned .si-popup {
-  animation-delay: 0s;
+  animation: tooltip-appear 0.1s ease 0s both;
 }
 .v2-root .section-info.is-pinned {
   background: var(--yellow-dim);
