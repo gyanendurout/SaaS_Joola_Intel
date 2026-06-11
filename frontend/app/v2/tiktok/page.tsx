@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   fetchBrands, fetchTikTok, fetchTopTikTokVideos,
   fetchTikTokCommentStats, fetchTikTokPaddleMentions,
@@ -49,8 +50,11 @@ export default function TikTokPage() {
   const [vpvSortKey, setVpvSortKey] = useState<string | null>(null)
   const [vpvSortDir, setVpvSortDir] = useState<'asc' | 'desc'>('desc')
   const [vpvBrandFilter, setVpvBrandFilter] = useState('')
+  const [bwSortKey, setBwSortKey] = useState<string>('followers')
+  const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, effectiveFrom, effectiveTo } = useDateRange()
+  const router = useRouter()
 
   useEffect(() => { document.title = 'JOOLA INTEL — TikTok' }, [])
 
@@ -170,6 +174,32 @@ export default function TikTokPage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredVideos
 
+  function toggleBwSort(col: string) {
+    if (bwSortKey === col) setBwSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setBwSortKey(col); setBwSortDir('desc') }
+  }
+  const topVideoByBrand: Record<string, V2TikTokVideo> = {}
+  displayVideos.forEach(v => {
+    if (!topVideoByBrand[v.brand] || v.views > topVideoByBrand[v.brand].views)
+      topVideoByBrand[v.brand] = v
+  })
+  const sortedBrandOverview = [...displayTT].sort((a, b) => {
+    if (a.brand === 'joola') return -1
+    if (b.brand === 'joola') return 1
+    const getV = (x: typeof a): number | string => {
+      if (bwSortKey === 'brand') return name(x.brand)
+      if (bwSortKey === 'videos') return x.videos
+      if (bwSortKey === 'totalHearts') return x.totalHearts
+      if (bwSortKey === 'avgViews') return x.avgViews
+      if (bwSortKey === 'delta') return x.delta ?? -9999
+      return x.followers
+    }
+    const av = getV(a), bv = getV(b)
+    if (typeof av === 'number' && typeof bv === 'number')
+      return bwSortDir === 'asc' ? av - bv : bv - av
+    return bwSortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+  })
+
   return (
     <>
       <PageHead title="TIKTOK" />
@@ -181,6 +211,89 @@ export default function TikTokPage() {
         findings={tiktokPlaybook(brands, displayTT, displayVideos, commentStats, paddleMentions)}
         brands={brands}
       />
+
+      {/* ── Brand-wise Overview Table ── */}
+      <section style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>Brand-wise overview <SectionInfo title="TikTok Channel Overview" description="One row per brand — followers, growth, video count, total hearts, avg views per video, and best post. Click any row for full brand TikTok activity." source="tiktok_profiles_weekly · tiktok_videos · latest snapshot" /></h2>
+            <div className="sub">{sortedBrandOverview.length} brands · click a row to view full details</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="table-wrap">
+            <table className="data" style={{ width: '100%' }}>
+              <thead><tr>
+                <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
+                <SortTh col="brand"       label="Brand"        sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
+                <SortTh col="followers"   label="Followers"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
+                <SortTh col="delta"       label="Flw Δ (wk)"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
+                <SortTh col="videos"      label="Videos"       sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} />
+                <SortTh col="totalHearts" label="Total Hearts" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
+                <SortTh col="avgViews"    label="Avg Views"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 90 }} />
+                <th style={{ minWidth: 180 }}>Top Video</th>
+                <th style={{ width: 70, textAlign: 'center' }}>Profile</th>
+              </tr></thead>
+              <tbody>
+                {sortedBrandOverview.map((d, i) => {
+                  const isJ = d.brand === 'joola'
+                  const color = pgColor(d.brand)
+                  const tv = topVideoByBrand[d.brand]
+                  return (
+                    <tr key={d.brand} className={isJ ? 'joola' : ''}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/tiktok/brand/${encodeURIComponent(d.brand)}`)}
+                      title={`View ${name(d.brand)} TikTok details`}>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{i + 1}</td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                            <span style={{ fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{name(d.brand)}</span>
+                          </span>
+                          {TIKTOK_HANDLES[d.brand] && <span style={{ paddingLeft: 15, fontSize: 10, color: 'var(--fg-4)' }}>@{TIKTOK_HANDLES[d.brand]}</span>}
+                        </div>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'JetBrains Mono', color: isJ ? '#22c55e' : 'var(--fg)' }}>
+                        {d.followers > 0 ? fmt(d.followers) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {d.delta != null && d.delta !== 0 ? (
+                          <span style={{ fontWeight: 700, fontSize: 11, fontFamily: 'JetBrains Mono', color: d.delta >= 0 ? '#22c55e' : '#ef4444' }}>
+                            {d.delta >= 0 ? '+' : ''}{fmt(d.delta)}
+                          </span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: 'var(--fg-3)' }}>{d.videos > 0 ? d.videos : '—'}</td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'JetBrains Mono', color: '#f97316' }}>
+                        {d.totalHearts > 0 ? fmt(d.totalHearts) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: '#F5E625', fontWeight: 700 }}>
+                        {d.avgViews > 0 ? fmt(d.avgViews) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td style={{ maxWidth: 200 }}>
+                        {tv ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontSize: 11, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }} title={tv.text}>
+                              {(tv.text || '').slice(0, 55)}{(tv.text || '').length > 55 ? '…' : ''}
+                            </span>
+                            <span style={{ fontSize: 10, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>👁 {fmt(tv.views)}</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No video data</span>}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        {TIKTOK_HANDLES[d.brand] ? (
+                          <a href={`https://www.tiktok.com/@${TIKTOK_HANDLES[d.brand]}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}>View ↗</a>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section style={{ marginBottom: 28 }}>
         <div className="two-col-even">

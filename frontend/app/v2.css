@@ -1470,6 +1470,7 @@ html { scroll-behavior: smooth; }
 .v2-root .page-head h1 em { white-space: nowrap; }
 @media (min-width: 600px) {
   .v2-root .page-head h1 { white-space: nowrap; }
+  .v2-root .page-head h1.wrap { white-space: normal; word-break: break-word; font-size: clamp(20px, 3vw, 36px); }
 }
 .v2-root .foot { color: var(--fg-3) !important; }
 .v2-root .foot strong { color: var(--fg-2) !important; }

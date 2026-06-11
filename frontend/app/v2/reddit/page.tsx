@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   fetchBrands, fetchReddit, fetchRedditTrend, fetchRedditSubreddits, fetchTopRedditMentions,
   fetchRedditViral, fetchRedditRemoved, fetchRedditCrisisClusters, fetchRedditReplyVsOp,
@@ -27,6 +28,7 @@ function weekLabel(weeksAgo: number): string {
 }
 
 export default function RedditPage() {
+  const router = useRouter()
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [reddit, setReddit] = useState<V2RedditRow[]>([])
   const [trend, setTrend] = useState<Record<string, number[]>>({})
@@ -40,6 +42,8 @@ export default function RedditPage() {
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [bwSortKey, setBwSortKey] = useState<string>('mentions')
+  const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
   const [colFilter, setColFilter] = useState<Record<string, string>>({})
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, maxDays } = useDateRange()
@@ -150,6 +154,31 @@ export default function RedditPage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredMentions
 
+  function toggleBwSort(col: string) {
+    if (bwSortKey === col) setBwSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setBwSortKey(col); setBwSortDir('desc') }
+  }
+  const topMentionByBrand: Record<string, V2RedditMention> = {}
+  displayMentions.forEach(m => {
+    if (!topMentionByBrand[m.brand] || m.score > topMentionByBrand[m.brand].score)
+      topMentionByBrand[m.brand] = m
+  })
+  const sortedBrandOverview = [...displayReddit].sort((a, b) => {
+    if (a.brand === 'joola') return -1
+    if (b.brand === 'joola') return 1
+    const getV = (x: typeof a): number | string => {
+      if (bwSortKey === 'brand') return name(x.brand)
+      if (bwSortKey === 'positive') return x.mentions > 0 ? x.positive / x.mentions : 0
+      if (bwSortKey === 'negative') return x.mentions > 0 ? x.negative / x.mentions : 0
+      if (bwSortKey === 'delta') return x.delta ?? -9999
+      return x.mentions
+    }
+    const av = getV(a), bv = getV(b)
+    if (typeof av === 'number' && typeof bv === 'number')
+      return bwSortDir === 'asc' ? av - bv : bv - av
+    return bwSortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+  })
+
   return (
     <>
       <PageHead
@@ -162,6 +191,92 @@ export default function RedditPage() {
         </>}
       />
       <FilterBanner />
+
+      {/* ── Brand-wise Overview Table ── */}
+      <section style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>Brand-wise overview <SectionInfo title="Reddit Brand Overview" description="One row per brand — mention volume, sentiment breakdown, weekly delta, and top post. Click any row to explore full Reddit activity for that brand." source="reddit_mentions · latest data" /></h2>
+            <div className="sub">{sortedBrandOverview.length} brands · click a row for full Reddit detail</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="table-wrap">
+            <table className="data" style={{ width: '100%' }}>
+              <thead><tr>
+                <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
+                <SortTh col="brand"    label="Brand"      sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
+                <SortTh col="mentions" label="Mentions"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
+                <SortTh col="delta"    label="Δ Mentions" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
+                <th style={{ minWidth: 160 }}>Sentiment</th>
+                <SortTh col="positive" label="Pos%" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 60 }} />
+                <SortTh col="negative" label="Neg%" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 60 }} />
+                <th style={{ minWidth: 200 }}>Top Post</th>
+                <th style={{ width: 70, textAlign: 'center' }}>Detail</th>
+              </tr></thead>
+              <tbody>
+                {sortedBrandOverview.map((d, i) => {
+                  const isJ = d.brand === 'joola'
+                  const color = pgColor(d.brand)
+                  const total = d.mentions || 1
+                  const posPct = Math.round((d.positive / total) * 100)
+                  const negPct = Math.round((d.negative / total) * 100)
+                  const neuPct = 100 - posPct - negPct
+                  const tm = topMentionByBrand[d.brand]
+                  return (
+                    <tr key={d.brand} className={isJ ? 'joola' : ''}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/reddit/brand/${encodeURIComponent(d.brand)}`)}
+                      title={`View ${name(d.brand)} Reddit details`}>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{i + 1}</td>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{name(d.brand)}</span>
+                        </span>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'JetBrains Mono', color: isJ ? '#22c55e' : 'var(--fg)' }}>{d.mentions}</td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {d.delta != null && d.delta !== 0 ? (
+                          <span style={{ fontWeight: 700, fontSize: 11, fontFamily: 'JetBrains Mono', color: d.delta >= 0 ? '#22c55e' : '#ef4444' }}>
+                            {d.delta >= 0 ? '+' : ''}{d.delta}
+                          </span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td>
+                        {d.mentions > 0 ? (
+                          <div style={{ height: 8, display: 'flex', borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', minWidth: 120 }}>
+                            <div style={{ width: `${posPct}%`, background: '#22c55e', opacity: 0.9 }} title={`Positive: ${posPct}%`} />
+                            <div style={{ width: `${neuPct}%`, background: '#94a3b8', opacity: 0.5 }} title={`Neutral: ${neuPct}%`} />
+                            <div style={{ width: `${negPct}%`, background: '#ef4444', opacity: 0.9 }} title={`Negative: ${negPct}%`} />
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No data</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: '#22c55e', fontWeight: 700, fontFamily: 'JetBrains Mono', fontSize: 11 }}>
+                        {d.mentions > 0 ? `${posPct}%` : '—'}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: '#ef4444', fontWeight: 700, fontFamily: 'JetBrains Mono', fontSize: 11 }}>
+                        {d.mentions > 0 ? `${negPct}%` : '—'}
+                      </td>
+                      <td style={{ maxWidth: 200 }}>
+                        {tm ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontSize: 11, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }} title={tm.title}>{tm.title.slice(0, 55)}{tm.title.length > 55 ? '…' : ''}</span>
+                            <span style={{ fontSize: 10, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>↑ {tm.score} · r/{tm.subreddit}</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No mention data</span>}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <button onClick={e => { e.stopPropagation(); router.push(`/v2/reddit/brand/${encodeURIComponent(d.brand)}`) }} className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}>Detail ↗</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section>
         <div className="kpi-grid">

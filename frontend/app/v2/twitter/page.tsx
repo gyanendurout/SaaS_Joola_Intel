@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   fetchBrands, fetchX, fetchTopXPosts,
   type V2Brand, type V2XRow, type V2XPost,
@@ -31,6 +32,7 @@ const X_HANDLES: Record<string, string> = {
 }
 
 export default function TwitterPage() {
+  const router = useRouter()
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [xData, setXData] = useState<V2XRow[]>([])
   const [posts, setPosts] = useState<V2XPost[]>([])
@@ -45,6 +47,8 @@ export default function TwitterPage() {
   const [erSortKey, setErSortKey] = useState<string | null>(null)
   const [erSortDir, setErSortDir] = useState<'asc' | 'desc'>('desc')
   const [erBrandFilter, setErBrandFilter] = useState('')
+  const [bwSortKey, setBwSortKey] = useState<string>('followers')
+  const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, effectiveFrom, effectiveTo } = useDateRange()
 
@@ -167,6 +171,32 @@ export default function TwitterPage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredPosts
 
+  // ─── Brand-wise overview ─────────────────────────────────────────────
+  function toggleBwSort(col: string) {
+    if (bwSortKey === col) setBwSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setBwSortKey(col); setBwSortDir('desc') }
+  }
+  const topPostByBrand: Record<string, V2XPost> = {}
+  displayPosts.forEach(p => {
+    if (!topPostByBrand[p.brand] || p.likes > topPostByBrand[p.brand].likes)
+      topPostByBrand[p.brand] = p
+  })
+  const sortedBrandOverview = [...displayX].sort((a, b) => {
+    if (a.brand === 'joola') return -1
+    if (b.brand === 'joola') return 1
+    const getV = (x: typeof a): number | string => {
+      if (bwSortKey === 'brand') return name(x.brand)
+      if (bwSortKey === 'tweets') return x.tweets
+      if (bwSortKey === 'engRate') return x.engRate
+      if (bwSortKey === 'delta') return x.delta ?? -9999
+      return x.followers
+    }
+    const av = getV(a), bv = getV(b)
+    if (typeof av === 'number' && typeof bv === 'number')
+      return bwSortDir === 'asc' ? av - bv : bv - av
+    return bwSortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+  })
+
   return (
     <>
       <PageHead title="X / TWITTER" />
@@ -178,6 +208,89 @@ export default function TwitterPage() {
         findings={twitterPlaybook(brands, displayX, displayPosts)}
         brands={brands}
       />
+
+      {/* ── Brand-wise Overview Table ── */}
+      <section style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>Brand-wise overview <SectionInfo title="X / Twitter Channel Overview" description="One row per brand — followers, growth, tweet count, engagement rate, and best-performing post. Click any row for full brand X activity." source="x_profiles_weekly · x_posts · latest snapshot" /></h2>
+            <div className="sub">{sortedBrandOverview.length} brands · click a row to view full details</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="table-wrap">
+            <table className="data" style={{ width: '100%' }}>
+              <thead><tr>
+                <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
+                <SortTh col="brand"    label="Brand"       sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
+                <SortTh col="followers" label="Followers"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
+                <SortTh col="delta"    label="Flw Δ (wk)"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
+                <SortTh col="tweets"   label="Tweets"      sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} />
+                <SortTh col="engRate"  label="Eng Rate"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
+                <th style={{ minWidth: 180 }}>Top Post</th>
+                <th style={{ width: 70, textAlign: 'center' }}>Profile</th>
+              </tr></thead>
+              <tbody>
+                {sortedBrandOverview.map((d, i) => {
+                  const isJ = d.brand === 'joola'
+                  const color = pgColor(d.brand)
+                  const tp = topPostByBrand[d.brand]
+                  return (
+                    <tr key={d.brand} className={isJ ? 'joola' : ''}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/twitter/brand/${encodeURIComponent(d.brand)}`)}
+                      title={`View ${name(d.brand)} X / Twitter details`}>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{i + 1}</td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                            <span style={{ fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{name(d.brand)}</span>
+                          </span>
+                          {X_HANDLES[d.brand] && <span style={{ paddingLeft: 15, fontSize: 10, color: 'var(--fg-4)' }}>@{X_HANDLES[d.brand]}</span>}
+                        </div>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'JetBrains Mono', color: isJ ? '#22c55e' : 'var(--fg)' }}>
+                        {d.followers > 0 ? fmt(d.followers) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {d.delta != null && d.delta !== 0 ? (
+                          <span style={{ fontWeight: 700, fontSize: 11, fontFamily: 'JetBrains Mono', color: d.delta >= 0 ? '#22c55e' : '#ef4444' }}>
+                            {d.delta >= 0 ? '+' : ''}{fmt(d.delta)}
+                          </span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: 'var(--fg-3)' }}>{d.tweets > 0 ? d.tweets : '—'}</td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {d.engRate > 0 ? (
+                          <span style={{ fontWeight: 700, fontFamily: 'JetBrains Mono', color: d.engRate > 3 ? '#22c55e' : d.engRate > 1 ? '#F5E625' : '#ef4444' }}>
+                            {d.engRate.toFixed(2)}%
+                          </span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td style={{ maxWidth: 200 }}>
+                        {tp ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontSize: 11, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }} title={tp.text}>
+                              {tp.text.slice(0, 60)}{tp.text.length > 60 ? '…' : ''}
+                            </span>
+                            <span style={{ fontSize: 10, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>♥ {fmt(tp.likes)} · 🔁 {fmt(tp.retweets)}</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No post data</span>}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        {X_HANDLES[d.brand] ? (
+                          <a href={`https://x.com/${X_HANDLES[d.brand]}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}>View ↗</a>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section style={{ marginBottom: 28 }}>
         <div className="section-head">

@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { BrandSummaryTable } from '@/components/v2/BrandSummaryTable'
+import { ProductDetailModal } from '@/components/v2/product-detail/ProductDetailModal'
 import {
   PageHead,
   FilterBanner,
@@ -67,6 +69,8 @@ function monthShortLabel(ym: string): string {
 
 // ─── Page ────────────────────────────────────────────────────────────
 export default function ProductIntelPage() {
+  const router = useRouter()
+  const [drillProduct, setDrillProduct] = useState<{ brand: string; productId: string } | null>(null)
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [intel, setIntel] = useState<ProductIntelData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -469,6 +473,15 @@ export default function ProductIntelPage() {
   // ─── Render ───────────────────────────────────────────────────────
   return (
     <>
+      {drillProduct && intel && (
+        <ProductDetailModal
+          brand={drillProduct.brand}
+          productId={drillProduct.productId}
+          intel={intel}
+          brands={brands}
+          onClose={() => setDrillProduct(null)}
+        />
+      )}
       <PageHead title="PRODUCT INTEL" />
       <FilterBanner />
 
@@ -727,7 +740,12 @@ export default function ProductIntelPage() {
               sortBy="attention"
               showEstUnitsSold={hasAnyEstUnits}
               showBestLag={hasAnyBestLag}
-              interpretation="Click any column header to sort. Brand and product search supported inline."
+              onRowClick={(brand, product) => {
+                const cp = intel?.curatedProducts?.find(c => c.display_name === product)
+                const pid = cp?.id || product
+                setDrillProduct({ brand, productId: pid })
+              }}
+              interpretation="Click any row to open product details · Click column headers to sort · Brand and product search supported inline."
             />
           </div></div>
         ) : leaderboardStatus.hasTimeseries || leaderboardStatus.hasLagScans ? (
@@ -785,7 +803,7 @@ export default function ProductIntelPage() {
                   const trendChar = trendDir === 'up' ? '▲' : trendDir === 'down' ? '▼' : '▬'
                   const trendColor = trendDir === 'up' ? '#22c55e' : trendDir === 'down' ? '#ef4444' : '#6b7280'
                   return (
-                    <tr key={row.productId} style={{ borderLeft: row.isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                    <tr key={row.productId} style={{ borderLeft: row.isJoola ? '2px solid #22c55e' : '2px solid transparent', cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: row.brandSlug, productId: row.productId })}>
                       <td style={{ color: row.isJoola ? '#22c55e' : 'var(--fg)', fontWeight: 600 }}>{row.productName}</td>
                       <td style={{ color: brandIdColor(row.brandId), fontWeight: 700, fontSize: 11.5 }}>{row.brand}</td>
                       <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace' }}>
@@ -852,7 +870,7 @@ export default function ProductIntelPage() {
                   const trendColor = trendDir === 'up' ? '#22c55e' : trendDir === 'down' ? '#ef4444' : '#6b7280'
                   const sl = row.salesLikelihood
                   return (
-                    <tr key={row.productId} style={{ borderLeft: '2px solid #22c55e' }}>
+                    <tr key={row.productId} style={{ borderLeft: '2px solid #22c55e', cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: 'joola', productId: row.productId })}>
                       <td style={{ color: '#22c55e', fontWeight: 600 }}>{row.productName}</td>
                       <td style={{ fontSize: 11, color: 'var(--fg-3)' }}>{row.category || '—'}</td>
                       <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace' }}>
@@ -1008,7 +1026,14 @@ export default function ProductIntelPage() {
                   const trendColor = p.trend === 'up' ? '#22c55e' : p.trend === 'down' ? '#ef4444' : p.trend === 'flat' ? '#6b7280' : 'var(--fg-4)'
                   const isJoola = p.brandSlug === 'joola'
                   return (
-                    <tr key={p.id} style={{ borderLeft: isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                    <tr key={p.id}
+                      style={{ borderLeft: isJoola ? '2px solid #22c55e' : '2px solid transparent', cursor: 'pointer' }}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('a')) return
+                        // Use curated product ID for the rich detail page when available
+                        const curatedId = intel?.productMatches?.catalogToCurated.get(p.id)
+                        setDrillProduct({ brand: p.brandSlug, productId: curatedId || p.name || p.id })
+                      }}>
                       <td>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           <span className="brand-dot" style={{ background: pgColor(p.brandSlug) }} />
@@ -1094,7 +1119,7 @@ export default function ProductIntelPage() {
                     const grow = r.growthPct
                     const growColor = grow == null ? 'var(--fg-4)' : grow > 0 ? '#22c55e' : grow < 0 ? '#ef4444' : 'var(--fg-3)'
                     return (
-                      <tr key={r.productId}>
+                      <tr key={r.productId} style={{ cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: r.brandSlug, productId: r.productId })}>
                         <td style={{ color: 'var(--fg)', fontWeight: 600 }}>{r.productName}</td>
                         <td>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1242,7 +1267,7 @@ export default function ProductIntelPage() {
                       { key: 'promotions', label: 'Promos' },
                     ]
                     return (
-                      <tr key={r.productId} style={{ borderLeft: r.isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                      <tr key={r.productId} style={{ borderLeft: r.isJoola ? '2px solid #22c55e' : '2px solid transparent', cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: r.brandSlug, productId: r.productId })}>
                         <td style={{ color: r.isJoola ? '#22c55e' : 'var(--fg)', fontWeight: 600 }}>{r.productName}</td>
                         <td>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1329,7 +1354,7 @@ export default function ProductIntelPage() {
                   {launchData.rows.filter(r => allowedSlugs.has(r.brandSlug)).map((r) => {
                     const isJoola = r.brandSlug === 'joola'
                     return (
-                      <tr key={r.productId} style={{ borderLeft: isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                      <tr key={r.productId} style={{ borderLeft: isJoola ? '2px solid #22c55e' : '2px solid transparent', cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: r.brandSlug, productId: r.productId })}>
                         <td style={{ color: isJoola ? '#22c55e' : 'var(--fg)', fontWeight: 600 }}>{r.productName}</td>
                         <td>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

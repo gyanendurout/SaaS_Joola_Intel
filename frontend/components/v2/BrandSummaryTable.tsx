@@ -69,9 +69,7 @@ export function BrandSummaryTable({ catalogStats, daily, brands, curatedProducts
             <tr>
               <th style={{ textAlign: 'left' }}>Brand</th>
               <th style={{ textAlign: 'right' }}>Number of Products</th>
-              <th style={{ textAlign: 'left' }}>Top Performing Product</th>
               <th style={{ textAlign: 'right' }}>Avg Price</th>
-              <th style={{ textAlign: 'center' }}>Trend (30d)</th>
             </tr>
           </thead>
           <tbody>
@@ -95,14 +93,8 @@ export function BrandSummaryTable({ catalogStats, daily, brands, curatedProducts
                     </span>
                   </td>
                   <td style={{ textAlign: 'right' }}>{r.productCount}</td>
-                  <td style={{ textAlign: 'left', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: '#e2e8f0', fontWeight: 600 }}
-                    title={`Top product by community activity: ${r.topProduct}`}>{r.topProduct}</td>
                   <td style={{ textAlign: 'right', color: r.avgPrice > 0 ? '#60a5fa' : '#3a4150', fontVariantNumeric: 'tabular-nums' }}>
                     {r.avgPrice > 0 ? `$${r.avgPrice.toFixed(0)}` : '—'}
-                  </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <span title={r.trend === 'unknown' ? 'Not enough data' : `Last 30d: ${r.last30} vs prev 30d: ${r.prev30}`}
-                      style={{ color: trendColor, fontWeight: 700, fontSize: 13, cursor: 'help' }}>{trendIcon}</span>
                   </td>
                 </tr>
               )
