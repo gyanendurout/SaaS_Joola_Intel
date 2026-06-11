@@ -433,7 +433,7 @@ export type EQMatrixDatum = {
   color: string; posts?: number
 }
 
-export function EngagementQualityMatrix({ data, w = 760, h = 380 }: { data: EQMatrixDatum[]; w?: number; h?: number }) {
+export function EngagementQualityMatrix({ data, w = 760, h = 380, onBubbleClick }: { data: EQMatrixDatum[]; w?: number; h?: number; onBubbleClick?: (d: EQMatrixDatum) => void }) {
   const padL = 60, padR = 30, padT = 30, padB = 52
   const innerW = w - padL - padR
   const innerH = h - padT - padB
@@ -512,7 +512,8 @@ export function EngagementQualityMatrix({ data, w = 760, h = 380 }: { data: EQMa
           return (
             <g key={i} style={{ cursor: 'pointer' }}
               onMouseEnter={() => setHover({ ...d, cx, cy })}
-              onMouseLeave={() => setHover(null)}>
+              onMouseLeave={() => setHover(null)}
+              onClick={() => onBubbleClick?.(d)}>
               <circle cx={cx} cy={cy} r={dotR + (isHov ? 10 : 5)} fill={d.color}
                 opacity={isHov ? 0.22 : 0.10}
                 style={{ transition: 'r 200ms, opacity 200ms' }} />

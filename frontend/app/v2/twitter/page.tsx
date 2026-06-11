@@ -49,10 +49,16 @@ export default function TwitterPage() {
   const [erBrandFilter, setErBrandFilter] = useState('')
   const [bwSortKey, setBwSortKey] = useState<string>('followers')
   const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
+  const [selectedDot, setSelectedDot] = useState<V2XRow | null>(null)
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, effectiveFrom, effectiveTo } = useDateRange()
 
   useEffect(() => { document.title = 'JOOLA INTEL — X / Twitter' }, [])
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedDot(null) }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
@@ -367,22 +373,114 @@ export default function TwitterPage() {
                 <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
                 <text x={W / 2} y={H - 6} fill="#8a93a4" fontSize="10" textAnchor="middle">Tweets sampled</text>
                 <text x={12} y={H / 2} fill="#8a93a4" fontSize="10" textAnchor="middle" transform={`rotate(-90 12 ${H / 2})`}>Followers</text>
-                {data.map(d => (
-                  <g key={d.brand}>
-                    <circle cx={x(d.tweets)} cy={y(d.followers)} r={d.brand === 'joola' ? 8 : 6}
-                      fill={pgColor(d.brand)} fillOpacity={0.75}
-                      stroke={d.brand === 'joola' ? '#22c55e' : 'transparent'} strokeWidth={2}>
-                      <title>{name(d.brand)} · {d.tweets} tweets · {fmt(d.followers)} followers</title>
-                    </circle>
-                    <text x={x(d.tweets)} y={y(d.followers) - 10} textAnchor="middle" fill={d.brand === 'joola' ? '#22c55e' : '#cbd1dc'} fontSize="10" fontWeight={d.brand === 'joola' ? 800 : 500}>
-                      {name(d.brand)}
-                    </text>
-                  </g>
-                ))}
+                {data.map(d => {
+                  const isJ = d.brand === 'joola'
+                  const cx = x(d.tweets), cy = y(d.followers)
+                  const r = isJ ? 8 : 6
+                  return (
+                    <g key={d.brand} style={{ cursor: 'pointer' }} onClick={() => setSelectedDot(d)}>
+                      <circle cx={cx} cy={cy} r={r + 10} fill="transparent" />
+                      <circle cx={cx} cy={cy} r={r}
+                        fill={pgColor(d.brand)} fillOpacity={0.85}
+                        stroke={isJ ? '#22c55e' : 'rgba(255,255,255,0.25)'} strokeWidth={isJ ? 2 : 1}>
+                        <title>{name(d.brand)} · {d.tweets} tweets · {fmt(d.followers)} followers · click for details</title>
+                      </circle>
+                      <text x={cx} y={cy - r - 6} textAnchor="middle"
+                        fill={isJ ? '#22c55e' : '#cbd1dc'} fontSize="10" fontWeight={isJ ? 800 : 500}>
+                        {name(d.brand)}
+                      </text>
+                    </g>
+                  )
+                })}
               </svg>
             )
           })()}
         </div></div>
+
+        {/* ── Brand detail modal ── */}
+        {selectedDot && (() => {
+          const d = selectedDot
+          const bColor = pgColor(d.brand)
+          const isJ = d.brand === 'joola'
+          const handle = X_HANDLES[d.brand] || d.handle
+          const topPost = displayPosts.filter(p => p.brand === d.brand).sort((a, b) => b.likes - a.likes)[0]
+          return (
+            <div onClick={() => setSelectedDot(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+              <div onClick={e => e.stopPropagation()}
+                style={{ background: '#0d1117', border: `1px solid ${bColor}55`, borderRadius: 16, width: '100%', maxWidth: 520, overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px ${bColor}22` }}>
+
+                {/* Header */}
+                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, rgba(13,17,23,0) 70%)`, padding: '20px 22px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: bColor, boxShadow: `0 0 18px ${bColor}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.26 5.632 5.903-5.632z"/></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: isJ ? '#22c55e' : '#fff' }}>{name(d.brand)}</div>
+                      {handle && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>@{handle}</div>}
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedDot(null)}
+                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
+                </div>
+
+                {/* Stats grid */}
+                <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Followers',   value: fmt(d.followers),  color: isJ ? '#22c55e' : bColor },
+                      { label: 'Following',   value: fmt(d.following),  color: 'var(--fg-2)' },
+                      { label: 'Tweets',      value: String(d.tweets),  color: 'var(--fg-2)' },
+                      { label: 'Eng Rate',    value: d.engRate > 0 ? d.engRate.toFixed(2) + '%' : '—', color: d.engRate > 3 ? '#22c55e' : d.engRate > 1 ? '#F5E625' : '#ef4444' },
+                      { label: 'Flw Growth',  value: d.delta != null ? (d.delta >= 0 ? '+' : '') + fmt(d.delta) : '—', color: d.delta != null ? (d.delta >= 0 ? '#22c55e' : '#ef4444') : 'var(--fg-4)' },
+                      { label: 'Flw Growth %', value: d.deltaPct != null ? (d.deltaPct >= 0 ? '+' : '') + d.deltaPct.toFixed(2) + '%' : '—', color: d.deltaPct != null ? (d.deltaPct >= 0 ? '#22c55e' : '#ef4444') : 'var(--fg-4)' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid rgba(255,255,255,0.07)`, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color, fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Top post preview */}
+                  {topPost && (
+                    <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 10, borderLeft: `3px solid ${bColor}` }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: bColor, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 7 }}>Top post</div>
+                      <p style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.55, margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{topPost.text}</p>
+                      <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
+                        <span style={{ fontSize: 11, color: '#f97316', fontFamily: 'JetBrains Mono', fontWeight: 700 }}>♥ {fmt(topPost.likes)}</span>
+                        <span style={{ fontSize: 11, color: '#22c55e', fontFamily: 'JetBrains Mono' }}>🔁 {fmt(topPost.retweets)}</span>
+                        <span style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'JetBrains Mono' }}>💬 {fmt(topPost.replies)}</span>
+                        {topPost.views > 0 && <span style={{ fontSize: 11, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>👁 {fmt(topPost.views)}</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CTAs */}
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {handle && (
+                      <a href={`https://x.com/${handle}`} target="_blank" rel="noopener noreferrer"
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#000', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '10px 0', color: '#fff', fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.26 5.632 5.903-5.632z"/></svg>
+                        View Profile ↗
+                      </a>
+                    )}
+                    <button onClick={() => { setSelectedDot(null); router.push(`/v2/twitter/brand/${encodeURIComponent(d.brand)}`) }}
+                      style={{ flex: 1, background: bColor, border: 'none', borderRadius: 10, padding: '10px 0', color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                      Full Detail →
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ padding: '8px 22px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>X / Twitter Intelligence · {name(d.brand)}</span>
+                  <span>Esc or click outside to close</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </section>
 
       <section>

@@ -8,7 +8,7 @@ import {
   type V2Brand, type V2TikTokRow, type V2TikTokVideo,
   type V2TikTokCommentStats, type V2TikTokPaddleMention,
 } from '@/lib/v2/data'
-import { fmt } from '@/components/v2/charts'
+import { fmt, Donut } from '@/components/v2/charts'
 import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { tiktokPlaybook } from '@/lib/v2/playbook'
@@ -52,11 +52,17 @@ export default function TikTokPage() {
   const [vpvBrandFilter, setVpvBrandFilter] = useState('')
   const [bwSortKey, setBwSortKey] = useState<string>('followers')
   const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
+  const [selectedVideo, setSelectedVideo] = useState<V2TikTokVideo | null>(null)
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, effectiveFrom, effectiveTo } = useDateRange()
   const router = useRouter()
 
   useEffect(() => { document.title = 'JOOLA INTEL — TikTok' }, [])
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedVideo(null) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
@@ -361,25 +367,41 @@ export default function TikTokPage() {
                 <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
                   No paddle mentions yet — run tiktok_enrichment.py.
                 </div>
-              ) : (
-                <div>
-                  {paddleMentions.map((p, i) => {
-                    const max = paddleMentions[0]?.mentions || 1
-                    return (
-                      <div key={i} className={'bar-row ' + (p.brand === 'joola' ? 'joola' : '')} style={{ gridTemplateColumns: '160px 1fr 50px' }}>
-                        <div className="lbl" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <span style={{ fontSize: 12 }}>{p.paddle}</span>
-                          <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{name(p.brand)}</span>
-                        </div>
-                        <div className="track">
-                          <div className="fill" style={{ width: Math.max(2, p.mentions / max * 100) + '%', background: `linear-gradient(90deg, ${pgColor(p.brand)}, ${pgColor(p.brand)}99)` }} />
-                        </div>
-                        <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(p.mentions)}</div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+              ) : (() => {
+                const top = paddleMentions.slice(0, 12)
+                const total = top.reduce((s, p) => s + p.mentions, 0)
+                const donutData = top.map(p => ({
+                  name: p.paddle,
+                  value: p.mentions,
+                  color: pgColor(p.brand),
+                }))
+                return (
+                  <div style={{ display: 'flex', gap: 28, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    {/* Donut */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <Donut data={donutData} size={220} thickness={36} centerLabel={String(total)} centerSub="mentions" />
+                    </div>
+                    {/* Legend */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 7, minWidth: 180 }}>
+                      {top.map((p, i) => {
+                        const pct = total > 0 ? Math.round((p.mentions / total) * 100) : 0
+                        const c = pgColor(p.brand)
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <span style={{ width: 10, height: 10, borderRadius: 2, background: c, flexShrink: 0 }} />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: p.brand === 'joola' ? '#22c55e' : 'var(--fg)' }}>{p.paddle}</span>
+                              <span style={{ fontSize: 10, color: 'var(--fg-4)', marginLeft: 6 }}>{name(p.brand)}</span>
+                            </div>
+                            <span style={{ fontSize: 10, color: 'var(--fg-4)', minWidth: 28, textAlign: 'right' }}>{pct}%</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: c, fontFamily: 'JetBrains Mono', minWidth: 20, textAlign: 'right' }}>{p.mentions}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
             </div></div>
           </div>
         </div>
@@ -409,22 +431,115 @@ export default function TikTokPage() {
             const xScale = (v: number) => padL + (Math.log10(v + 1) / Math.log10(maxV + 1)) * (W - padL - padR)
             const yScale = (c: number) => H - padB - (Math.log10(c + 1) / Math.log10(maxC + 1)) * (H - padT - padB)
             return (
-              <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+              <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', cursor: 'pointer' }}>
                 <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
                 <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
                 <text x={W / 2} y={H - 6} fill="#8a93a4" fontSize="10" textAnchor="middle">Views (log scale)</text>
                 <text x={12} y={H / 2} fill="#8a93a4" fontSize="10" textAnchor="middle" transform={`rotate(-90 12 ${H / 2})`}>Comments (log scale)</text>
-                {sample.map((v, i) => (
-                  <circle key={i} cx={xScale(v.views)} cy={yScale(v.comments)} r={v.brand === 'joola' ? 5 : 3}
-                    fill={pgColor(v.brand)} fillOpacity={0.7}
-                    stroke={v.brand === 'joola' ? '#22c55e' : 'transparent'} strokeWidth={1.5}>
-                    <title>{name(v.brand)} · {fmt(v.views)} views · {fmt(v.comments)} comments</title>
-                  </circle>
-                ))}
+                {sample.map((v, i) => {
+                  const isJ = v.brand === 'joola'
+                  const cx = xScale(v.views), cy = yScale(v.comments)
+                  const r = isJ ? 8 : 5
+                  return (
+                    <g key={i} style={{ cursor: 'pointer' }} onClick={() => setSelectedVideo(v)}>
+                      {/* invisible larger hit area */}
+                      <circle cx={cx} cy={cy} r={r + 8} fill="transparent" />
+                      <circle cx={cx} cy={cy} r={r}
+                        fill={pgColor(v.brand)} fillOpacity={0.85}
+                        stroke={isJ ? '#22c55e' : 'rgba(255,255,255,0.25)'} strokeWidth={isJ ? 2 : 1}
+                        style={{ transition: 'r 120ms' }}>
+                        <title>{name(v.brand)} · {fmt(v.views)} views · {fmt(v.comments)} comments · click for details</title>
+                      </circle>
+                    </g>
+                  )
+                })}
               </svg>
             )
           })()}
         </div></div>
+
+        {/* ── Video detail modal ── */}
+        {selectedVideo && (() => {
+          const v = selectedVideo
+          const bColor = pgColor(v.brand)
+          const isJ = v.brand === 'joola'
+          const engRate = v.views > 0 ? (((v.likes + v.comments) / v.views) * 100).toFixed(2) : '0'
+          const watchUrl = v.video_url || `https://www.tiktok.com/search?q=${encodeURIComponent(v.text?.slice(0, 40) ?? '')}`
+          return (
+            <div onClick={() => setSelectedVideo(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+              <div onClick={e => e.stopPropagation()}
+                style={{ background: '#0d1117', border: `1px solid ${bColor}55`, borderRadius: 16, width: '100%', maxWidth: 560, overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px ${bColor}22` }}>
+
+                {/* Header */}
+                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, rgba(13,17,23,0) 70%)`, padding: '20px 22px 18px', borderBottom: `1px solid rgba(255,255,255,0.07)`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: bColor, boxShadow: `0 0 18px ${bColor}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-2.47 12 12 0 00-11.64 0A4.83 4.83 0 01.41 6.69 49.11 49.11 0 000 12a49.11 49.11 0 00.41 5.31 4.83 4.83 0 003.77 2.47 12 12 0 0011.64 0 4.83 4.83 0 003.77-2.47A49.11 49.11 0 0024 12a49.11 49.11 0 00-.41-5.31zM9.75 15.02V8.98l6 3.02z"/></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: isJ ? '#22c55e' : '#fff' }}>{name(v.brand)}</div>
+                      {v.handle && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>@{v.handle}</div>}
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedVideo(null)}
+                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
+                </div>
+
+                {/* Body */}
+                <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Caption */}
+                  {v.text && (
+                    <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, borderLeft: `3px solid ${bColor}` }}>
+                      {v.text}
+                    </p>
+                  )}
+
+                  {/* Stats grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Views',    value: fmt(v.views),    color: '#F5E625', icon: '👁' },
+                      { label: 'Likes',    value: fmt(v.likes),    color: '#f97316', icon: '♥' },
+                      { label: 'Comments', value: fmt(v.comments), color: '#a78bfa', icon: '💬' },
+                      { label: 'Shares',   value: fmt(v.shares),   color: '#34d399', icon: '↗' },
+                    ].map(({ label, value, color: c, icon }) => (
+                      <div key={label} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${c}22`, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
+                        <div style={{ fontSize: 16, marginBottom: 4 }}>{icon}</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: c, fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
+                        <div style={{ fontSize: 10, color: 'var(--fg-4)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Eng rate + posted */}
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>Engagement rate</span>
+                      <span style={{ fontSize: 14, fontWeight: 800, color: Number(engRate) > 5 ? '#22c55e' : Number(engRate) > 2 ? '#F5E625' : '#ef4444', fontFamily: 'JetBrains Mono' }}>{engRate}%</span>
+                    </div>
+                    <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>Posted</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-2)', fontFamily: 'JetBrains Mono' }}>{v.days === 0 ? 'Today' : `${v.days}d ago`}</span>
+                    </div>
+                  </div>
+
+                  {/* CTA */}
+                  <a href={watchUrl} target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: bColor, borderRadius: 10, padding: '11px 0', color: '#000', fontWeight: 800, fontSize: 13, textDecoration: 'none' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-2.47 12 12 0 00-11.64 0A4.83 4.83 0 01.41 6.69 49.11 49.11 0 000 12a49.11 49.11 0 00.41 5.31 4.83 4.83 0 003.77 2.47 12 12 0 0011.64 0 4.83 4.83 0 003.77-2.47A49.11 49.11 0 0024 12a49.11 49.11 0 00-.41-5.31zM9.75 15.02V8.98l6 3.02z"/></svg>
+                    Watch on TikTok ↗
+                  </a>
+                </div>
+
+                {/* Footer */}
+                <div style={{ padding: '10px 22px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>TikTok Video Intelligence · {name(v.brand)}</span>
+                  <span>Press Esc or click outside to close</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </section>
 
       <section>

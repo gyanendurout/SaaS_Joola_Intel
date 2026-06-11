@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { PageHead, MiniKpi, SectionInfo, LoadingPage, SortTh, ColumnFilter, pgColor } from '@/components/v2/PageShell'
 import { fmt, ScatterChart, type ScatterDatum } from '@/components/v2/charts'
@@ -143,6 +144,9 @@ export default function SalesIntelPage() {
   const [revSortKey, setRevSortKey] = useState<string | null>(null)
   const [revSortDir, setRevSortDir] = useState<'asc' | 'desc'>('desc')
   const [revColFilter, setRevColFilter] = useState<Record<string, string>>({})
+  const [ovSortKey, setOvSortKey] = useState<string>('total')
+  const [ovSortDir, setOvSortDir] = useState<'asc' | 'desc'>('desc')
+  const router = useRouter()
 
   function toggleStock(k: string) {
     if (stockSortKey === k) setStockSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -443,6 +447,50 @@ export default function SalesIntelPage() {
     })
   }, [revenueRows, revColFilter, revSortKey, revSortDir])
 
+  // ─── Brand overview (aggregated per-brand signals) ─────────────────
+  const brandOverview = useMemo(() => {
+    function toggleOvSort(col: string) {
+      if (ovSortKey === col) setOvSortDir(d => d === 'asc' ? 'desc' : 'asc')
+      else { setOvSortKey(col); setOvSortDir('desc') }
+    }
+    return { toggleOvSort }
+  }, [ovSortKey])
+
+  const brandOverviewRows = useMemo(() => {
+    return brandCards.map(card => {
+      const slug = card.brand.slug
+      const stockouts = stockoutRows.filter(r => r.brandSlug === slug).length
+      const prices = priceRows2.filter(r => r.brandSlug === slug)
+      const avgDiscount = prices.length
+        ? prices.reduce((s, r) => s + (r.discountPct ?? 0), 0) / prices.length
+        : null
+      const avgPrice = revenueRows.find(r => r.brand.slug === slug)?.avgPrice ?? null
+      const cadence = cadenceRows.filter(r => r.brandSlug === slug)
+      const demand = cadence.reduce((s, r) => s + r.demand30d, 0)
+      const patterns = cadence.map(r => r.pattern)
+      const topPattern = patterns.length
+        ? (['Frequent', 'Steady', 'Occasional', 'Single restock'] as const)
+            .find(p => patterns.includes(p)) ?? patterns[0]
+        : null
+      return { brand: card.brand, total: card.total, inStock: card.inStock, outStock: card.outStock, limited: card.limited, confidence: card.confidence, stockouts, avgDiscount, avgPrice, demand, topPattern }
+    }).sort((a, b) => {
+      if (a.brand.slug === 'joola') return -1
+      if (b.brand.slug === 'joola') return 1
+      const getV = (x: typeof a): number | string => {
+        if (ovSortKey === 'brand') return x.brand.name
+        if (ovSortKey === 'inStock') return x.inStock
+        if (ovSortKey === 'outStock') return x.outStock
+        if (ovSortKey === 'stockouts') return x.stockouts
+        if (ovSortKey === 'avgPrice') return x.avgPrice ?? -1
+        if (ovSortKey === 'demand') return x.demand
+        return x.total
+      }
+      const av = getV(a), bv = getV(b)
+      if (typeof av === 'number' && typeof bv === 'number') return ovSortDir === 'asc' ? av - bv : bv - av
+      return ovSortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+    })
+  }, [brandCards, stockoutRows, priceRows2, cadenceRows, revenueRows, ovSortKey, ovSortDir])
+
   // ─── Render ────────────────────────────────────────────────────────
   if (loading) return <LoadingPage />
 
@@ -503,6 +551,92 @@ export default function SalesIntelPage() {
             customVs={`of ${brands.length} tracked`}
             tip="How many of the 11 tracked brands returned at least one stock snapshot this window. If this is low, scraper coverage needs a check before drawing conclusions from the page."
           />
+        </div>
+      </section>
+
+      {/* ─── Brand Overview Table ──────────────────────────────────── */}
+      <section style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>Brand-wise overview
+              <SectionInfo title="Sales Intel — Brand Overview" description="Per-brand summary: products tracked, stock health, stockout opportunities, avg price, demand signal, and restock cadence. Click any row to see full brand-level detail." source="product_snapshots · inventory_events · price_daily · product_attention_summary" />
+            </h2>
+            <div className="sub">{brandOverviewRows.length} brands · click a row for full sales detail</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="table-wrap">
+            <table className="data" style={{ width: '100%' }}>
+              <thead><tr>
+                <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
+                <SortTh col="brand"    label="Brand"         sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ minWidth: 130 }} />
+                <SortTh col="total"    label="Products"      sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 80 }} />
+                <SortTh col="inStock"  label="In Stock"      sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 80 }} />
+                <SortTh col="outStock" label="Out of Stock"  sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 90 }} />
+                <th style={{ minWidth: 120 }}>Stock Health</th>
+                <SortTh col="stockouts" label="Stockout Opps" sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 100 }} />
+                <SortTh col="avgPrice" label="Avg Price"     sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 85 }} />
+                <SortTh col="demand"   label="Demand 30d"    sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 90 }} />
+                <th style={{ width: 110 }}>Restock Pattern</th>
+                <th style={{ width: 70, textAlign: 'center' }}>Detail</th>
+              </tr></thead>
+              <tbody>
+                {brandOverviewRows.map((row, i) => {
+                  const isJ = row.brand.slug === 'joola'
+                  const color = brandColor(row.brand.slug)
+                  const inPct = row.total > 0 ? Math.round((row.inStock / row.total) * 100) : 0
+                  const patternColor = row.topPattern === 'Frequent' ? '#22c55e' : row.topPattern === 'Steady' ? '#F5E625' : row.topPattern === 'Occasional' ? '#fb923c' : '#6b7280'
+                  return (
+                    <tr key={row.brand.slug} className={isJ ? 'joola' : ''}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/sales-intel/brand/${encodeURIComponent(row.brand.slug)}`)}
+                      title={`View ${row.brand.name} sales detail`}>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{i + 1}</td>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{row.brand.name}</span>
+                        </span>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{row.total || '—'}</td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, color: '#22c55e', fontFamily: 'JetBrains Mono' }}>{row.inStock > 0 ? row.inStock : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, color: row.outStock > 0 ? '#ef4444' : 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{row.outStock > 0 ? row.outStock : '—'}</td>
+                      <td>
+                        {row.total > 0 ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', minWidth: 60 }}>
+                              <div style={{ height: '100%', width: `${inPct}%`, background: inPct > 70 ? '#22c55e' : inPct > 40 ? '#F5E625' : '#ef4444', borderRadius: 99 }} />
+                            </div>
+                            <span style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--fg-3)', minWidth: 30 }}>{inPct}%</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No data</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {row.stockouts > 0 ? (
+                          <span style={{ fontWeight: 700, color: '#fb923c', fontFamily: 'JetBrains Mono', fontSize: 12 }}>{row.stockouts}</span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: 'var(--fg-2)', fontWeight: 600 }}>
+                        {row.avgPrice != null ? `$${Math.round(row.avgPrice)}` : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: '#818cf8', fontWeight: 700 }}>
+                        {row.demand > 0 ? fmt(row.demand) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td>
+                        {row.topPattern ? (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: patternColor + '18', color: patternColor, border: `1px solid ${patternColor}44` }}>{row.topPattern}</span>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span>}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <button onClick={() => router.push(`/v2/sales-intel/brand/${encodeURIComponent(row.brand.slug)}`)}
+                          className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}>Detail →</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

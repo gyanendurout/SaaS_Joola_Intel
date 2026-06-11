@@ -65,12 +65,18 @@ export default function InstagramPage() {
   const [formatFilter, setFormatFilter] = useState<'all' | 'reels' | 'carousels' | 'images'>('all')
   const [colFilter, setColFilter] = useState<Record<string, string>>({})
   const [igDrillBrand, setIgDrillBrand] = useState<string | null>(null)
+  const [selectedEQDot, setSelectedEQDot] = useState<import('@/components/v2/charts').EQMatrixDatum | null>(null)
   const [bwSortKey, setBwSortKey] = useState<string>('followers')
   const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, effectiveFrom, effectiveTo } = useDateRange()
 
   useEffect(() => { document.title = 'JOOLA INTEL — Instagram' }, [])
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedEQDot(null) }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
@@ -867,8 +873,99 @@ export default function InstagramPage() {
           </div>
         </div>
         <div className="card"><div className="card-pad-lg">
-          <EngagementQualityMatrix data={eqData} />
+          <EngagementQualityMatrix data={eqData} onBubbleClick={d => setSelectedEQDot(d)} />
         </div></div>
+
+        {/* ── EQ dot detail modal ── */}
+        {selectedEQDot && (() => {
+          const d = selectedEQDot
+          const bColor = pgColor(d.brand)
+          const isJ = d.brand === 'joola'
+          const igRow = displayIg.find(r => r.brand === d.brand)
+          const erRank = erSorted.findIndex(r => r.brand === d.brand) + 1
+          const erLabel = d.engRate > 3 ? 'Excellent' : d.engRate > 1 ? 'Solid' : 'Low'
+          const erLabelColor = d.engRate > 3 ? '#22c55e' : d.engRate > 1 ? '#F5E625' : '#ef4444'
+          const xMid = 150000 * 0.25
+          const quadrant = d.followers > xMid && d.engRate > (d.engRate / 2)
+            ? (d.followers > xMid ? (d.engRate > 1.25 ? 'High Value' : 'Big Reach · Low Eng') : (d.engRate > 1.25 ? 'High Eng · Small Reach' : 'Underperforming'))
+            : 'Underperforming'
+          const handle = IG_HANDLES[d.brand]
+          return (
+            <div onClick={() => setSelectedEQDot(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+              <div onClick={e => e.stopPropagation()}
+                style={{ background: '#0d1117', border: `1px solid ${bColor}55`, borderRadius: 16, width: '100%', maxWidth: 500, overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px ${bColor}22` }}>
+
+                {/* Header */}
+                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, rgba(13,17,23,0) 70%)`, padding: '20px 22px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: bColor, boxShadow: `0 0 18px ${bColor}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: isJ ? '#22c55e' : '#fff' }}>{d.name}</div>
+                      {handle && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>@{handle} · Instagram</div>}
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedEQDot(null)}
+                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
+                </div>
+
+                {/* Stats */}
+                <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Followers',   value: fmt(d.followers),             color: isJ ? '#22c55e' : bColor },
+                      { label: 'Eng Rate',    value: d.engRate.toFixed(2) + '%',   color: erLabelColor },
+                      { label: 'ER Rank',     value: erRank > 0 ? `#${erRank}` : '—', color: '#F5E625' },
+                      { label: 'Posts Sampled', value: d.posts ? String(d.posts) : '—', color: 'var(--fg-2)' },
+                      { label: 'Flw Growth',  value: igRow?.deltaPct != null ? (igRow.deltaPct >= 0 ? '+' : '') + igRow.deltaPct.toFixed(2) + '%' : '—', color: igRow?.deltaPct != null ? (igRow.deltaPct >= 0 ? '#22c55e' : '#ef4444') : 'var(--fg-4)' },
+                      { label: 'ER Tier',     value: erLabel,                       color: erLabelColor },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid rgba(255,255,255,0.07)`, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color, fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Engagement rate bar */}
+                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 11 }}>
+                      <span style={{ color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', fontSize: 9, fontWeight: 700 }}>Engagement rate vs best in class</span>
+                      <span style={{ color: erLabelColor, fontWeight: 700, fontFamily: 'JetBrains Mono' }}>{d.engRate.toFixed(2)}%</span>
+                    </div>
+                    <div style={{ height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, (d.engRate / Math.max(1, ...eqData.map(e => e.engRate))) * 100)}%`, background: erLabelColor, borderRadius: 99, transition: 'width 0.5s ease' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 9, color: 'var(--fg-4)' }}>
+                      <span>0%</span><span style={{ color: '#F5E625' }}>3% excellent</span><span>{Math.max(...eqData.map(e => e.engRate)).toFixed(1)}% max</span>
+                    </div>
+                  </div>
+
+                  {/* CTAs */}
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {handle && (
+                      <a href={`https://www.instagram.com/${handle}`} target="_blank" rel="noopener noreferrer"
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)', borderRadius: 10, padding: '10px 0', color: '#fff', fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
+                        View on Instagram ↗
+                      </a>
+                    )}
+                    <button onClick={() => { setSelectedEQDot(null); setIgDrillBrand(d.brand) }}
+                      style={{ flex: 1, background: bColor, border: 'none', borderRadius: 10, padding: '10px 0', color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                      Full Brand Detail →
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ padding: '8px 22px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Instagram Intelligence · {d.name}</span>
+                  <span>Esc or click outside to close</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </section>
 
       {/* ── Brand-wise Analysis ── */}
