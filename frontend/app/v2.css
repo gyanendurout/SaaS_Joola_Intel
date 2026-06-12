@@ -2021,3 +2021,136 @@ html { scroll-behavior: smooth; }
   font-size: 12px;
   vertical-align: middle;
 }
+
+/* ─── Light theme ──────────────────────────────────────────────────────
+   Applied by toggling <html class="theme-light">. Sidebar stays dark.
+   ─────────────────────────────────────────────────────────────────── */
+html.theme-light .v2-root {
+  --bg:       #f0f2f8;
+  --bg-2:     #e6e9f2;
+  --surface:  #ffffff;
+  --surface-2:#f2f4f9;
+  --line:     rgba(0,0,0,0.09);
+  --line-2:   rgba(0,0,0,0.05);
+  --fg:       #0d1117;
+  --fg-2:     #1e2533;
+  --fg-3:     #374151;
+  --fg-4:     #6b7280;
+  --muted:    #8a93a2;
+  background: var(--bg);
+  color: var(--fg);
+}
+/* Main content area */
+html.theme-light .v2-root .main { background: var(--bg); }
+
+/* Sidebar stays dark */
+html.theme-light .v2-root .sidebar {
+  background: #0f1219;
+  border-right-color: rgba(255,255,255,0.06);
+}
+
+/* Cards */
+html.theme-light .v2-root .card {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.09);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+html.theme-light .v2-root .card-pad,
+html.theme-light .v2-root .card-pad-lg { background: transparent; }
+
+/* KPI cards */
+html.theme-light .v2-root .kpi,
+html.theme-light .v2-root .brief-card,
+html.theme-light .v2-root .opp-card {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.09);
+}
+
+/* Section head */
+html.theme-light .v2-root .section-head { border-color: rgba(0,0,0,0.08); }
+
+/* Tables */
+html.theme-light .v2-root table.data thead tr {
+  background: #f2f4f9;
+  border-bottom-color: rgba(0,0,0,0.09);
+}
+html.theme-light .v2-root table.data thead th { color: var(--fg-4); }
+html.theme-light .v2-root table.data tbody tr { border-bottom-color: rgba(0,0,0,0.05); }
+html.theme-light .v2-root table.data tbody tr:hover {
+  background: rgba(0,0,0,0.03);
+  box-shadow: none;
+  transform: none;
+}
+html.theme-light .v2-root .table-wrap { background: transparent; }
+
+/* Bar rows */
+html.theme-light .v2-root .bar-row { border-color: rgba(0,0,0,0.06); }
+html.theme-light .v2-root .bar-row:hover { background: rgba(0,0,0,0.03); }
+html.theme-light .v2-root .bar-row .track { background: rgba(0,0,0,0.07); }
+
+/* Buttons + selects */
+html.theme-light .v2-root .btn,
+html.theme-light .v2-root .select {
+  border-color: rgba(0,0,0,0.14);
+  color: var(--fg-2);
+  background: transparent;
+}
+html.theme-light .v2-root .btn:hover,
+html.theme-light .v2-root .select:hover {
+  border-color: rgba(0,0,0,0.24);
+  color: var(--fg);
+}
+html.theme-light .v2-root .btn-ghost {
+  border-color: rgba(0,0,0,0.14);
+  color: var(--fg-3);
+}
+
+/* Scatter / chart tooltips stay dark */
+html.theme-light .v2-root .tip {
+  background: #1a2033;
+  color: #fff;
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* Scatter grid lines */
+html.theme-light .v2-root .scatter-axis { fill: #6b7280; }
+html.theme-light .v2-root .scatter-grid line { stroke: rgba(0,0,0,0.07); }
+html.theme-light .v2-root .scatter-quadrant { fill: rgba(0,0,0,0.25); }
+
+/* Pills */
+html.theme-light .v2-root .pill-ghost { background: rgba(0,0,0,0.06); color: var(--fg-3); border-color: rgba(0,0,0,0.1); }
+
+/* Filter banner */
+html.theme-light .v2-root .filter-banner { background: rgba(245,230,37,0.15); border-color: rgba(245,230,37,0.4); }
+
+/* Section info popup */
+html.theme-light .v2-root .si-popup {
+  background: #1a2033;
+  color: #e2e6ed;
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* Theme toggle button itself (inside sidebar — always dark context) */
+.theme-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 16px);
+  margin: 0 8px 6px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  color: #9aa2b0;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  transition: background 0.15s, color 0.15s;
+}
+.theme-toggle-btn:hover { background: rgba(255,255,255,0.10); color: #fff; }
+.theme-toggle-btn.collapsed-mode {
+  width: calc(100% - 16px);
+  justify-content: center;
+  padding: 9px 0;
+}

@@ -535,7 +535,9 @@ export default function InfluencerIntelPage() {
             </thead>
             <tbody>
               {sortBy(filteredAttention, attentionSort.key, attentionSort.dir).slice(0, 200).map((r, i) => (
-                <tr key={`${r.player}-${r.brandSlug}`} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                <tr key={`${r.player}-${r.brandSlug}`} className={r.brandSlug === 'joola' ? 'joola' : ''}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; router.push(`/v2/influencers/player/${encodeURIComponent(r.brandSlug + '--' + r.player)}`) }}>
                   <td className="cell-num">{i + 1}</td>
                   <td style={{ fontWeight: 700 }}>{r.player}</td>
                   <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
@@ -600,7 +602,9 @@ export default function InfluencerIntelPage() {
                 const t = tierFromFollowers(r.followers)
                 const active = r.posts > 0
                 return (
-                  <tr key={r.id} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                  <tr key={r.id} className={r.brandSlug === 'joola' ? 'joola' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; router.push(`/v2/influencers/player/${encodeURIComponent(r.brandSlug + '--' + r.name)}`) }}>
                     <td className="cell-num">{i + 1}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -672,7 +676,9 @@ export default function InfluencerIntelPage() {
             </thead>
             <tbody>
               {sortBy(filteredBrandStats, brandStatsSort.key, brandStatsSort.dir).map(r => (
-                <tr key={r.brandSlug} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                <tr key={r.brandSlug} className={r.brandSlug === 'joola' ? 'joola' : ''}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => router.push(`/v2/influencers/brand/${encodeURIComponent(r.brandSlug)}`)}>
                   <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
                   <td className="cell-num" style={{ textAlign: 'right' }}>{r.playersTracked}</td>
                   <td className="cell-num" style={{ textAlign: 'right' }}>{r.playersActive}</td>
@@ -848,7 +854,9 @@ export default function InfluencerIntelPage() {
               </thead>
               <tbody>
                 {data.joolaPlayerStats.map(j => (
-                  <tr key={j.player} className="joola">
+                  <tr key={j.player} className="joola"
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; router.push(`/v2/influencers/player/${encodeURIComponent('joola--' + j.player)}`) }}>
                     <td style={{ fontWeight: 700, color: '#22c55e' }}>{j.player}</td>
                     <td className="cell-num" style={{ textAlign: 'right' }}>{j.signals > 0 ? fmt(j.signals) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                     <td className="cell-num" style={{ textAlign: 'right' }}>{j.ig > 0 ? fmt(j.ig) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
