@@ -6,7 +6,9 @@ import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 
 const I = {
+  home: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
   overview: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>,
+  health: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>,
   ig: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" /></svg>,
   yt: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="3" /><path d="M10 9l5 3-5 3z" fill="currentColor" /></svg>,
   reddit: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8" /><circle cx="9" cy="13" r="1" fill="currentColor" /><circle cx="15" cy="13" r="1" fill="currentColor" /><path d="M9 16c1 1 4 1 6 0" /></svg>,
@@ -54,7 +56,7 @@ const navGroups: NavGroup[] = [
       { href: '/v2/market',      label: 'Market Intel',       ic: I.mkt },
       { href: '/v2/correlations', label: 'Correlations',     ic: I.corr },
       { href: '/v2/changepoints', label: 'Changepoints',     ic: I.change },
-      { href: '/v2/data-health',  label: 'Data Health',      ic: I.overview },
+      { href: '/v2/data-health',  label: 'Data Health',      ic: I.health },
     ],
   },
   {
@@ -89,18 +91,37 @@ export function V2Sidebar() {
   const [open, setOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
 
   useEffect(() => {
-    const saved = localStorage.getItem('joola-theme') as 'dark' | 'light' | null
-    if (saved) {
-      setTheme(saved)
-      document.documentElement.classList.toggle('theme-light', saved === 'light')
+    // Restore collapse state
+    const savedCollapsed = localStorage.getItem('joola-sidebar-collapsed') === 'true'
+    setCollapsed(savedCollapsed)
+    document.documentElement.style.setProperty('--sidebar-w', savedCollapsed ? '60px' : '232px')
+    // Restore theme
+    const savedTheme = localStorage.getItem('joola-theme') as 'dark' | 'light' | null
+    if (savedTheme) {
+      setTheme(savedTheme)
+      document.documentElement.classList.toggle('theme-light', savedTheme === 'light')
+    }
+    // Restore density
+    const savedDensity = localStorage.getItem('joola-density') as 'comfortable' | 'compact' | null
+    if (savedDensity) {
+      setDensity(savedDensity)
+      document.documentElement.classList.toggle('density-compact', savedDensity === 'compact')
     }
   }, [])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '60px' : '232px')
   }, [collapsed])
+
+  function toggleDensity() {
+    const next = density === 'comfortable' ? 'compact' : 'comfortable'
+    setDensity(next)
+    document.documentElement.classList.toggle('density-compact', next === 'compact')
+    localStorage.setItem('joola-density', next)
+  }
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -141,6 +162,20 @@ export function V2Sidebar() {
         </div>
 
         <div className="nav-section" style={{ flex: 1, overflowY: 'auto' }}>
+          {/* Home entry — always at top */}
+          <div className="nav-group">
+            <Link
+              href="/v2/ask-intel"
+              className={'nav-item ' + (path === '/v2' || path === '/v2/ask-intel' ? 'active' : '')}
+              onClick={() => setOpen(false)}
+              title={collapsed ? 'Home' : undefined}
+              aria-label="Home"
+            >
+              <span className="ic">{I.home}</span>
+              {!collapsed && <span>Home</span>}
+            </Link>
+          </div>
+
           {navGroups.map((group, gi) => (
             <div key={group.heading} className="nav-group" style={gi > 0 ? { marginTop: 12 } : undefined}>
               {!collapsed && <h6>{group.heading}</h6>}
@@ -175,10 +210,29 @@ export function V2Sidebar() {
           {!collapsed && <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>}
         </button>
 
+        {/* Density toggle */}
+        <button
+          className={`theme-toggle-btn${collapsed ? ' collapsed-mode' : ''}`}
+          onClick={toggleDensity}
+          title={density === 'comfortable' ? 'Switch to compact view' : 'Switch to comfortable view'}
+          aria-label={density === 'comfortable' ? 'Switch to compact view' : 'Switch to comfortable view'}
+        >
+          {density === 'comfortable' ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="5" x2="21" y2="5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="13" x2="21" y2="13"/><line x1="3" y1="17" x2="21" y2="17"/><line x1="3" y1="21" x2="21" y2="21"/></svg>
+          )}
+          {!collapsed && <span>{density === 'comfortable' ? 'Compact view' : 'Comfortable view'}</span>}
+        </button>
+
         {/* Collapse toggle — desktop only */}
         <button
           className="collapse-btn"
-          onClick={() => setCollapsed(c => !c)}
+          onClick={() => setCollapsed(c => {
+            const next = !c
+            localStorage.setItem('joola-sidebar-collapsed', String(next))
+            return next
+          })}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >

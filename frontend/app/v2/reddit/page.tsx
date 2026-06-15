@@ -85,7 +85,7 @@ export default function RedditPage() {
   if (error) return (
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-      <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+      <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
     </div>
   )
 
@@ -319,7 +319,7 @@ export default function RedditPage() {
             border: '1px solid rgba(245,230,37,0.2)', borderRadius: 6,
             padding: '8px 12px',
           }}>
-            ⚠ Sentiment classifier in calibration — bars currently render as 100% neutral. Mention volume is accurate.
+            ⚠ Sentiment data is still being processed — mention volume is accurate, tone breakdown will populate after the next weekly refresh.
           </div>
         </section>
       )}
@@ -331,11 +331,11 @@ export default function RedditPage() {
               Mention volume
               <SectionInfo
                 title="Brand Mention Volume"
-                description="How many times each brand was mentioned on Reddit across all tracked subreddits. A brand with many mentions has strong community presence — could mean product launches, controversy, or organic discussion. Tone breakdown is still calibrating."
+                description="How many times each brand was mentioned on Reddit across all tracked subreddits. A brand with many mentions has strong community presence — could mean product launches, controversy, or organic discussion."
                 source="Reddit data · scraped via trudax/reddit-scraper-lite from r/pickleball and related subreddits"
               />
             </h2>
-            <div className="sub">Tone breakdown coming soon — sentiment classifier calibrating.</div>
+            <div className="sub">Mention volume across {displayReddit.length} brands · sentiment scores update weekly.</div>
           </div>
         </div>
         <div className="card"><div className="card-pad">

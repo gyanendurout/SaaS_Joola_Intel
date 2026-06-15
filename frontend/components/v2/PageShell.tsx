@@ -107,22 +107,56 @@ export function MiniKpi({
 // ─── Skeleton loading page ────────────────────────────────────────────
 export function LoadingPage() {
   return (
-    <div className="skeleton-page">
-      <div className="sk-header" style={{ paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-        <div className="skel sk-h12" style={{ width: 160, marginBottom: 12 }} />
-        <div className="skel sk-h24" style={{ width: 320, marginBottom: 10 }} />
-        <div className="skel sk-h12" style={{ width: 440 }} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingTop: 8 }}>
+      {/* Page head skeleton */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 8 }}>
+        <div className="skeleton skeleton-text" style={{ width: 80 }} />
+        <div className="skeleton skeleton-title" style={{ width: 220 }} />
+        <div className="skeleton skeleton-text" style={{ width: 320 }} />
       </div>
-      <div className="sk-kpis">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="skel sk-h80" style={{ animationDelay: i * 0.06 + 's' }} />
+      {/* KPI row skeleton */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="skeleton-card">
+            <div className="skeleton skeleton-text" style={{ width: '50%', marginBottom: 12 }} />
+            <div className="skeleton skeleton-title" style={{ width: '70%' }} />
+          </div>
         ))}
       </div>
-      <div className="skel sk-h160" style={{ marginTop: 20, animationDelay: '0.2s' }} />
-      <div className="sk-cards" style={{ marginTop: 14 }}>
-        <div className="skel sk-h160" style={{ animationDelay: '0.25s' }} />
-        <div className="skel sk-h160" style={{ animationDelay: '0.3s' }} />
-      </div>
+      {/* Section skeleton × 2 */}
+      {Array.from({ length: 2 }).map((_, si) => (
+        <div key={si} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="skeleton skeleton-text" style={{ width: 160 }} />
+          <div className="skeleton-card" style={{ minHeight: 140 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton skeleton-text" style={{ width: `${70 + (i % 3) * 10}%`, marginBottom: 14 }} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Empty state placeholder ──────────────────────────────────────────
+export function EmptyState({
+  icon, title, body, action,
+}: {
+  icon?: React.ReactNode
+  title: string
+  body?: string
+  action?: React.ReactNode
+}) {
+  return (
+    <div style={{ padding: '48px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      {icon && (
+        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+          {icon}
+        </div>
+      )}
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg-2)' }}>{title}</div>
+      {body && <div style={{ fontSize: 12, color: 'var(--fg-4)', maxWidth: 360, lineHeight: 1.6 }}>{body}</div>}
+      {action && <div style={{ marginTop: 8 }}>{action}</div>}
     </div>
   )
 }

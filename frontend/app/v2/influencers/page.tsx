@@ -347,7 +347,7 @@ export default function InfluencerIntelPage() {
     return (
       <div style={{ padding: '80px 32px', textAlign: 'center' }}>
         <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error || 'No data'}</div>
-        <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+        <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
       </div>
     )
   }

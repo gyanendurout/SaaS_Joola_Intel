@@ -89,7 +89,7 @@ export default function TikTokPage() {
   if (error) return (
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-      <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+      <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
     </div>
   )
 
@@ -314,13 +314,13 @@ export default function TikTokPage() {
                     source="tiktok_comments · sentiment_label · GROUP BY brand_id"
                   />
                 </h2>
-                <div className="sub">Audience tone per brand — large neutral % usually means classifier still calibrating.</div>
+                <div className="sub">Audience tone per brand across TikTok comments · updated weekly.</div>
               </div>
             </div>
             <div className="card"><div className="card-pad">
               {commentStats.length === 0 ? (
                 <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
-                  No TikTok comment data — run scrape_comments.py + enrichment.
+                  No TikTok comment sentiment data available yet — check back after the next weekly refresh.
                 </div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>

@@ -110,7 +110,7 @@ export default function InstagramPage() {
   if (error) return (
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-      <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+      <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
     </div>
   )
 
@@ -219,7 +219,21 @@ export default function InstagramPage() {
 
   return (
     <>
-      <PageHead title="INSTAGRAM" />
+      <PageHead
+        title="INSTAGRAM"
+        actions={
+          <a
+            href="https://www.instagram.com/joolapickleball"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-ghost"
+            aria-label="View JOOLA on Instagram"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginRight: 5 }}><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" stroke="none"/></svg>
+            JOOLA on Instagram ↗
+          </a>
+        }
+      />
       <FilterBanner />
 
       {/* ── Brand Details Modal ── */}

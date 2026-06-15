@@ -2154,3 +2154,102 @@ html.theme-light .v2-root .si-popup {
   justify-content: center;
   padding: 9px 0;
 }
+
+/* ─── Sticky section heads ─────────────────────────────────────────── */
+.v2-root .section-head {
+  position: sticky;
+  top: 48px;
+  z-index: 9;
+  background: var(--bg);
+  padding-top: 4px;
+  padding-bottom: 4px;
+  margin-bottom: 12px;
+}
+/* Light theme override */
+html.theme-light .v2-root .section-head {
+  background: var(--bg);
+}
+
+/* ─── Skeleton / pulse loader ──────────────────────────────────────── */
+@keyframes skeleton-pulse {
+  0%   { opacity: 0.45; }
+  50%  { opacity: 0.9; }
+  100% { opacity: 0.45; }
+}
+.skeleton {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.07);
+}
+html.theme-light .skeleton {
+  background: rgba(0,0,0,0.09);
+}
+.skeleton-text  { height: 12px; border-radius: 4px; }
+.skeleton-title { height: 22px; border-radius: 4px; }
+.skeleton-card  { border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); padding: 20px; }
+html.theme-light .skeleton-card { background: #fff; border-color: rgba(0,0,0,0.08); }
+
+/* ─── Table density toggle ─────────────────────────────────────────── */
+/* default = comfortable (existing styles unchanged) */
+/* compact mode — toggled by adding class to .v2-root */
+html.density-compact .v2-root table.data td,
+html.density-compact .v2-root table.data th {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+html.density-compact .v2-root .bar-row {
+  padding: 5px 0;
+  min-height: 28px;
+}
+html.density-compact .v2-root .kpi-grid {
+  gap: 8px;
+}
+html.density-compact .v2-root .card-pad,
+html.density-compact .v2-root .card-pad-lg {
+  padding: 12px 16px;
+}
+
+/* ─── Mobile: detail page grids ───────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Hero stat cards → 2-column */
+  .v2-root .main [style*="gridTemplateColumns: repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  /* Two-col layouts → single col */
+  .v2-root .two-col,
+  .v2-root .two-col-even {
+    grid-template-columns: 1fr !important;
+  }
+  /* Flex stat rows → wrap */
+  .v2-root .main > div > div[style*="display: flex"] {
+    flex-wrap: wrap;
+  }
+  /* Section head sticky offset = 0 on mobile (topbar collapses) */
+  .v2-root .section-head {
+    top: 0;
+  }
+  /* Table horizontal scroll */
+  .v2-root .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Hero flex → column on mobile */
+  .v2-root .main [style*="display: flex"][style*="justifyContent: space-between"] {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+  /* Page head actions wrap */
+  .v2-root .page-head .actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-root .main {
+    padding: 16px 14px 48px;
+  }
+  .v2-root .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

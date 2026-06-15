@@ -81,7 +81,7 @@ export default function TwitterPage() {
   if (error) return (
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-      <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+      <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
     </div>
   )
 
@@ -691,33 +691,25 @@ export default function TwitterPage() {
         </div>
       </section>
 
-      {/* ─── Pending: X / Twitter mention intelligence ─────────────────── */}
+      {/* ─── Paddle & player mentions — coming soon ────────────────────── */}
       <section>
         <div className="section-head"><div>
-          <h2>
-            Paddle and player mentions on X · pending
-            <SectionInfo
-              title="X Mention Intelligence — Pending"
-              description="Cross-channel mention extraction (paddle SKU mentions, athlete tags, sentiment scoring per mention) is implemented for Reddit, Instagram, and YouTube via the mention_facts table. The X enrichment branch of the pipeline has not been wired up — no rows with channel='x' or 'x_posts' exist yet."
-              source="mention_facts · (no X channel rows yet — see TODO_SESSION.md)"
-            />
-          </h2>
-          <div className="sub">Awaiting enrichment pipeline coverage for X posts.</div>
+          <h2>Paddle &amp; player mentions · X / Twitter</h2>
+          <div className="sub">Cross-channel mention intelligence for X — coming in a future update.</div>
         </div></div>
-        <div className="card"><div className="card-pad" style={{ padding: 24, color: 'var(--fg-4)', fontSize: 12, lineHeight: 1.6 }}>
-          <p style={{ marginTop: 0 }}>
-            <strong style={{ color: 'var(--fg)' }}>Why this is empty:</strong> the AI enrichment step
-            that writes paddle/player mentions to <code>mention_facts</code> is wired to
-            <code> ig_comments</code>, <code>yt_comments</code>, <code>reddit_mentions</code>, and
-            <code> reddit_comments</code>. It does not yet read from <code>x_posts</code>, so no
-            X-channel mention rows are produced even though the raw posts are scraped.
-          </p>
-          <p>
-            <strong style={{ color: 'var(--fg)' }}>What ships when it&apos;s wired:</strong>
-            {' '}top mentioned paddles by tweet count, top mentioned athletes, sentiment per brand
-            on X, and crisis flags surfaced on the existing Crisis page with channel = <code>x</code>.
-          </p>
-        </div></div>
+        <div className="card">
+          <div style={{ padding: '36px 32px', display: 'flex', alignItems: 'center', gap: 20 }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', marginBottom: 4 }}>Mention intelligence not yet available for X</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-4)', lineHeight: 1.6, maxWidth: 520 }}>
+                Paddle SKU mentions, athlete tags, and per-brand sentiment on X will appear here once the enrichment pipeline is extended to cover X posts. Instagram, YouTube, and Reddit are already covered.
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
     </>
   )

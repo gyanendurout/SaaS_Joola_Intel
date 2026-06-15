@@ -8,8 +8,8 @@ import { DateRangeProvider } from '@/lib/v2/DateRangeContext'
 import { DateRangePicker } from '@/components/v2/DateRangePicker'
 
 export const metadata: Metadata = {
-  title: 'JOOLA INTEL — Executive Briefing',
-  description: 'Pickleball competitive intelligence — Executive design',
+  title: 'JOOLA INTEL — Competitive Intelligence',
+  description: 'Pickleball competitive intelligence dashboard — track 11 brands across social, ads, products and community signals.',
 }
 
 export default function V2Layout({ children }: { children: React.ReactNode }) {
@@ -30,8 +30,7 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
               {children}
               <footer className="foot">
                 <div>
-                  <strong style={{ color: 'var(--fg-2)' }}>JOOLA INTEL</strong> · live · 17 tables ·
-                  refreshed Mondays 7:00 AM IST
+                  <strong style={{ color: 'var(--fg-2)' }}>JOOLA INTEL</strong> · live data · refreshed weekly
                 </div>
                 <FooterLinks />
               </footer>

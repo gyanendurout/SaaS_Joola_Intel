@@ -311,6 +311,19 @@ export default function MarketIntelPage() {
         title="Market"
         accent="intel"
         sub="One view across paid, organic, and community signals. What competitors are doing right now and what JOOLA should respond to."
+        actions={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <a href="https://www.facebook.com/ads/library/?q=pickleball&search_type=keyword_unordered" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" aria-label="Meta Ads Library">
+              Meta Ads ↗
+            </a>
+            <a href="https://www.reddit.com/r/pickleball/" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" aria-label="r/pickleball on Reddit">
+              r/pickleball ↗
+            </a>
+            <a href="https://www.joola.com" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" aria-label="JOOLA website">
+              joola.com ↗
+            </a>
+          </div>
+        }
       />
       <FilterBanner />
 

@@ -498,7 +498,7 @@ export default function SalesIntelPage() {
     return (
       <div style={{ padding: '80px 32px', textAlign: 'center' }}>
         <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-        <button className="btn btn-yellow" onClick={() => window.location.reload()}>
+        <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">
           Refresh page
         </button>
       </div>

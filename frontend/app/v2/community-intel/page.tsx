@@ -349,7 +349,7 @@ export default function CommunityIntelPage() {
       <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>
         {error || 'Unable to load Community Intel.'}
       </div>
-      <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+      <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
     </div>
   )
 
