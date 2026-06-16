@@ -2253,3 +2253,136 @@ html.density-compact .v2-root .card-pad-lg {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ─── Light theme — comprehensive pass ─────────────────────────────── */
+
+/* Dot grid: light dots on light bg = invisible — switch to dark dots */
+html.theme-light .v2-root .dot-grid {
+  background-image: radial-gradient(rgba(0,0,0,0.06) 1px, transparent 1px);
+}
+
+/* Topbar backdrop */
+html.theme-light .v2-root .topbar { background: transparent; }
+
+/* Date pickers */
+html.theme-light .v2-root .drd-select {
+  background: #fff;
+  border-color: rgba(0,0,0,0.15);
+  color: var(--fg);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234b5563' stroke-width='2.5'><polyline points='6 9 12 15 18 9'/></svg>");
+}
+html.theme-light .v2-root .drd-select:hover { border-color: rgba(0,0,0,0.28); }
+html.theme-light .v2-root .drd-label-inline { color: var(--fg-4); }
+html.theme-light .v2-root .drd-ic { color: var(--fg-4); }
+html.theme-light .v2-root .drd-arrow { color: var(--fg-4); }
+
+/* Section sticky nav */
+html.theme-light .v2-root .section-nav {
+  background: rgba(240,242,248,0.95);
+  border-bottom-color: rgba(0,0,0,0.09);
+}
+html.theme-light .v2-root .snav-item { color: var(--fg-4); }
+html.theme-light .v2-root .snav-item:hover {
+  color: var(--fg);
+  background: rgba(0,0,0,0.05);
+}
+
+/* Column filter inputs */
+html.theme-light .v2-root .col-filter-input {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.12);
+  color: var(--fg);
+}
+html.theme-light .v2-root .col-filter-input::placeholder { color: var(--fg-4); }
+
+/* Scrollbar */
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-track { background: rgba(0,0,0,0.04); }
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); }
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.35); }
+
+/* Chip filter buttons */
+html.theme-light .v2-root .chip {
+  background: #fff;
+  border-color: rgba(0,0,0,0.12);
+  color: var(--fg-3);
+}
+html.theme-light .v2-root .chip:hover { color: var(--fg); background: #f4f5fa; }
+html.theme-light .v2-root .chip-divider { background: rgba(0,0,0,0.1); }
+
+/* Sidebar badge */
+html.theme-light .v2-root .nav-item .badge {
+  background: rgba(0,0,0,0.09);
+  color: var(--fg-4);
+}
+
+/* Signal rows */
+html.theme-light .v2-root .signal {
+  border-color: rgba(0,0,0,0.06);
+}
+html.theme-light .v2-root .signal:hover {
+  background: rgba(0,0,0,0.03);
+  border-left-color: var(--yellow);
+}
+
+/* Trend track (mini bars in trend-row) */
+html.theme-light .v2-root .mtrack { background: rgba(0,0,0,0.06); }
+
+/* Brand filter dropdown popover */
+html.theme-light .v2-root .bfd-trigger {
+  background: #fff;
+  border-color: rgba(0,0,0,0.14);
+  color: var(--fg-3);
+}
+html.theme-light .v2-root .bfd-trigger:hover { border-color: rgba(0,0,0,0.24); color: var(--fg); }
+html.theme-light .v2-root .bfd-trigger.is-filtered { border-color: rgba(245,230,37,0.6); }
+html.theme-light .v2-root .bfd-popover {
+  background: #fff;
+  border-color: rgba(0,0,0,0.12);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+html.theme-light .v2-root .bfd-head { border-bottom-color: rgba(0,0,0,0.08); }
+html.theme-light .v2-root .bfd-title { color: var(--fg-4); }
+html.theme-light .v2-root .bfd-item { border-color: rgba(0,0,0,0.05); color: var(--fg-2); }
+html.theme-light .v2-root .bfd-item:hover { background: rgba(0,0,0,0.03); }
+html.theme-light .v2-root .bfd-only {
+  color: var(--fg-4);
+  border-color: rgba(0,0,0,0.12);
+}
+html.theme-light .v2-root .bfd-only:hover { color: var(--fg); background: rgba(0,0,0,0.05); }
+html.theme-light .v2-root .bfd-clear {
+  color: var(--fg-3);
+  border-color: rgba(0,0,0,0.12);
+}
+
+/* Page head */
+html.theme-light .v2-root .page-head {
+  border-bottom-color: rgba(0,0,0,0.08);
+}
+html.theme-light .v2-root .page-head .eyebrow { color: var(--fg-4); }
+
+/* KPI mini cards */
+html.theme-light .v2-root .kpi { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+html.theme-light .v2-root .kpi .src { color: var(--fg-4); }
+
+/* Bar-row fills stay readable — just lighten the track */
+html.theme-light .v2-root .bar-row .val { color: var(--fg); }
+
+/* Inline code */
+html.theme-light .v2-root code {
+  background: rgba(0,0,0,0.07);
+  color: var(--fg-3);
+}
+
+/* Section info (?) button */
+html.theme-light .v2-root .si-btn { color: var(--fg-4); }
+html.theme-light .v2-root .si-btn:hover { color: var(--fg-2); }
+
+/* Footer */
+html.theme-light .v2-root .foot {
+  border-top-color: rgba(0,0,0,0.08);
+  color: var(--fg-4);
+}
+
+/* Sort-th hover */
+html.theme-light .v2-root th.sortable:hover { background: rgba(0,0,0,0.03); }
+html.theme-light .v2-root .col-filter-row th { background: #f2f4f9; }
