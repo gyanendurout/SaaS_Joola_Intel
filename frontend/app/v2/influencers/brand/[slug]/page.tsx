@@ -37,7 +37,7 @@ function tierFromFollowers(n: number) {
 
 function StatCell({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
+    <div style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
       <div style={{ fontSize: 20, fontWeight: 800, color: value === '—' ? '#3a4150' : (color || '#fff'), fontFamily: 'JetBrains Mono', lineHeight: 1.1 }}>{value}</div>
       <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
     </div>
@@ -49,7 +49,7 @@ function PlatformBar({ label, value, max, color }: { label: string; value: numbe
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', width: 56, textTransform: 'uppercase', letterSpacing: '0.07em', flexShrink: 0 }}>{label}</span>
-      <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+      <div style={{ flex: 1, height: 6, background: 'var(--wb-5)', borderRadius: 99, overflow: 'hidden' }}>
         <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 99, transition: 'width 0.4s ease' }} />
       </div>
       <span style={{ fontSize: 11, fontWeight: 700, color: value > 0 ? color : '#3a4150', fontFamily: 'JetBrains Mono', minWidth: 42, textAlign: 'right' }}>
@@ -126,7 +126,7 @@ export default function BrandStrengthDetailPage() {
         accent="Sponsored Players"
         sub={`Brand-level sponsored-player strength · ${roster.length} athletes tracked`}
         actions={
-          <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--fg-3)', borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+          <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid var(--wb-14)', color: 'var(--fg-3)', borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
             ← Back
           </button>
         }
@@ -191,7 +191,7 @@ export default function BrandStrengthDetailPage() {
                       <span style={{ fontSize: 10, color: '#6b7280', fontFamily: 'JetBrains Mono', width: 16 }}>#{i + 1}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: isJoola ? '#22c55e' : 'var(--fg)', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.player}</div>
-                        <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: 4, background: 'var(--wb-5)', borderRadius: 99, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${(a.total / maxAtt) * 100}%`, background: color, borderRadius: 99 }} />
                         </div>
                       </div>
@@ -264,7 +264,7 @@ export default function BrandStrengthDetailPage() {
                         <td>
                           <div style={{ display: 'inline-flex', gap: 4 }}>
                             {r.igHandle      && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(225,48,108,0.15)', color: '#e1306c', fontWeight: 700 }}>IG</span>}
-                            {r.xHandle       && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(255,255,255,0.08)', color: '#fff',     fontWeight: 700 }}>X</span>}
+                            {r.xHandle       && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'var(--wb-8)', color: '#fff',     fontWeight: 700 }}>X</span>}
                             {r.ytHandle      && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(255,0,0,0.15)',     color: '#ff4040', fontWeight: 700 }}>YT</span>}
                             {r.tiktokHandle  && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(105,201,208,0.15)', color: '#69c9d0', fontWeight: 700 }}>TT</span>}
                             {r.redditHandle  && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 4, background: 'rgba(255,69,0,0.15)',    color: '#ff4500', fontWeight: 700 }}>RD</span>}
@@ -298,7 +298,7 @@ export default function BrandStrengthDetailPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {(showAllPosts ? posts : posts.slice(0, 5)).map(p => (
-                <div key={p.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '12px 16px' }}>
+                <div key={p.id} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '12px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: 'rgba(225,48,108,0.15)', color: '#e1306c', border: '1px solid rgba(225,48,108,0.3)', textTransform: 'uppercase' }}>{p.platform}</span>
                     <span style={{ fontSize: 11, fontWeight: 700, color: isJoola ? '#22c55e' : color }}>{p.athleteName}</span>

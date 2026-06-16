@@ -1025,7 +1025,7 @@ export default function InfluencerIntelPage() {
                     <td className="cell-num" style={{ textAlign: 'right', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                         <span style={{ fontWeight: 800, color: '#F5E625' }}>{r.impactScore.toFixed(1)}</span>
-                        <div style={{ width: 80, height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ width: 80, height: 5, background: 'var(--wb-5)', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ width: `${barPct}%`, height: '100%', background: r.brandSlug === 'joola' ? '#22c55e' : '#F5E625' }} />
                         </div>
                       </div>
@@ -1115,8 +1115,8 @@ export default function InfluencerIntelPage() {
             onClick={() => setPullJoolaOnly(v => !v)}
             style={{
               padding: '6px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700,
-              background: pullJoolaOnly ? 'rgba(34,197,94,0.20)' : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${pullJoolaOnly ? 'rgba(34,197,94,0.45)' : 'rgba(255,255,255,0.10)'}`,
+              background: pullJoolaOnly ? 'rgba(34,197,94,0.20)' : 'var(--wb-5)',
+              border: `1px solid ${pullJoolaOnly ? 'rgba(34,197,94,0.45)' : 'var(--wb-10)'}`,
               color: pullJoolaOnly ? '#22c55e' : 'var(--fg-2)',
               cursor: 'pointer',
             }}
@@ -1326,8 +1326,8 @@ function PlatformPill({ p }: { p: IntelPlatform }) {
   const colorMap: Record<IntelPlatform, { bg: string; bd: string; fg: string }> = {
     ig:     { bg: 'rgba(236,72,153,0.14)', bd: 'rgba(236,72,153,0.35)', fg: '#ec4899' },
     yt:     { bg: 'rgba(239,68,68,0.14)',  bd: 'rgba(239,68,68,0.35)',  fg: '#ef4444' },
-    tiktok: { bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
-    x:      { bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
+    tiktok: { bg: 'var(--wb-6)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
+    x:      { bg: 'var(--wb-6)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
     reddit: { bg: 'rgba(251,146,60,0.14)', bd: 'rgba(251,146,60,0.35)', fg: '#fb923c' },
   }
   const c = colorMap[p]
@@ -1361,7 +1361,7 @@ function SentimentMix({ positive, negative, total }: { positive: number; negativ
   const ariaLabel = `Sentiment: ${posPct}% positive, ${neuPct}% neutral, ${negPct}% negative`
   return (
     <div title={tip} role="img" aria-label={ariaLabel} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, minWidth: 70, cursor: 'help' }}>
-      <div style={{ display: 'flex', height: 6, borderRadius: 99, overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
+      <div style={{ display: 'flex', height: 6, borderRadius: 99, overflow: 'hidden', background: 'var(--wb-6)' }}>
         <div style={{ width: pos + '%', background: '#22c55e' }} aria-hidden="true" />
         <div style={{ width: (100 - pos - neg) + '%', background: '#94a3b8' }} aria-hidden="true" />
         <div style={{ width: neg + '%', background: '#ef4444' }} aria-hidden="true" />
@@ -1386,8 +1386,8 @@ function ImpactCards({
 }) {
   const card: React.CSSProperties = {
     padding: 14,
-    background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--wb-3)',
+    border: '1px solid var(--wb-8)',
     borderRadius: 8,
     fontSize: 12,
     color: 'var(--fg-2)',
@@ -1531,10 +1531,10 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
         {/* Grid */}
         <g className="scatter-grid">
           {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'gx' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} stroke="rgba(255,255,255,0.04)" />
+            <line key={'gx' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} stroke="var(--line-2)" />
           ))}
           {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'gy' + i} y1={padT + t * innerH} y2={padT + t * innerH} x1={padL} x2={padL + innerW} stroke="rgba(255,255,255,0.04)" />
+            <line key={'gy' + i} y1={padT + t * innerH} y2={padT + t * innerH} x1={padL} x2={padL + innerW} stroke="var(--line-2)" />
           ))}
         </g>
         {/* Quadrant split lines (median reach + median ER) */}
@@ -1668,11 +1668,11 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
       onClick={onClose}
     >
       <div
-        style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
+        style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: brandColor, flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>{r.player}</div>
@@ -1682,7 +1682,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
         </div>
 
         {/* Status + Verification */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', gap: 24 }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 24 }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Status</div>
             <span className="pill" style={{ background: STATUS_COLOR[r.status] + '22', color: STATUS_COLOR[r.status], border: `1px solid ${STATUS_COLOR[r.status]}55`, fontSize: 11, padding: '3px 10px', borderRadius: 99, fontWeight: 700 }}>
@@ -1698,7 +1698,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
         </div>
 
         {/* Performance Stats */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Roster Performance</div>
           {!influencer ? (
             <div style={{ fontSize: 12, color: '#6b7280' }}>No scraped profile data found for this player.</div>
@@ -1710,7 +1710,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
                   { label: 'Posts tracked', value: influencer.posts > 0 ? String(influencer.posts) : '—', color: '#94a3b8', tip: 'Number of posts collected in the tracking window' },
                   { label: 'Avg likes', value: influencer.avgLikes > 0 ? fmt(influencer.avgLikes) : '—', color: '#22c55e', tip: 'Average likes per post' },
                 ].map(m => (
-                  <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 12px', textAlign: 'center', cursor: 'help' }}>
+                  <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px', textAlign: 'center', cursor: 'help' }}>
                     <div style={{ fontSize: 16, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
                     <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{m.label}</div>
                   </div>
@@ -1722,7 +1722,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
                   { label: 'Eng. rate', value: influencer.engRate > 0 ? influencer.engRate.toFixed(2) + '%' : '—', color: influencer.engRate > 8 ? '#F5E625' : '#94a3b8', tip: 'Engagement rate = (likes + comments) ÷ followers × 100. Above 8% is exceptional.' },
                   { label: 'Tier', value: tierFromFollowers(influencer.followers).label, color: tierFromFollowers(influencer.followers).color, tip: 'NANO < 10K · MICRO 10K–100K · MACRO 100K–500K · MEGA 500K+' },
                 ].map(m => (
-                  <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 12px', textAlign: 'center', cursor: 'help' }}>
+                  <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px', textAlign: 'center', cursor: 'help' }}>
                     <div style={{ fontSize: 16, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
                     <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{m.label}</div>
                   </div>
@@ -1733,11 +1733,11 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
         </div>
 
         {/* Social Handles */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Social Handles</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {platforms.map(p => (
-              <div key={p.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 12px' }}>
+              <div key={p.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px' }}>
                 <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4 }}>{p.label}</div>
                 {p.handle
                   ? <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: '#60a5fa', textDecoration: 'none' }}>@{p.handle.replace(/^@/, '')}</a>
@@ -1748,7 +1748,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
         </div>
 
         {/* Cross-platform attention */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
           {!attention ? (
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Cross-Platform Attention</div>
@@ -1764,7 +1764,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
                 { label: 'X (Twitter)', value: attention.x > 0 ? fmt(attention.x) : '—', color: '#1d9bf0', tip: 'X/Twitter mentions' },
                 { label: 'Reddit', value: attention.reddit > 0 ? fmt(attention.reddit) : '—', color: '#ff4500', tip: 'Reddit mentions' },
               ].map(m => (
-                <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'help' }}>
+                <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'help' }}>
                   <div style={{ fontSize: 16, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
                   <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{m.label}</div>
                 </div>
@@ -1776,7 +1776,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
                 { label: 'Sentiment', value: `+${attention.positive} / −${attention.negative}`, color: '#22c55e', tip: `${attention.positive} positive · ${attention.negative} negative mentions` },
                 { label: 'Trend', value: attention.trend === 'up' ? '▲ Rising' : attention.trend === 'down' ? '▼ Falling' : attention.trend === 'flat' ? '▬ Stable' : '— Unknown', color: attention.trend === 'up' ? '#22c55e' : attention.trend === 'down' ? '#ef4444' : '#94a3b8', tip: 'Signal volume trend: last 14 days vs prior 14 days' },
               ].map(m => (
-                <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'help' }}>
+                <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'help' }}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
                   <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{m.label}</div>
                 </div>
@@ -1787,7 +1787,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
         </div>
 
         {/* Top Posts */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               Top Performing Posts {totalPosts > 0 && <span style={{ color: '#3a4150' }}>· {totalPosts} total</span>}
@@ -1803,7 +1803,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {topPosts.map(p => (
-                <div key={p.id} onClick={() => onPostClick(p)} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', transition: 'border-color 150ms' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(96,165,250,0.4)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)')}>
+                <div key={p.id} onClick={() => onPostClick(p)} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', transition: 'border-color 150ms' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(96,165,250,0.4)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--line)')}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <PlatformPill p={p.platform} />
                     <span style={{ fontSize: 10, color: '#6b7280' }}>{p.type}</span>
@@ -1868,8 +1868,8 @@ function BubbleDetailDialog({ bubble: b, brands, medianReach, medianEr, onClose 
   ]
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 12, height: 12, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0, border: isJoola ? '2px solid #fff' : 'none' }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{b.name}</div>
@@ -1878,12 +1878,12 @@ function BubbleDetailDialog({ bubble: b, brands, medianReach, medianEr, onClose 
           <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: qColor + '22', color: qColor, border: `1px solid ${qColor}44` }}>{quadrant}</span>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
         </div>
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: qColor + '08' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', background: qColor + '08' }}>
           <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.6 }}>{qDesc[quadrant]}</div>
         </div>
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
           {metrics.map(m => (
-            <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+            <div key={m.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
               <div style={{ fontSize: 11, color: '#fff', fontWeight: 600, marginTop: 2 }}>{m.label}</div>
               <div style={{ fontSize: 10, color: m.color, marginTop: 2 }}>{m.sub}</div>
@@ -1926,10 +1926,10 @@ function ContentDetailDialog({ post: p, brands, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 580, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 580, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: platColor + '22', color: platColor, border: `1px solid ${platColor}44`, textTransform: 'uppercase' }}>{p.platform}</span>
           <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: sentColor + '18', color: sentColor, border: `1px solid ${sentColor}33` }}>{p.sentiment}</span>
           {p.type && <span style={{ fontSize: 10, color: '#6b7280' }}>{p.type}</span>}
@@ -1938,7 +1938,7 @@ function ContentDetailDialog({ post: p, brands, onClose }: {
         </div>
 
         {/* Athlete + Brand */}
-        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: isJoola ? '#22c55e' : pgColor(p.brandSlug), flexShrink: 0 }} />
           <span style={{ fontWeight: 800, fontSize: 14, color: isJoola ? '#22c55e' : '#fff' }}>{p.athleteName}</span>
           <span style={{ color: '#6b7280', fontSize: 12 }}>· {brandName}</span>
@@ -1946,17 +1946,17 @@ function ContentDetailDialog({ post: p, brands, onClose }: {
         </div>
 
         {/* Caption */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Caption</div>
-          <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.65, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.65, background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {p.caption || '(no caption)'}
           </div>
         </div>
 
         {/* Metrics */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {metrics.map(m => (
-            <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+            <div key={m.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
               <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{m.label}</div>
             </div>
@@ -2005,10 +2005,10 @@ function ImpactDetailDialog({ row: r, brands, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: pgColor(r.brandSlug), flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{r.player}</div>
@@ -2019,14 +2019,14 @@ function ImpactDetailDialog({ row: r, brands, onClose }: {
         </div>
 
         {/* Classification explanation */}
-        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: clsColor + '08' }}>
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid var(--line)', background: clsColor + '08' }}>
           <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.6 }}>{CLS_DESC[r.classification]}</div>
         </div>
 
         {/* Metrics grid */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {metrics.map(m => (
-            <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+            <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
               <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{m.label}</div>
             </div>
@@ -2054,10 +2054,10 @@ function PlayerPostsDialog({ player, posts, onPostClick, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 15, color: '#fff' }}>{player}</div>
             <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{posts.length} posts · sorted by engagement</div>
@@ -2069,9 +2069,9 @@ function PlayerPostsDialog({ player, posts, onPostClick, onClose }: {
         <div style={{ overflowY: 'auto', flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {posts.map(p => (
             <div key={p.id} onClick={() => onPostClick(p)}
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', transition: 'border-color 150ms' }}
+              style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', transition: 'border-color 150ms' }}
               onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(96,165,250,0.4)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)')}>
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--line)')}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <PlatformPill p={p.platform} />
                 <span className={'pill ' + SENT_PILL[p.sentiment]} style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>{p.sentiment}</span>
@@ -2089,7 +2089,7 @@ function PlayerPostsDialog({ player, posts, onPostClick, onClose }: {
           ))}
         </div>
 
-        <div style={{ padding: '10px 22px', borderTop: '1px solid rgba(255,255,255,0.07)', fontSize: 11, color: '#6b7280', flexShrink: 0 }}>Press Esc to close</div>
+        <div style={{ padding: '10px 22px', borderTop: '1px solid var(--line)', fontSize: 11, color: '#6b7280', flexShrink: 0 }}>Press Esc to close</div>
       </div>
     </div>
   )

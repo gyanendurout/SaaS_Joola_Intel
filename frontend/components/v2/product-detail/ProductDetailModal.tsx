@@ -112,12 +112,12 @@ export function ProductDetailModal({ brand, productId, intel, brands, onClose }:
       onClick={onClose}
     >
       <div
-        style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.85)' }}
+        style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.85)' }}
         onClick={e => e.stopPropagation()}
       >
 
         {/* ── Header ── */}
-        <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'flex-start', gap: 12, flexShrink: 0 }}>
+        <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'flex-start', gap: 12, flexShrink: 0 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: brandColor, flexShrink: 0, marginTop: 5 }} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: 17, color: brand === 'joola' ? '#22c55e' : '#fff', lineHeight: 1.3, wordBreak: 'break-word' }}>{dn}</div>
@@ -158,7 +158,7 @@ export function ProductDetailModal({ brand, productId, intel, brands, onClose }:
                     <div
                       key={i}
                       title={`${r.date}: ${r.mention_count} mention${r.mention_count !== 1 ? 's' : ''}`}
-                      style={{ flex: 1, height: `${Math.max(4, (r.mention_count / maxD) * 100)}%`, background: r.mention_count > 0 ? brandColor : 'rgba(255,255,255,0.06)', borderRadius: '2px 2px 0 0', opacity: r.mention_count > 0 ? 0.85 : 1, minHeight: 4 }}
+                      style={{ flex: 1, height: `${Math.max(4, (r.mention_count / maxD) * 100)}%`, background: r.mention_count > 0 ? brandColor : 'var(--wb-6)', borderRadius: '2px 2px 0 0', opacity: r.mention_count > 0 ? 0.85 : 1, minHeight: 4 }}
                     />
                   ))}
                 </div>
@@ -224,7 +224,7 @@ export function ProductDetailModal({ brand, productId, intel, brands, onClose }:
         </div>
 
         {/* ── Footer ── */}
-        <div style={{ padding: '10px 24px', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', flexShrink: 0 }}>
+        <div style={{ padding: '10px 24px', borderTop: '1px solid var(--line)', display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', flexShrink: 0 }}>
           <span>Product Intelligence · {brandDisplay}</span>
           <span>Press Esc to close</span>
         </div>

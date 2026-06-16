@@ -35,7 +35,7 @@ interface ProductRow {
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110 }}>
+    <div style={{ background: 'var(--wb-6)', border: '1px solid var(--wb-10)', borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110 }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 800, color: color || '#fff', fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>{sub}</div>}
@@ -135,12 +135,12 @@ export default function SalesIntelBrandPage() {
 
       {/* ── Hero ── */}
       <div style={{
-        background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, rgba(13,17,23,0.95) 100%)`,
+        background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`,
         borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32,
       }}>
         <div style={{ marginBottom: 20 }}>
           <button onClick={() => router.back()}
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             ← Back
           </button>
         </div>
@@ -173,9 +173,9 @@ export default function SalesIntelBrandPage() {
               <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Product catalog · stock status</h2>
               <div className="sub">{products.length} products · latest snapshot availability</div>
             </div>
-            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 3 }}>
+            <div style={{ display: 'flex', gap: 4, background: 'var(--wb-5)', borderRadius: 8, padding: 3 }}>
               {(['status', 'price', 'name'] as const).map(k => (
-                <button key={k} onClick={() => setProductSort(k)} style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: productSort === k ? 'rgba(255,255,255,0.12)' : 'transparent', color: productSort === k ? 'var(--fg)' : 'var(--fg-4)', border: 'none' }}>
+                <button key={k} onClick={() => setProductSort(k)} style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: productSort === k ? 'var(--wb-12)' : 'transparent', color: productSort === k ? 'var(--fg)' : 'var(--fg-4)', border: 'none' }}>
                   {k.charAt(0).toUpperCase() + k.slice(1)}
                 </button>
               ))}
@@ -184,7 +184,7 @@ export default function SalesIntelBrandPage() {
 
           {/* Stock health bar */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 200, height: 10, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden', display: 'flex' }}>
+            <div style={{ flex: 1, minWidth: 200, height: 10, background: 'var(--wb-5)', borderRadius: 99, overflow: 'hidden', display: 'flex' }}>
               <div style={{ width: `${inPct}%`, background: '#22c55e' }} title={`In stock: ${inStock}`} />
               <div style={{ width: `${products.length > 0 ? (limited / products.length) * 100 : 0}%`, background: '#F5E625', opacity: 0.8 }} title={`Limited: ${limited}`} />
               <div style={{ width: `${products.length > 0 ? (outStock / products.length) * 100 : 0}%`, background: '#ef4444' }} title={`Out of stock: ${outStock}`} />
@@ -244,7 +244,7 @@ export default function SalesIntelBrandPage() {
             </div>
             <div className="card"><div className="card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {stockouts.map((r, i) => (
-                <div key={i} style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(251,146,60,0.2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div key={i} style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--wb-3)', border: '1px solid rgba(251,146,60,0.2)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--fg)' }}>{r.productName}</span>
                     <span className={`pill ${r.status === 'in_stock' ? 'pill-green' : r.status === 'limited' ? 'pill-amber' : 'pill-red'}`} style={{ fontSize: 9, flexShrink: 0 }}>{r.status.replace(/_/g, ' ')}</span>
@@ -271,7 +271,7 @@ export default function SalesIntelBrandPage() {
               {pressure.map((r, i) => {
                 const disc = r.discountPct ?? 0
                 return (
-                  <div key={i} style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div key={i} style={{ padding: '10px 12px', borderRadius: 8, background: 'var(--wb-3)', border: '1px solid var(--wb-6)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--fg)' }}>{r.productName}</span>
                       <span style={{ fontSize: 13, fontWeight: 800, color: r.currentPrice ? '#F5E625' : 'var(--fg-4)', fontFamily: 'JetBrains Mono', flexShrink: 0 }}>
@@ -281,7 +281,7 @@ export default function SalesIntelBrandPage() {
                     {disc !== 0 && (
                       <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 11 }}>
                         <span style={{ color: disc < 0 ? '#22c55e' : '#ef4444', fontWeight: 700 }}>{disc < 0 ? `↓ ${Math.abs(disc).toFixed(1)}% discount` : `↑ ${disc.toFixed(1)}% premium`}</span>
-                        <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ flex: 1, height: 4, background: 'var(--wb-5)', borderRadius: 99, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${Math.min(100, (Math.abs(disc) / maxPressureDiscount) * 100)}%`, background: disc < 0 ? '#22c55e' : '#ef4444', borderRadius: 99 }} />
                         </div>
                       </div>
@@ -307,13 +307,13 @@ export default function SalesIntelBrandPage() {
               {cadence.map((r, i) => {
                 const pc = patternColor(r.pattern)
                 return (
-                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 100px 80px', gap: 14, alignItems: 'center', padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 100px 80px', gap: 14, alignItems: 'center', padding: '10px 12px', borderRadius: 8, background: 'var(--wb-3)', border: '1px solid var(--wb-6)' }}>
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)' }}>{r.productName}</div>
                       {r.mostRecent && <div style={{ fontSize: 10, color: 'var(--fg-4)', marginTop: 2 }}>Last restock: {new Date(r.mostRecent).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ flex: 1, height: 5, background: 'var(--wb-5)', borderRadius: 99, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${(r.demand30d / maxCadenceDemand) * 100}%`, background: '#818cf8', borderRadius: 99 }} />
                       </div>
                       <span style={{ fontSize: 10, color: '#818cf8', fontFamily: 'JetBrains Mono', whiteSpace: 'nowrap' }}>{r.demand30d}</span>
@@ -326,7 +326,7 @@ export default function SalesIntelBrandPage() {
                 )
               })}
             </div>
-            <div style={{ display: 'flex', gap: 20, marginTop: 14, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 10, color: 'var(--fg-4)' }}>
+            <div style={{ display: 'flex', gap: 20, marginTop: 14, paddingTop: 10, borderTop: '1px solid var(--wb-6)', fontSize: 10, color: 'var(--fg-4)' }}>
               <span>Demand 30d = mention volume · Avg days = mean gap between restock events</span>
             </div>
           </div></div>

@@ -28,7 +28,7 @@ export function TableSearch({
     padding: '4px 10px',
     margin: '0 0 10px 0',
     background: 'rgba(0,0,0,0.25)',
-    border: '1px solid rgba(255,255,255,0.10)',
+    border: '1px solid var(--wb-10)',
     borderRadius: 6,
     width: typeof width === 'number' ? `${width}px` : width,
     maxWidth: '100%',

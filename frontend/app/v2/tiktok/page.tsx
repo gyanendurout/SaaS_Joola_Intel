@@ -335,7 +335,7 @@ export default function TikTokPage() {
                           <span style={{ fontSize: 11, fontWeight: 700, color: c.brand === 'joola' ? '#22c55e' : 'var(--fg)' }}>{name(c.brand)}</span>
                           <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{fmt(c.total)} comments · {Math.round((c.enriched / tot) * 100)}% enriched</span>
                         </div>
-                        <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
+                        <div style={{ display: 'flex', height: 8, borderRadius: 4, overflow: 'hidden', background: 'var(--line-2)' }}>
                           <div style={{ width: posPct + '%', background: '#22c55e' }} title={`Positive ${c.positive}`} />
                           <div style={{ width: neuPct + '%', background: '#94a3b8', opacity: 0.5 }} title={`Neutral ${c.neutral}`} />
                           <div style={{ width: negPct + '%', background: '#ef4444' }} title={`Negative ${c.negative}`} />
@@ -432,8 +432,8 @@ export default function TikTokPage() {
             const yScale = (c: number) => H - padB - (Math.log10(c + 1) / Math.log10(maxC + 1)) * (H - padT - padB)
             return (
               <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', cursor: 'pointer' }}>
-                <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
-                <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
+                <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="var(--wb-10)" />
+                <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="var(--wb-10)" />
                 <text x={W / 2} y={H - 6} fill="#8a93a4" fontSize="10" textAnchor="middle">Views (log scale)</text>
                 <text x={12} y={H / 2} fill="#8a93a4" fontSize="10" textAnchor="middle" transform={`rotate(-90 12 ${H / 2})`}>Comments (log scale)</text>
                 {sample.map((v, i) => {
@@ -472,7 +472,7 @@ export default function TikTokPage() {
                 style={{ background: '#0d1117', border: `1px solid ${bColor}55`, borderRadius: 16, width: '100%', maxWidth: 560, overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px ${bColor}22` }}>
 
                 {/* Header */}
-                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, rgba(13,17,23,0) 70%)`, padding: '20px 22px 18px', borderBottom: `1px solid rgba(255,255,255,0.07)`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, rgba(13,17,23,0) 70%)`, padding: '20px 22px 18px', borderBottom: `1px solid var(--line)`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 40, height: 40, borderRadius: '50%', background: bColor, boxShadow: `0 0 18px ${bColor}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-2.47 12 12 0 00-11.64 0A4.83 4.83 0 01.41 6.69 49.11 49.11 0 000 12a49.11 49.11 0 00.41 5.31 4.83 4.83 0 003.77 2.47 12 12 0 0011.64 0 4.83 4.83 0 003.77-2.47A49.11 49.11 0 0024 12a49.11 49.11 0 00-.41-5.31zM9.75 15.02V8.98l6 3.02z"/></svg>
@@ -483,14 +483,14 @@ export default function TikTokPage() {
                     </div>
                   </div>
                   <button onClick={() => setSelectedVideo(null)}
-                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
+                    style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
                 </div>
 
                 {/* Body */}
                 <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {/* Caption */}
                   {v.text && (
-                    <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0, padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, borderLeft: `3px solid ${bColor}` }}>
+                    <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6, margin: 0, padding: '12px 14px', background: 'var(--wb-3)', borderRadius: 8, borderLeft: `3px solid ${bColor}` }}>
                       {v.text}
                     </p>
                   )}
@@ -503,7 +503,7 @@ export default function TikTokPage() {
                       { label: 'Comments', value: fmt(v.comments), color: '#a78bfa', icon: '💬' },
                       { label: 'Shares',   value: fmt(v.shares),   color: '#34d399', icon: '↗' },
                     ].map(({ label, value, color: c, icon }) => (
-                      <div key={label} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${c}22`, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
+                      <div key={label} style={{ background: 'var(--line-2)', border: `1px solid ${c}22`, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
                         <div style={{ fontSize: 16, marginBottom: 4 }}>{icon}</div>
                         <div style={{ fontSize: 16, fontWeight: 800, color: c, fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
                         <div style={{ fontSize: 10, color: 'var(--fg-4)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
@@ -513,11 +513,11 @@ export default function TikTokPage() {
 
                   {/* Eng rate + posted */}
                   <div style={{ display: 'flex', gap: 12 }}>
-                    <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ flex: 1, background: 'var(--wb-3)', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>Engagement rate</span>
                       <span style={{ fontSize: 14, fontWeight: 800, color: Number(engRate) > 5 ? '#22c55e' : Number(engRate) > 2 ? '#F5E625' : '#ef4444', fontFamily: 'JetBrains Mono' }}>{engRate}%</span>
                     </div>
-                    <div style={{ flex: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ flex: 1, background: 'var(--wb-3)', borderRadius: 8, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>Posted</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-2)', fontFamily: 'JetBrains Mono' }}>{v.days === 0 ? 'Today' : `${v.days}d ago`}</span>
                     </div>
@@ -532,7 +532,7 @@ export default function TikTokPage() {
                 </div>
 
                 {/* Footer */}
-                <div style={{ padding: '10px 22px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ padding: '10px 22px', borderTop: '1px solid var(--wb-6)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
                   <span>TikTok Video Intelligence · {name(v.brand)}</span>
                   <span>Press Esc or click outside to close</span>
                 </div>
@@ -680,7 +680,7 @@ export default function TikTokPage() {
           {sortedVideos.length > 0 ? (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data">
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
                     <SortTh col="text" label="Caption" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />

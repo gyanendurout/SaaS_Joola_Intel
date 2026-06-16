@@ -363,7 +363,7 @@ export default function YouTubePage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th>Brand</th>
                     <th style={{ width: '25%' }}>Video</th>
@@ -546,7 +546,7 @@ export default function YouTubePage() {
           {sortedVideos.length > 0 ? (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data">
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
                     <SortTh col="title" label="Title" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />

@@ -44,7 +44,7 @@ export function ProductPriceContext({ productPrice, brandStat, brandColor, norm 
             { label: 'vs avg',       value: `${vsAvg >= 0 ? '+' : ''}$${vsAvg.toFixed(0)}`, color: vsAvg >= 0 ? '#ef4444' : '#22c55e', tip: 'How this product\'s price compares to the brand average. Positive = more expensive than average.' },
             { label: 'Percentile',   value: `${pctile}th`,                 color: '#a78bfa', tip: `This product is more expensive than ${pctile}% of products in the brand's catalogue.` },
           ].map(m => (
-            <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', cursor: m.tip ? 'help' : 'default' }}>
+            <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', cursor: m.tip ? 'help' : 'default' }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 }}>{m.label}</div>
               <div style={{ fontSize: 18, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
             </div>

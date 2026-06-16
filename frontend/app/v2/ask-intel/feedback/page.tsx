@@ -97,7 +97,7 @@ export default function AskIntelFeedbackPage() {
               style={{
                 padding: '5px 12px', fontSize: 11, borderRadius: 3, cursor: 'pointer',
                 background: filter === f ? 'rgba(245,230,37,0.12)' : 'transparent',
-                border: '1px solid ' + (filter === f ? 'rgba(245,230,37,0.4)' : 'rgba(255,255,255,0.1)'),
+                border: '1px solid ' + (filter === f ? 'rgba(245,230,37,0.4)' : 'var(--wb-10)'),
                 color: filter === f ? '#F5E625' : 'var(--fg-3)',
                 fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em',
               }}
@@ -195,7 +195,7 @@ function FeedbackRow({
         </td>
         <td style={{ textAlign: 'center' }}>
           <button onClick={onToggle} style={{
-            background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
+            background: 'transparent', border: '1px solid var(--wb-12)',
             color: 'var(--fg-3)', fontSize: 10, padding: '2px 6px', cursor: 'pointer',
             borderRadius: 3,
           }}>

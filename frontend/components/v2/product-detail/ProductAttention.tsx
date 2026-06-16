@@ -44,7 +44,7 @@ export function ProductAttention({ row, brandColor }: Props) {
             { label: 'Total mentions',  value: fmt(row.mentions),                                   color: '#60a5fa', tip: 'Total community mentions for this product in the active date window across all tracked channels.' },
             { label: 'Est. units sold', value: row.estimatedUnitsSold != null ? fmt(row.estimatedUnitsSold) : '—', color: '#22c55e', tip: 'AI-estimated units sold based on attention score and historical signal patterns. Directional only — not actual sales data.' },
           ].map(m => (
-            <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 8, padding: '12px 14px', cursor: 'help' }}>
+            <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '12px 14px', cursor: 'help' }}>
               <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{m.label}</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: m.value === '—' ? 'var(--fg-4)' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
             </div>

@@ -129,7 +129,7 @@ export default function CatalogueProductPage() {
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80 }}>
                 {dailyRows.map((r, i) => (
                   <div key={i} title={`${r.date}: ${r.mention_count} mentions`}
-                    style={{ flex: 1, height: `${Math.max(3, (r.mention_count / maxD) * 100)}%`, background: r.mention_count > 0 ? brandColor : 'rgba(255,255,255,0.06)', borderRadius: '2px 2px 0 0', opacity: r.mention_count > 0 ? 0.85 : 1, cursor: 'default', minHeight: 3 }} />
+                    style={{ flex: 1, height: `${Math.max(3, (r.mention_count / maxD) * 100)}%`, background: r.mention_count > 0 ? brandColor : 'var(--wb-6)', borderRadius: '2px 2px 0 0', opacity: r.mention_count > 0 ? 0.85 : 1, cursor: 'default', minHeight: 3 }} />
                 ))}
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--fg-4)', marginTop: 6 }}>

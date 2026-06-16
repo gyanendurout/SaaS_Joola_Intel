@@ -531,7 +531,7 @@ export default function CommunityIntelPage() {
                     <td style={{ textAlign: 'right', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                         <span style={{ fontWeight: 700, color: '#fff' }}>{fmt(r.total)}</span>
-                        <div style={{ width: 80, height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ width: 80, height: 6, background: 'var(--wb-5)', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ width: `${barPct}%`, height: '100%', background: isJoola ? '#22c55e' : '#F5E625' }} />
                         </div>
                       </div>
@@ -860,7 +860,7 @@ export default function CommunityIntelPage() {
         <div className="card">
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%', minWidth: 980 }}>
-              <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+              <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                 <tr>
                   <th>Status</th>
                   <SortTh col="brand" label="Brand" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} style={{ textAlign: 'left' }} />
@@ -1323,8 +1323,8 @@ function ImpactCards({
 }) {
   const card: React.CSSProperties = {
     padding: 14,
-    background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--wb-3)',
+    border: '1px solid var(--wb-8)',
     borderRadius: 8,
     fontSize: 12,
     color: 'var(--fg-2)',
@@ -1416,7 +1416,7 @@ function CommunityTrendChart({ points }: { points: TrendPoint[] }) {
       <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
         {[0, Math.ceil(max / 2), max].map((tick) => (
           <g key={tick}>
-            <line x1={padL} x2={w - padR} y1={y(tick)} y2={y(tick)} stroke="rgba(255,255,255,0.06)" strokeDasharray="2 4" />
+            <line x1={padL} x2={w - padR} y1={y(tick)} y2={y(tick)} stroke="var(--wb-6)" strokeDasharray="2 4" />
             <text x={padL - 6} y={y(tick) + 3} textAnchor="end" fontSize={10} fill="#6b7280">{tick}</text>
           </g>
         ))}
@@ -1463,7 +1463,7 @@ function CommunityTrendChart({ points }: { points: TrendPoint[] }) {
             top: 22,
             transform: 'translateX(-50%)',
             background: 'rgba(7,9,14,0.95)',
-            border: '1px solid rgba(255,255,255,0.15)',
+            border: '1px solid var(--wb-14)',
             borderRadius: 6,
             padding: '8px 10px',
             fontSize: 11,
@@ -1722,7 +1722,7 @@ function JoolaSummary({
                     <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 99, background: communityChannelColor(ch), marginRight: 6 }} />
                     {communityChannelLabel(ch)}
                   </span>
-                  <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: 6, background: 'var(--wb-5)', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{ width: `${pct}%`, height: '100%', background: '#22c55e' }} />
                   </div>
                   <span style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: '#fff', fontWeight: 700 }}>{count}</span>
@@ -1811,11 +1811,11 @@ function SignalDetailDialog({
       onClick={onClose}
     >
       <div
-        style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }}
+        style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 99, background: `${chColor}22`, color: chColor, border: `1px solid ${chColor}44` }}>
             {s.sourceLabel}
           </span>
@@ -1848,7 +1848,7 @@ function SignalDetailDialog({
           </div>
 
           {/* Full text */}
-          <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.7, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '14px 16px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+          <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.7, background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '14px 16px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
             {s.summary || '(no content)'}
           </div>
 
@@ -1860,7 +1860,7 @@ function SignalDetailDialog({
               ['Posted', formatCalendarDate(s.postedAt)],
               ['Days ago', `${s.days} day${s.days !== 1 ? 's' : ''}`],
             ].map(([label, val]) => (
-              <div key={label} style={{ background: 'rgba(255,255,255,0.03)', borderRadius: 6, padding: '8px 12px' }}>
+              <div key={label} style={{ background: 'var(--wb-3)', borderRadius: 6, padding: '8px 12px' }}>
                 <div style={{ color: '#6b7280', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 3 }}>{label}</div>
                 <div style={{ color: '#cbd1dc' }}>{val}</div>
               </div>
@@ -1869,7 +1869,7 @@ function SignalDetailDialog({
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '12px 24px', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ padding: '12px 24px', borderTop: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
           {s.link
             ? <a href={s.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', textDecoration: 'none', padding: '6px 14px', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 6, background: 'rgba(96,165,250,0.08)' }}>
@@ -1915,11 +1915,11 @@ function SignalDialog({
       onClick={onClose}
     >
       <div
-        style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '82vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
+        style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '82vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: '#fff', letterSpacing: 0.3 }}>{brandName}</div>
@@ -1929,7 +1929,7 @@ function SignalDialog({
         </div>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--line)' }}>
           {([['crisis', `⚠ Crisis (${crisis.length})`, '#ef4444'], ['negative', `▼ Negative (${negative.length})`, '#f97316']] as const).map(([t, label, color]) => (
             <button
               key={t}
@@ -1951,7 +1951,7 @@ function SignalDialog({
             const chKey = String(s.source).split('_')[0]
             const chColor = CHANNEL_COLOR[chKey] || CHANNEL_COLOR.default
             return (
-              <div key={s.uniqueKey} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${s.isCrisis ? 'rgba(239,68,68,0.25)' : 'rgba(249,115,22,0.18)'}`, borderRadius: 8, padding: '12px 14px' }}>
+              <div key={s.uniqueKey} style={{ background: 'var(--wb-3)', border: `1px solid ${s.isCrisis ? 'rgba(239,68,68,0.25)' : 'rgba(249,115,22,0.18)'}`, borderRadius: 8, padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: `${chColor}22`, color: chColor, border: `1px solid ${chColor}44` }}>
                     {s.sourceLabel}
@@ -1976,7 +1976,7 @@ function SignalDialog({
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '10px 20px', borderTop: '1px solid rgba(255,255,255,0.07)', fontSize: 11, color: '#6b7280', display: 'flex', justifyContent: 'space-between' }}>
+        <div style={{ padding: '10px 20px', borderTop: '1px solid var(--line)', fontSize: 11, color: '#6b7280', display: 'flex', justifyContent: 'space-between' }}>
           <span>Showing signals from the active filter window</span>
           <span>Press Esc to close</span>
         </div>

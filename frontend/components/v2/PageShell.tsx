@@ -150,7 +150,7 @@ export function EmptyState({
   return (
     <div style={{ padding: '48px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
       {icon && (
-        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--wb-5)', border: '1px solid var(--wb-8)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
           {icon}
         </div>
       )}

@@ -14,7 +14,7 @@ import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
-    <div style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110 }}>
+    <div style={{ background: 'var(--wb-6)', border: '1px solid var(--wb-10)', borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110 }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 800, color: color || '#fff', fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>{sub}</div>}
@@ -25,9 +25,9 @@ function StatCard({ label, value, sub, color }: { label: string; value: string; 
 function PostCard({ m, color }: { m: V2RedditMention; color: string }) {
   return (
     <a href={m.url || `https://www.reddit.com/search/?q=${encodeURIComponent(m.title)}`} target="_blank" rel="noopener noreferrer"
-      style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', gap: 10, borderRadius: 12, padding: '14px 16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s' }}
+      style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', gap: 10, borderRadius: 12, padding: '14px 16px', background: 'var(--line-2)', border: '1px solid var(--wb-8)', transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s' }}
       onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.transform = 'translateY(-3px)'; el.style.boxShadow = `0 10px 32px ${color}33`; el.style.borderColor = color + '55' }}
-      onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = ''; el.style.boxShadow = ''; el.style.borderColor = 'rgba(255,255,255,0.08)' }}>
+      onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.transform = ''; el.style.boxShadow = ''; el.style.borderColor = 'var(--wb-8)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 10, fontWeight: 700, color, background: color + '20', padding: '2px 8px', borderRadius: 4 }}>r/{m.subreddit}</span>
         <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{formatCalendarDateFromDaysAgo(m.days)}</span>
@@ -36,7 +36,7 @@ function PostCard({ m, color }: { m: V2RedditMention; color: string }) {
       {m.body && (
         <p style={{ fontSize: 11, color: 'var(--fg-4)', lineHeight: 1.5, margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{m.body}</p>
       )}
-      <div style={{ display: 'flex', gap: 14, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ display: 'flex', gap: 14, paddingTop: 8, borderTop: '1px solid var(--wb-6)' }}>
         <span style={{ fontSize: 11, color: '#F5E625', fontFamily: 'JetBrains Mono', fontWeight: 700 }}>↑ {fmt(m.score)}</span>
         <span style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'JetBrains Mono' }}>💬 {fmt(m.comments)}</span>
       </div>
@@ -108,9 +108,9 @@ export default function RedditBrandPage() {
   return (
     <div style={{ minHeight: '100vh' }}>
       {/* Hero */}
-      <div style={{ background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, rgba(13,17,23,0.95) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
+      <div style={{ background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
         <div style={{ marginBottom: 20 }}>
-          <button onClick={() => router.back()} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>← Back</button>
+          <button onClick={() => router.back()} style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>← Back</button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -185,7 +185,7 @@ export default function RedditBrandPage() {
                       <a href={`https://reddit.com/r/${sub}`} target="_blank" rel="noopener noreferrer" style={{ color: color, fontWeight: 600, textDecoration: 'none' }}>r/{sub}</a>
                       <span style={{ color: 'var(--fg-3)', fontFamily: 'JetBrains Mono' }}>{count}</span>
                     </div>
-                    <div style={{ height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: 5, background: 'var(--wb-5)', borderRadius: 99, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${(count / maxSub) * 100}%`, background: color, borderRadius: 99 }} />
                     </div>
                   </div>
@@ -201,7 +201,7 @@ export default function RedditBrandPage() {
                       <span style={{ color: 'var(--fg-2)', fontWeight: 600 }}>"{c.keyword}"</span>
                       <span style={{ color: '#ef4444', fontFamily: 'JetBrains Mono', fontWeight: 700 }}>{c.mentions}</span>
                     </div>
-                    <div style={{ height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: 5, background: 'var(--wb-5)', borderRadius: 99, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${(c.mentions / maxCrisis) * 100}%`, background: '#ef4444', borderRadius: 99 }} />
                     </div>
                   </div>
@@ -219,9 +219,9 @@ export default function RedditBrandPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {viral.slice(0, 5).map((v, i) => (
               <a key={i} href={v.url} target="_blank" rel="noopener noreferrer"
-                style={{ textDecoration: 'none', display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 14, alignItems: 'center', padding: '12px 16px', borderRadius: 10, background: 'rgba(255,255,255,0.04)', border: `1px solid ${color}22`, transition: 'background 0.15s' }}
+                style={{ textDecoration: 'none', display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 14, alignItems: 'center', padding: '12px 16px', borderRadius: 10, background: 'var(--line-2)', border: `1px solid ${color}22`, transition: 'background 0.15s' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = `${color}10` }}
-                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)' }}>
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--line-2)' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color, background: color + '20', padding: '2px 8px', borderRadius: 4 }}>r/{v.subreddit}</span>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.title}</span>
                 <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
@@ -241,9 +241,9 @@ export default function RedditBrandPage() {
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Posts · {mentions.length} tracked</h2>
             <div className="sub">Sorted by {sortKey} · click a card to open on Reddit</div>
           </div>
-          <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 3 }}>
+          <div style={{ display: 'flex', gap: 4, background: 'var(--wb-5)', borderRadius: 8, padding: 3 }}>
             {(['score', 'comments', 'days'] as const).map(k => (
-              <button key={k} onClick={() => setSortKey(k)} style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: sortKey === k ? 'rgba(255,255,255,0.12)' : 'transparent', color: sortKey === k ? 'var(--fg)' : 'var(--fg-4)', border: 'none' }}>
+              <button key={k} onClick={() => setSortKey(k)} style={{ padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', background: sortKey === k ? 'var(--wb-12)' : 'transparent', color: sortKey === k ? 'var(--fg)' : 'var(--fg-4)', border: 'none' }}>
                 {k === 'days' ? 'Recent' : k === 'score' ? 'Score' : 'Comments'}
               </button>
             ))}

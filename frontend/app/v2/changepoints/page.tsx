@@ -413,7 +413,7 @@ export default function ChangepointsPage() {
                   </h3>
                   <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
                     <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                      <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                         <tr>
                           <SortTh col="date" label="Date" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} />
                           <SortTh col="brandName" label="Brand" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} />
@@ -489,7 +489,7 @@ export default function ChangepointsPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 520, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th>Brand</th>
                     <th>Product</th>

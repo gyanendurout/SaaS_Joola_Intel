@@ -245,7 +245,7 @@ export default function RedditPage() {
                       </td>
                       <td>
                         {d.mentions > 0 ? (
-                          <div style={{ height: 8, display: 'flex', borderRadius: 4, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', minWidth: 120 }}>
+                          <div style={{ height: 8, display: 'flex', borderRadius: 4, overflow: 'hidden', background: 'var(--line-2)', minWidth: 120 }}>
                             <div style={{ width: `${posPct}%`, background: '#22c55e', opacity: 0.9 }} title={`Positive: ${posPct}%`} />
                             <div style={{ width: `${neuPct}%`, background: '#94a3b8', opacity: 0.5 }} title={`Neutral: ${neuPct}%`} />
                             <div style={{ width: `${negPct}%`, background: '#ef4444', opacity: 0.9 }} title={`Negative: ${negPct}%`} />

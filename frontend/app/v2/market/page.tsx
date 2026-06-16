@@ -451,8 +451,8 @@ export default function MarketIntelPage() {
             const dotColor = brandSlug ? pgColor(brandSlug) : '#3a4150'
             const sentimentLeft = ((sentiment + 1) / 2) * 100
             const cardStyle: React.CSSProperties = {
-              background: 'rgba(255,255,255,0.04)',
-              border: isJoola ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.08)',
+              background: 'var(--line-2)',
+              border: isJoola ? '1px solid rgba(34,197,94,0.4)' : '1px solid var(--wb-8)',
               borderRadius: 12,
               padding: 14,
               boxShadow: isJoola ? '0 0 20px rgba(34,197,94,0.1)' : 'none',
@@ -494,7 +494,7 @@ export default function MarketIntelPage() {
                       height: 8,
                       borderRadius: 999,
                       background: hasData ? (sentiment >= 0 ? '#22c55e' : '#ef4444') : '#6b7280',
-                      border: '1px solid rgba(13,17,23,0.9)',
+                      border: '1px solid var(--sticky-bg)',
                     }}
                   />
                 </div>
@@ -614,7 +614,7 @@ export default function MarketIntelPage() {
             return (
               <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
               <table className="data" style={{ width: '100%', minWidth: 880 }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th style={{ textAlign: 'left' }}>Brand</th>
                     <SortTh col="igFollowers" label="IG Followers" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
@@ -684,7 +684,7 @@ export default function MarketIntelPage() {
           {marketIntel ? (
             <div className="table-wrap" style={{ overflowX: 'auto' }}>
               <table className="data" style={{ width: '100%', minWidth: 960 }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th style={{ textAlign: 'left' }}>Area</th>
                     <th style={{ textAlign: 'left' }}>Winner</th>

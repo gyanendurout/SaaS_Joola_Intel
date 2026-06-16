@@ -20,7 +20,7 @@ const YT_HANDLES: Record<string, string> = {
 function AnalysisRow({ a, color }: { a: V2YTVideoAnalysis; color: string }) {
   return (
     <div title={a.performanceThesis || undefined}
-      style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start', padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', cursor: 'help' }}>
+      style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start', padding: '10px 12px', borderRadius: 8, background: 'var(--wb-3)', border: '1px solid var(--wb-6)', cursor: 'help' }}>
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg)', marginBottom: 4, lineHeight: 1.35 }}>
           {a.url
@@ -43,7 +43,7 @@ function AnalysisRow({ a, color }: { a: V2YTVideoAnalysis; color: string }) {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>{fmt(a.views)}</span>
         {a.contentType && (
-          <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 4, background: 'rgba(255,255,255,0.06)', color: 'var(--fg-3)', fontWeight: 600, whiteSpace: 'nowrap' }}>{a.contentType}</span>
+          <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 4, background: 'var(--wb-6)', color: 'var(--fg-3)', fontWeight: 600, whiteSpace: 'nowrap' }}>{a.contentType}</span>
         )}
       </div>
     </div>
@@ -53,7 +53,7 @@ function AnalysisRow({ a, color }: { a: V2YTVideoAnalysis; color: string }) {
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)',
+      background: 'var(--wb-6)', border: '1px solid var(--wb-10)',
       borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110,
     }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>{label}</div>
@@ -74,12 +74,12 @@ function VideoCard({ v, color }: { v: V2TopYTVideo; color: string }) {
   const likeRatio = v.views > 0 ? ((v.likes / v.views) * 100).toFixed(2) : '0'
   return (
     <a href={watchHref} target="_blank" rel="noopener noreferrer"
-      style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', borderRadius: 12, overflow: 'hidden', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s', cursor: 'pointer' }}
+      style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', borderRadius: 12, overflow: 'hidden', background: 'var(--line-2)', border: '1px solid var(--wb-8)', transition: 'transform 0.18s, box-shadow 0.18s, border-color 0.18s', cursor: 'pointer' }}
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 12px 40px ${color}33`; (e.currentTarget as HTMLElement).style.borderColor = color + '55' }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = ''; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)' }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = ''; (e.currentTarget as HTMLElement).style.borderColor = 'var(--wb-8)' }}
     >
       {/* Thumbnail */}
-      <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: 'rgba(255,255,255,0.03)', flexShrink: 0 }}>
+      <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: 'var(--wb-3)', flexShrink: 0 }}>
         {thumbUrl ? (
           <img src={thumbUrl} alt={v.title} onError={() => setImgErr(true)}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -195,7 +195,7 @@ export default function YoutubeBrandPage() {
     <div style={{ minHeight: '100vh' }}>
       {/* ── Hero ── */}
       <div style={{
-        background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, rgba(13,17,23,0.95) 100%)`,
+        background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`,
         borderBottom: `1px solid ${color}33`,
         padding: '28px 0 32px',
         marginBottom: 32,
@@ -204,7 +204,7 @@ export default function YoutubeBrandPage() {
         {/* Back nav */}
         <div style={{ marginBottom: 20 }}>
           <button onClick={() => router.back()}
-            style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             ← Back
           </button>
         </div>
@@ -269,7 +269,7 @@ export default function YoutubeBrandPage() {
               { label: '💬 Most Discussed', video: topByComments, val: fmt(topByComments?.comments), metricColor: '#a78bfa' },
             ].map(({ label, video, val, metricColor }) => video ? (
               <a key={label} href={video.url || '#'} target="_blank" rel="noopener noreferrer"
-                style={{ textDecoration: 'none', background: 'rgba(255,255,255,0.04)', border: `1px solid ${color}33`, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10, transition: 'transform 0.15s, box-shadow 0.15s' }}
+                style={{ textDecoration: 'none', background: 'var(--line-2)', border: `1px solid ${color}33`, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10, transition: 'transform 0.15s, box-shadow 0.15s' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow = `0 8px 28px ${color}22` }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = '' }}>
                 <span style={{ fontSize: 11, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
@@ -301,9 +301,9 @@ export default function YoutubeBrandPage() {
                   {analyses.length > 5 && (
                     <button
                       onClick={() => setShowAllAnalyses(true)}
-                      style={{ marginTop: 4, padding: '9px 0', background: 'rgba(255,255,255,0.04)', border: `1px solid ${color}44`, borderRadius: 8, color, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', transition: 'background 0.15s' }}
+                      style={{ marginTop: 4, padding: '9px 0', background: 'var(--line-2)', border: `1px solid ${color}44`, borderRadius: 8, color, fontSize: 12, fontWeight: 700, cursor: 'pointer', width: '100%', transition: 'background 0.15s' }}
                       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = color + '14' }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'var(--line-2)' }}
                     >
                       View all {analyses.length} analyses ↗
                     </button>
@@ -321,14 +321,14 @@ export default function YoutubeBrandPage() {
                   onClick={e => e.stopPropagation()}
                   style={{ background: '#0d1117', border: `1px solid ${color}44`, borderRadius: 16, width: '100%', maxWidth: 780, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px ${color}22` }}>
                   {/* Modal header */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: `1px solid rgba(255,255,255,0.08)`, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: `1px solid var(--wb-8)`, flexShrink: 0 }}>
                     <div>
                       <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg)' }}>Content analysis · AI performance theses</div>
                       <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 3 }}>{analyses.length} videos analysed for {brandName}</div>
                     </div>
                     <button
                       onClick={() => setShowAllAnalyses(false)}
-                      style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, lineHeight: 1, flexShrink: 0 }}>
+                      style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, lineHeight: 1, flexShrink: 0 }}>
                       ×
                     </button>
                   </div>
@@ -388,7 +388,7 @@ export default function YoutubeBrandPage() {
           {/* Controls */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Type filter */}
-            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 3 }}>
+            <div style={{ display: 'flex', gap: 4, background: 'var(--wb-5)', borderRadius: 8, padding: 3 }}>
               {(['all', 'long', 'short'] as const).map(t => (
                 <button key={t} onClick={() => setTypeFilter(t)} style={{
                   padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
@@ -401,11 +401,11 @@ export default function YoutubeBrandPage() {
               ))}
             </div>
             {/* Sort */}
-            <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 8, padding: 3 }}>
+            <div style={{ display: 'flex', gap: 4, background: 'var(--wb-5)', borderRadius: 8, padding: 3 }}>
               {([['views', 'Views'], ['likes', 'Likes'], ['comments', 'Comments'], ['days', 'Recent']] as const).map(([key, lbl]) => (
                 <button key={key} onClick={() => setSortKey(key)} style={{
                   padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                  background: sortKey === key ? 'rgba(255,255,255,0.12)' : 'transparent',
+                  background: sortKey === key ? 'var(--wb-12)' : 'transparent',
                   color: sortKey === key ? 'var(--fg)' : 'var(--fg-4)',
                   border: 'none',
                 }}>

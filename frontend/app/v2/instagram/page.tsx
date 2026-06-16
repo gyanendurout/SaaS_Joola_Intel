@@ -268,11 +268,11 @@ export default function InstagramPage() {
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
             onClick={() => setIgDrillBrand(null)}>
-            <div style={{ background: '#0d1117', border: `1px solid ${isJ ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 14, width: '100%', maxWidth: 920, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.9)' }}
+            <div style={{ background: '#0d1117', border: `1px solid ${isJ ? 'rgba(34,197,94,0.3)' : 'var(--wb-10)'}`, borderRadius: 14, width: '100%', maxWidth: 920, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.9)' }}
               onClick={e => e.stopPropagation()}>
 
               {/* Header */}
-              <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
                 <span style={{ width: 12, height: 12, borderRadius: '50%', background: bColor }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 800, fontSize: 17, color: isJ ? '#22c55e' : '#fff' }}>{bName}</div>
@@ -299,7 +299,7 @@ export default function InstagramPage() {
                     { l: 'Avg Likes',    v: avgLikes > 0 ? fmt(avgLikes) : '—', c: '#f97316', tip: 'Average likes per post' },
                     { l: 'Avg Comments', v: avgComments > 0 ? fmt(avgComments) : '—', c: '#a78bfa', tip: 'Average comments per post' },
                   ].map(m => (
-                    <div key={m.l} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px', cursor: 'help' }}>
+                    <div key={m.l} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px', cursor: 'help' }}>
                       <div style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>{m.l}</div>
                       <div style={{ fontSize: 16, fontWeight: 800, color: m.c, fontFamily: 'JetBrains Mono' }}>{m.v}</div>
                     </div>
@@ -323,7 +323,7 @@ export default function InstagramPage() {
                     {FMT_DEF.map(f => (
                       <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }} title={`${f.label}: avg ${fmt(Math.round(f.avg))} likes across ${f.n} posts`}>
                         <span style={{ width: 80, fontSize: 11, color: 'var(--fg-4)', textAlign: 'right', flexShrink: 0 }}>{f.label}</span>
-                        <div style={{ flex: 1, height: 14, background: 'rgba(255,255,255,0.04)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ flex: 1, height: 14, background: 'var(--line-2)', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${Math.max(f.avg > 0 ? 2 : 0, (f.avg / fmtMax) * 100)}%`, background: f.color, borderRadius: 3, opacity: 0.85 }} />
                         </div>
                         <span style={{ fontSize: 12, fontWeight: 700, color: f.avg > 0 ? f.color : 'var(--fg-4)', minWidth: 50, textAlign: 'right', fontFamily: 'JetBrains Mono' }}>{f.avg > 0 ? fmt(Math.round(f.avg)) : '—'}</span>
@@ -341,7 +341,7 @@ export default function InstagramPage() {
                       <div key={r.brand} style={{ display: 'flex', alignItems: 'center', gap: 8, opacity: r.brand === igDrillBrand ? 1 : 0.55 }}>
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: pgColor(r.brand), flexShrink: 0 }} />
                         <span style={{ fontSize: 11, minWidth: 110, fontWeight: r.brand === igDrillBrand ? 800 : 400, color: r.brand === igDrillBrand ? (isJ ? '#22c55e' : bColor) : 'var(--fg-3)' }}>{name(r.brand)}</span>
-                        <div style={{ flex: 1, height: 10, background: 'rgba(255,255,255,0.04)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ flex: 1, height: 10, background: 'var(--line-2)', borderRadius: 2, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${(r.engRate / maxER) * 100}%`, background: r.brand === igDrillBrand ? (isJ ? '#22c55e' : bColor) : pgColor(r.brand), borderRadius: 2 }} />
                         </div>
                         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', minWidth: 46, textAlign: 'right', fontFamily: 'JetBrains Mono' }}>{r.engRate.toFixed(2)}%</span>
@@ -363,7 +363,7 @@ export default function InstagramPage() {
                         const weekIdx = Math.floor(i / 7)
                         const dayName = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][dayIdx]
                         return (
-                          <div key={i} title={`Week ${weekIdx + 1} · ${dayName}: ${v} post${v !== 1 ? 's' : ''}`} style={{ height: 22, background: v === 0 ? 'rgba(255,255,255,0.03)' : bColor + (['00','55','88','bb','ff'][Math.min(v,4)]), borderRadius: 4, cursor: 'default' }} />
+                          <div key={i} title={`Week ${weekIdx + 1} · ${dayName}: ${v} post${v !== 1 ? 's' : ''}`} style={{ height: 22, background: v === 0 ? 'var(--wb-3)' : bColor + (['00','55','88','bb','ff'][Math.min(v,4)]), borderRadius: 4, cursor: 'default' }} />
                         )
                       })}
                     </div>
@@ -391,7 +391,7 @@ export default function InstagramPage() {
                     <div style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8 }}>Top {topPosts.length} posts by likes</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {topPosts.map((p, i) => (
-                        <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 7 }}>
+                        <div key={i} style={{ display: 'flex', gap: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--wb-5)', borderRadius: 7 }}>
                           <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700, minWidth: 16 }}>#{i+1}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 11, color: 'var(--fg-3)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
@@ -411,7 +411,7 @@ export default function InstagramPage() {
                 )}
               </div>
 
-              <div style={{ padding: '10px 22px', borderTop: '1px solid rgba(255,255,255,0.07)', fontSize: 11, color: '#6b7280', display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div style={{ padding: '10px 22px', borderTop: '1px solid var(--line)', fontSize: 11, color: '#6b7280', display: 'flex', justifyContent: 'space-between', flexShrink: 0 }}>
                 <span>Instagram Intelligence · {bName}</span>
                 <span>Press Esc to close</span>
               </div>
@@ -627,7 +627,7 @@ export default function InstagramPage() {
                                   <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                                     title={`${f.label}: avg ${fmt(Math.round(v))} likes across ${n} posts`}>
                                     <span style={{ fontSize: 10, color: 'var(--fg-4)', width: 68, textAlign: 'right', flexShrink: 0 }}>{f.label}</span>
-                                    <div style={{ flex: 1, height: 14, background: 'rgba(255,255,255,0.04)', borderRadius: 3, position: 'relative', overflow: 'hidden' }}>
+                                    <div style={{ flex: 1, height: 14, background: 'var(--line-2)', borderRadius: 3, position: 'relative', overflow: 'hidden' }}>
                                       <div style={{
                                         height: '100%', width: pct + '%',
                                         background: v > 0 ? f.color : 'transparent',
@@ -649,7 +649,7 @@ export default function InstagramPage() {
                                 )
                               })}
                             </div>
-                            <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', marginTop: 10 }} />
+                            <div style={{ borderBottom: '1px solid var(--wb-5)', marginTop: 10 }} />
                           </div>
                         )
                       })}
@@ -716,7 +716,7 @@ export default function InstagramPage() {
                           style={{
                             display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
                             background: isJ ? 'rgba(34,197,94,0.05)' : 'rgba(255,255,255,0.025)',
-                            border: `1px solid ${isJ ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.06)'}`,
+                            border: `1px solid ${isJ ? 'rgba(34,197,94,0.2)' : 'var(--wb-6)'}`,
                             borderRadius: 10,
                           }}>
                           {/* Brand */}
@@ -741,7 +741,7 @@ export default function InstagramPage() {
                           {/* Competitors on same theme */}
                           {competitors.length > 0 && (
                             <span title={`Also: ${competitors.map(b => name(b)).join(', ')}`}
-                              style={{ fontSize: 9, color: 'var(--fg-4)', background: 'rgba(255,255,255,0.05)', borderRadius: 4, padding: '2px 6px', flexShrink: 0, cursor: 'help' }}>
+                              style={{ fontSize: 9, color: 'var(--fg-4)', background: 'var(--wb-5)', borderRadius: 4, padding: '2px 6px', flexShrink: 0, cursor: 'help' }}>
                               +{competitors.length} brand{competitors.length > 1 ? 's' : ''} same lane
                             </span>
                           )}
@@ -789,7 +789,7 @@ export default function InstagramPage() {
           {sortedPosts.length > 0 ? (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data">
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="brand" label="Brand · handle" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
                     <SortTh col="caption" label="Caption" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '36%' }} />
@@ -911,7 +911,7 @@ export default function InstagramPage() {
                 style={{ background: '#0d1117', border: `1px solid ${bColor}55`, borderRadius: 16, width: '100%', maxWidth: 500, overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px ${bColor}22` }}>
 
                 {/* Header */}
-                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, rgba(13,17,23,0) 70%)`, padding: '20px 22px 18px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, rgba(13,17,23,0) 70%)`, padding: '20px 22px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{ width: 42, height: 42, borderRadius: '50%', background: bColor, boxShadow: `0 0 18px ${bColor}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
@@ -922,7 +922,7 @@ export default function InstagramPage() {
                     </div>
                   </div>
                   <button onClick={() => setSelectedEQDot(null)}
-                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
+                    style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
                 </div>
 
                 {/* Stats */}
@@ -936,7 +936,7 @@ export default function InstagramPage() {
                       { label: 'Flw Growth',  value: igRow?.deltaPct != null ? (igRow.deltaPct >= 0 ? '+' : '') + igRow.deltaPct.toFixed(2) + '%' : '—', color: igRow?.deltaPct != null ? (igRow.deltaPct >= 0 ? '#22c55e' : '#ef4444') : 'var(--fg-4)' },
                       { label: 'ER Tier',     value: erLabel,                       color: erLabelColor },
                     ].map(({ label, value, color }) => (
-                      <div key={label} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid rgba(255,255,255,0.07)`, borderRadius: 10, padding: '10px 12px' }}>
+                      <div key={label} style={{ background: 'var(--line-2)', border: `1px solid var(--line)`, borderRadius: 10, padding: '10px 12px' }}>
                         <div style={{ fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
                         <div style={{ fontSize: 18, fontWeight: 800, color, fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
                       </div>
@@ -944,12 +944,12 @@ export default function InstagramPage() {
                   </div>
 
                   {/* Engagement rate bar */}
-                  <div style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
+                  <div style={{ padding: '12px 14px', background: 'var(--wb-3)', borderRadius: 10 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 11 }}>
                       <span style={{ color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', fontSize: 9, fontWeight: 700 }}>Engagement rate vs best in class</span>
                       <span style={{ color: erLabelColor, fontWeight: 700, fontFamily: 'JetBrains Mono' }}>{d.engRate.toFixed(2)}%</span>
                     </div>
-                    <div style={{ height: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: 8, background: 'var(--wb-6)', borderRadius: 99, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${Math.min(100, (d.engRate / Math.max(1, ...eqData.map(e => e.engRate))) * 100)}%`, background: erLabelColor, borderRadius: 99, transition: 'width 0.5s ease' }} />
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 9, color: 'var(--fg-4)' }}>
@@ -972,7 +972,7 @@ export default function InstagramPage() {
                   </div>
                 </div>
 
-                <div style={{ padding: '8px 22px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ padding: '8px 22px', borderTop: '1px solid var(--wb-6)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
                   <span>Instagram Intelligence · {d.name}</span>
                   <span>Esc or click outside to close</span>
                 </div>
@@ -1284,7 +1284,7 @@ function PostingCadenceChart({ series, dayLabels }: {
       <div style={{
         display: 'grid',
         gridTemplateColumns: '26px 140px 52px repeat(4, 44px) 72px 70px 1fr',
-        gap: 8, padding: '0 10px 6px', borderBottom: '1px solid rgba(255,255,255,0.06)',
+        gap: 8, padding: '0 10px 6px', borderBottom: '1px solid var(--wb-6)',
         marginBottom: 4,
       }}>
         {['', 'Brand', 'Total', 'W1', 'W2', 'W3', 'W4', 'Status', 'vs last wk', '28-day rhythm'].map((h, i) => (
@@ -1331,7 +1331,7 @@ function PostingCadenceChart({ series, dayLabels }: {
               {s.weeks.map((wk, wi) => (
                 <div key={wi} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                   <span style={{ fontSize: 9, color: wk > 0 ? 'var(--fg-3)' : 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{wk}</span>
-                  <div style={{ width: 28, height: 18, background: 'rgba(255,255,255,0.04)', borderRadius: 3, display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
+                  <div style={{ width: 28, height: 18, background: 'var(--line-2)', borderRadius: 3, display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
                     <div style={{
                       width: '100%',
                       height: `${(wk / maxWeek) * 100}%`,
@@ -1363,7 +1363,7 @@ function PostingCadenceChart({ series, dayLabels }: {
                 {s.data.map((v, di) => (
                   <div key={di} style={{
                     flex: 1, height: v > 0 ? `${Math.max(20, (v / dayMax) * 100)}%` : '8%',
-                    background: v > 0 ? s.color : 'rgba(255,255,255,0.05)',
+                    background: v > 0 ? s.color : 'var(--wb-5)',
                     borderRadius: 1,
                     opacity: v > 0 ? (isJ ? 1 : 0.75) : 0.3,
                     transition: 'height 0.3s',
@@ -1406,13 +1406,13 @@ function PostingCadenceChart({ series, dayLabels }: {
                     return (
                       <div key={di} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, position: 'relative' }}>
                         {isWeekBoundary && (
-                          <div style={{ position: 'absolute', left: -1, top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.08)' }} />
+                          <div style={{ position: 'absolute', left: -1, top: 0, bottom: 0, width: 1, background: 'var(--wb-8)' }} />
                         )}
                         {isHov && v > 0 && (
                           <span style={{
                             position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
                             fontSize: 9, fontWeight: 700, color: s.color, whiteSpace: 'nowrap', marginBottom: 2,
-                            background: 'rgba(13,17,23,0.9)', padding: '1px 4px', borderRadius: 3,
+                            background: 'var(--sticky-bg)', padding: '1px 4px', borderRadius: 3,
                           }}>{v}</span>
                         )}
                         <div
@@ -1420,7 +1420,7 @@ function PostingCadenceChart({ series, dayLabels }: {
                           style={{
                             width: '100%',
                             height: v > 0 ? `${Math.max(6, (v / dayMax) * 100)}%` : 3,
-                            background: v > 0 ? (isHov ? '#fff' : s.color) : 'rgba(255,255,255,0.05)',
+                            background: v > 0 ? (isHov ? '#fff' : s.color) : 'var(--wb-5)',
                             borderRadius: 2,
                             transition: 'background 0.1s, height 0.2s',
                             cursor: 'default',
@@ -1441,7 +1441,7 @@ function PostingCadenceChart({ series, dayLabels }: {
                 </div>
 
                 {/* Day-of-week breakdown */}
-                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--wb-6)' }}>
                   <span style={{ fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'block', marginBottom: 8 }}>Posts by day of week (4-week avg)</span>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {DAY_NAMES.map((day, di) => {
@@ -1471,7 +1471,7 @@ function PostingCadenceChart({ series, dayLabels }: {
         )
       })}
 
-      <div style={{ display: 'flex', gap: 20, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: 4, fontSize: 9, color: 'var(--fg-4)' }}>
+      <div style={{ display: 'flex', gap: 20, paddingTop: 10, borderTop: '1px solid var(--wb-6)', marginTop: 4, fontSize: 9, color: 'var(--fg-4)' }}>
         <span>Click any row to expand day-by-day detail</span>
         <span>W1–W4 bars show weekly post volume relative to the busiest week</span>
         <span>{series.length} brands · last 4 weeks</span>

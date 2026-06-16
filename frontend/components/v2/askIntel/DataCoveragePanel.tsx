@@ -119,8 +119,8 @@ export function DataCoveragePanel() {
 function Stat({ label, value, small }: { label: string; value: string | number; small?: boolean }) {
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.03)',
-      border: '1px solid rgba(255,255,255,0.06)',
+      background: 'var(--wb-3)',
+      border: '1px solid var(--wb-6)',
       padding: 8, borderRadius: 3,
     }}>
       <div style={{

@@ -781,7 +781,7 @@ export default function ProductIntelPage() {
           </div>
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                 <tr>
                   <SortTh col="productName" label="Product" sortKey={matrixSortKey} sortDir={matrixSortDir} toggle={mkToggle(setMatrixSortKey, setMatrixSortDir, matrixSortKey, matrixSortDir)} />
                   <SortTh col="brand" label="Brand" sortKey={matrixSortKey} sortDir={matrixSortDir} toggle={mkToggle(setMatrixSortKey, setMatrixSortDir, matrixSortKey, matrixSortDir)} />
@@ -845,7 +845,7 @@ export default function ProductIntelPage() {
         <div className="card">
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                 <tr>
                   <SortTh col="productName" label="Product" sortKey={joolaSortKey} sortDir={joolaSortDir} toggle={mkToggle(setJoolaSortKey, setJoolaSortDir, joolaSortKey, joolaSortDir)} />
                   <SortTh col="category" label="Category" sortKey={joolaSortKey} sortDir={joolaSortDir} toggle={mkToggle(setJoolaSortKey, setJoolaSortDir, joolaSortKey, joolaSortDir)} />
@@ -1004,7 +1004,7 @@ export default function ProductIntelPage() {
           </div>
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                 <tr>
                   <SortTh col="brandName" label="Brand" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} />
                   <SortTh col="name" label="Product" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} />
@@ -1101,7 +1101,7 @@ export default function ProductIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Competitor product</th>
                     <th>Brand</th>
@@ -1203,7 +1203,7 @@ export default function ProductIntelPage() {
                           <div style={{ fontSize: 9, color: 'var(--fg-4)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
                             {s.label}
                           </div>
-                          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 3, height: 10, overflow: 'hidden' }}>
+                          <div style={{ background: 'var(--wb-5)', borderRadius: 3, height: 10, overflow: 'hidden' }}>
                             <div style={{ width: s.pct + '%', height: 10, background: `linear-gradient(90deg, ${s.color}, ${s.color}99)` }} />
                           </div>
                           <div style={{ fontSize: 11, color: 'var(--fg)', fontFamily: 'JetBrains Mono, monospace', marginTop: 3, fontWeight: 700 }}>{s.value}</div>
@@ -1245,7 +1245,7 @@ export default function ProductIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Product</th>
                     <th>Brand</th>
@@ -1338,7 +1338,7 @@ export default function ProductIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Product</th>
                     <th>Brand</th>
@@ -1411,7 +1411,7 @@ export default function ProductIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Mention text</th>
                     <th style={{ textAlign: 'right' }}>Occurrences</th>
@@ -1430,7 +1430,7 @@ export default function ProductIntelPage() {
                       <td>
                         <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
                           {r.brandsTalking.length === 0 ? <span style={{ color: 'var(--fg-4)' }}>—</span> : r.brandsTalking.map((s) => (
-                            <span key={s} className="brand-dot" style={{ background: pgColor(s), border: '1px solid rgba(255,255,255,0.15)' }} title={pgName(s, brands)} />
+                            <span key={s} className="brand-dot" style={{ background: pgColor(s), border: '1px solid var(--wb-14)' }} title={pgName(s, brands)} />
                           ))}
                         </span>
                       </td>
@@ -1465,7 +1465,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: 11, color: 'var(--fg-4)', fontWeight: 600,
 }
 const selectStyle: React.CSSProperties = {
-  background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
+  background: 'rgba(0,0,0,0.3)', border: '1px solid var(--wb-10)',
   color: 'var(--fg-2)', fontSize: 12, padding: '4px 8px', borderRadius: 4,
 }
 const subHeadStyle: React.CSSProperties = {
@@ -1585,13 +1585,13 @@ function ProductMomentumBarChart({ series, monthLabels }: {
         {/* Horizontal guide lines */}
         {series.map((_, ri) => (
           <line key={ri} x1={padL} x2={padL + innerW} y1={yPos(ri + 1)} y2={yPos(ri + 1)}
-            stroke="rgba(255,255,255,0.04)" strokeDasharray="3 6" />
+            stroke="var(--line-2)" strokeDasharray="3 6" />
         ))}
         {/* Month columns */}
         {monthLabels.map((lbl, mi) => (
           <g key={mi}>
             <line x1={xPos(mi)} x2={xPos(mi)} y1={padT} y2={h - padB}
-              stroke="rgba(255,255,255,0.05)" strokeWidth={1} />
+              stroke="var(--wb-5)" strokeWidth={1} />
             <text x={xPos(mi)} y={h - padB + 16} textAnchor="middle" fontSize={10} fill="#6b7280" fontWeight={600}>{lbl}</text>
           </g>
         ))}
@@ -1651,7 +1651,7 @@ function ProductMomentumBarChart({ series, monthLabels }: {
                 return (
                   <g key={mi}>
                     <circle cx={xPos(mi)} cy={yPos(rank)} r={isHov ? 4 : 2.5}
-                      fill={noData ? 'rgba(13,17,23,0.9)' : s.color}
+                      fill={noData ? 'var(--sticky-bg)' : s.color}
                       stroke={s.color}
                       strokeWidth={noData ? (isHov ? 1.5 : 1) : 0}
                       strokeDasharray={noData ? '2 2' : 'none'}
@@ -1661,7 +1661,7 @@ function ProductMomentumBarChart({ series, monthLabels }: {
                     {isHov && (
                       <text x={xPos(mi)} y={yPos(rank) - 9} textAnchor="middle"
                         fontSize={8} fill={noData ? '#6b7280' : s.color} fontWeight={700}
-                        style={{ paintOrder: 'stroke', stroke: 'rgba(13,17,23,0.95)', strokeWidth: 2 }}>
+                        style={{ paintOrder: 'stroke', stroke: 'var(--sticky-bg)', strokeWidth: 2 }}>
                         {noData ? '0 / NO DATA' : val}
                       </text>
                     )}

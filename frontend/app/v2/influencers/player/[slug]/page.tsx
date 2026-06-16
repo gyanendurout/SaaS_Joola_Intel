@@ -91,7 +91,7 @@ export default function PlayerDetailPage() {
         accent={brandName}
         sub={`Sponsored player · ${brandName}`}
         actions={
-          <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--fg-3)', borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+          <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid var(--wb-14)', color: 'var(--fg-3)', borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
             ← Back
           </button>
         }
@@ -143,7 +143,7 @@ export default function PlayerDetailPage() {
                   { label: 'Eng. rate',     value: influencer.engRate > 0 ? influencer.engRate.toFixed(2) + '%' : '—', color: influencer.engRate > 8 ? '#F5E625' : '#94a3b8' },
                   { label: 'Tier',          value: tier?.label || '—',                                                color: tier?.color || '#94a3b8' },
                 ].map(m => (
-                  <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
+                  <div key={m.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 8px', textAlign: 'center' }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
                     <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
                   </div>
@@ -165,7 +165,7 @@ export default function PlayerDetailPage() {
                   { label: 'Engagement', value: fmt(attention.engagement),                                                                           color: '#22c55e' },
                   { label: 'Trend',      value: attention.trend === 'up' ? '▲ Rising' : attention.trend === 'down' ? '▼ Falling' : attention.trend === 'flat' ? '▬ Stable' : '—', color: attention.trend === 'up' ? '#22c55e' : attention.trend === 'down' ? '#ef4444' : '#94a3b8' },
                 ].map(m => (
-                  <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+                  <div key={m.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
                     <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
                   </div>
@@ -187,7 +187,7 @@ export default function PlayerDetailPage() {
                 { label: 'TikTok', handle: roster.tiktokHandle, url: roster.tiktokHandle ? `https://www.tiktok.com/@${(roster.tiktokHandle || '').replace(/^@/, '')}` : '' },
                 { label: 'Reddit', handle: roster.redditHandle, url: roster.redditHandle ? `https://www.reddit.com/user/${(roster.redditHandle || '').replace(/^u\//, '')}` : '' },
               ].map(p => (
-                <div key={p.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 14px' }}>
+                <div key={p.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px' }}>
                   <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4 }}>{p.label}</div>
                   {p.handle
                     ? <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13, fontWeight: 600, color: '#60a5fa', textDecoration: 'none' }}>@{p.handle.replace(/^@/, '')}</a>
@@ -213,7 +213,7 @@ export default function PlayerDetailPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {(showAllPosts ? posts : posts.slice(0, 5)).map(p => (
-                <div key={p.id} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '12px 16px' }}>
+                <div key={p.id} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '12px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: 'rgba(225,48,108,0.15)', color: '#e1306c', border: '1px solid rgba(225,48,108,0.3)', textTransform: 'uppercase' }}>{p.platform}</span>
                     <span className={'pill ' + (SENT_PILL[p.sentiment] || 'pill-ghost')} style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>{p.sentiment}</span>

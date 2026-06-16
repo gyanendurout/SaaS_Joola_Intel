@@ -506,7 +506,7 @@ export default function CorrelationsPage() {
           <div className="card">
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="brand" label="Brand" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} />
                     <SortTh col="product" label="Product" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} />
@@ -593,12 +593,12 @@ export default function CorrelationsPage() {
         <div className="card">
           {leadingRows.length === 0 ? (
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
-              Run <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 3 }}>python -m analytics_backend.run --module all</code> to populate analysis results.
+              Run <code style={{ background: 'var(--wb-5)', padding: '2px 6px', borderRadius: 3 }}>python -m analytics_backend.run --module all</code> to populate analysis results.
             </div>
           ) : (
             <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th>Outcome</th>
                     <th>Leading signal</th>
@@ -659,12 +659,12 @@ export default function CorrelationsPage() {
         <div className="card">
           {leadingRows.filter((r) => r.bestPvalue != null && r.bestPvalue < 0.05).length === 0 ? (
             <div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
-              No statistically significant findings yet. Run <code style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 3 }}>python -m analytics_backend.run --module all</code> to populate analysis results.
+              No statistically significant findings yet. Run <code style={{ background: 'var(--wb-5)', padding: '2px 6px', borderRadius: 3 }}>python -m analytics_backend.run --module all</code> to populate analysis results.
             </div>
           ) : (
             <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th>Finding</th>
                     <th>Business meaning</th>

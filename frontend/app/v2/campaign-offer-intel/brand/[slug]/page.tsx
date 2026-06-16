@@ -38,7 +38,7 @@ const QUADRANT_DESC: Record<string, string> = {
 
 function StatCard({ label, value, sub, color, tip }: { label: string; value: string; sub?: string; color?: string; tip?: string }) {
   return (
-    <div title={tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '14px 16px', cursor: tip ? 'help' : 'default' }}>
+    <div title={tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--wb-8)', borderRadius: 10, padding: '14px 16px', cursor: tip ? 'help' : 'default' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 800, color: value === '—' ? '#3a4150' : (color || '#fff'), fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 5 }}>{sub}</div>}
@@ -113,7 +113,7 @@ export default function BrandCampaignPage() {
         title={brandName}
         sub="Brand campaign intelligence"
         actions={
-          <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid rgba(255,255,255,0.15)', color: 'var(--fg-3)', borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+          <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid var(--wb-14)', color: 'var(--fg-3)', borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
             ← Back
           </button>
         }
@@ -146,7 +146,7 @@ export default function BrandCampaignPage() {
               <div>
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 80, marginBottom: 8 }}>
                   {brandTrend.map((p, i) => (
-                    <div key={i} title={`${p.week}: ${p.count} ads`} style={{ flex: 1, height: `${Math.max(4, (p.count / maxTrend) * 100)}%`, background: p.count > 0 ? brandColor : 'rgba(255,255,255,0.05)', borderRadius: '3px 3px 0 0', opacity: p.count > 0 ? 0.85 : 1, transition: 'height 400ms cubic-bezier(0.16,1,0.3,1)', cursor: 'default', minHeight: 4 }} />
+                    <div key={i} title={`${p.week}: ${p.count} ads`} style={{ flex: 1, height: `${Math.max(4, (p.count / maxTrend) * 100)}%`, background: p.count > 0 ? brandColor : 'var(--wb-5)', borderRadius: '3px 3px 0 0', opacity: p.count > 0 ? 0.85 : 1, transition: 'height 400ms cubic-bezier(0.16,1,0.3,1)', cursor: 'default', minHeight: 4 }} />
                   ))}
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#4b5563' }}>
@@ -178,7 +178,7 @@ export default function BrandCampaignPage() {
                   return (
                     <div key={theme} style={{ display: 'grid', gridTemplateColumns: '130px 1fr 40px', alignItems: 'center', gap: 10 }}>
                       <span style={{ fontSize: 12, color: '#cbd1dc', textTransform: 'capitalize' }}>{theme.replace('-', ' ')}</span>
-                      <div style={{ height: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: 8, background: 'var(--wb-5)', borderRadius: 99, overflow: 'hidden' }}>
                         <div style={{ width: `${pct}%`, height: '100%', background: brandColor, borderRadius: 99, opacity: 0.8 }} />
                       </div>
                       <span style={{ fontSize: 11, color: '#6b7280', textAlign: 'right' }}>{count}</span>
@@ -196,7 +196,7 @@ export default function BrandCampaignPage() {
             <h6 style={{ margin: 0 }}>Promotions</h6>
             <div style={{ display: 'flex', gap: 4 }}>
               {(['active', 'all'] as const).map(t => (
-                <button key={t} onClick={() => setPromoTab(t)} style={{ background: promoTab === t ? 'rgba(255,255,255,0.08)' : 'none', border: `1px solid ${promoTab === t ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.07)'}`, color: promoTab === t ? '#fff' : '#6b7280', borderRadius: 6, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                <button key={t} onClick={() => setPromoTab(t)} style={{ background: promoTab === t ? 'var(--wb-8)' : 'none', border: `1px solid ${promoTab === t ? 'var(--wb-14)' : 'var(--line)'}`, color: promoTab === t ? '#fff' : '#6b7280', borderRadius: 6, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
                   {t === 'active' ? `Active (${offers.filter(o => o.active).length})` : `All (${offers.length})`}
                 </button>
               ))}
@@ -207,7 +207,7 @@ export default function BrandCampaignPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
               {displayOffers.map(o => (
-                <div key={o.id} style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8 }}>
+                <div key={o.id} style={{ padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--wb-6)', borderRadius: 8 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                     <span className="pill pill-ghost" style={{ fontSize: 9, padding: '1px 6px' }}>{o.type}</span>
                     {o.discount && o.discount > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#F5E625' }}>{o.discount}% off</span>}
@@ -228,7 +228,7 @@ export default function BrandCampaignPage() {
           <h6 style={{ margin: 0 }}>Ad Creatives</h6>
           <div style={{ display: 'flex', gap: 4 }}>
             {(['active', 'all'] as const).map(t => (
-              <button key={t} onClick={() => setAdTab(t)} style={{ background: adTab === t ? 'rgba(255,255,255,0.08)' : 'none', border: `1px solid ${adTab === t ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.07)'}`, color: adTab === t ? '#fff' : '#6b7280', borderRadius: 6, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+              <button key={t} onClick={() => setAdTab(t)} style={{ background: adTab === t ? 'var(--wb-8)' : 'none', border: `1px solid ${adTab === t ? 'var(--wb-14)' : 'var(--line)'}`, color: adTab === t ? '#fff' : '#6b7280', borderRadius: 6, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
                 {t === 'active' ? `Active (${ads.filter(a => a.active).length})` : `All (${ads.length})`}
               </button>
             ))}
@@ -239,14 +239,14 @@ export default function BrandCampaignPage() {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 10, maxHeight: 480, overflowY: 'auto' }}>
             {displayAds.map(a => (
-              <div key={a.id} style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${a.active ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.06)'}`, borderRadius: 8 }}>
+              <div key={a.id} style={{ padding: '12px 14px', background: 'rgba(255,255,255,0.02)', border: `1px solid ${a.active ? 'rgba(34,197,94,0.2)' : 'var(--wb-6)'}`, borderRadius: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <span className={'pill ' + (a.rawPlatform === 'meta' ? 'pill-info' : 'pill-amber')} style={{ fontSize: 9 }}>{a.platform}</span>
                   {a.cta && <span className="pill pill-ghost" style={{ fontSize: 9 }}>{a.cta}</span>}
                   <span className={'pill ' + (a.active ? 'pill-green' : 'pill-ghost')} style={{ fontSize: 9, marginLeft: 'auto' }}>{a.active ? 'ACTIVE' : 'ENDED'}</span>
                 </div>
                 {a.creativeUrl && (
-                  <img src={a.creativeUrl} alt="" style={{ width: '100%', maxHeight: 80, objectFit: 'cover', borderRadius: 6, marginBottom: 8, border: '1px solid rgba(255,255,255,0.06)' }} onError={e => (e.currentTarget.style.display = 'none')} />
+                  <img src={a.creativeUrl} alt="" style={{ width: '100%', maxHeight: 80, objectFit: 'cover', borderRadius: 6, marginBottom: 8, border: '1px solid var(--wb-6)' }} onError={e => (e.currentTarget.style.display = 'none')} />
                 )}
                 <div style={{ fontSize: 12, color: a.copy ? '#e2e8f0' : '#4b5563', lineHeight: 1.5, marginBottom: a.sourceUrl ? 6 : 0 }}>
                   {a.copy || '(no copy — Google Ads)'}

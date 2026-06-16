@@ -110,7 +110,7 @@ export function LeaderboardTable({
       {interpretation && <div className="viz-note">{interpretation}</div>}
       <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
         <table className="data leaderboard-table" role="table" aria-label="Product leaderboard">
-          <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+          <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
             <tr>
               <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
               <SortTh col="product" label="Product" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />

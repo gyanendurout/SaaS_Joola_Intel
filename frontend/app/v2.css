@@ -2386,3 +2386,32 @@ html.theme-light .v2-root .foot {
 /* Sort-th hover */
 html.theme-light .v2-root th.sortable:hover { background: rgba(0,0,0,0.03); }
 html.theme-light .v2-root .col-filter-row th { background: #f2f4f9; }
+
+/* ─── Theme-aware inline-style variables ──────────────────────────────
+   These switch automatically so inline style={{ background: 'var(--wb-3)' }}
+   works in both dark and light mode without any per-component logic.
+   ─────────────────────────────────────────────────────────────────── */
+:root {
+  --wb-3:      rgba(255,255,255,0.03);
+  --wb-5:      rgba(255,255,255,0.05);
+  --wb-6:      rgba(255,255,255,0.06);
+  --wb-8:      rgba(255,255,255,0.08);
+  --wb-10:     rgba(255,255,255,0.10);
+  --wb-12:     rgba(255,255,255,0.12);
+  --wb-14:     rgba(255,255,255,0.14);
+  --wb-stroke: rgba(255,255,255,0.10);
+  --sticky-bg: rgba(13,17,23,0.95);
+}
+html.theme-light {
+  --wb-3:      rgba(0,0,0,0.025);
+  --wb-5:      rgba(0,0,0,0.04);
+  --wb-6:      rgba(0,0,0,0.05);
+  --wb-8:      rgba(0,0,0,0.07);
+  --wb-10:     rgba(0,0,0,0.09);
+  --wb-12:     rgba(0,0,0,0.10);
+  --wb-14:     rgba(0,0,0,0.12);
+  --wb-stroke: rgba(0,0,0,0.09);
+  --sticky-bg: rgba(240,242,248,0.95);
+  --line-2:    rgba(0,0,0,0.04);
+  --line:      rgba(0,0,0,0.08);
+}

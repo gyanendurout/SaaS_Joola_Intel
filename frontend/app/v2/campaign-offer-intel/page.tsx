@@ -495,7 +495,7 @@ export default function CampaignOfferIntelPage() {
                     <td style={{ textAlign: 'right', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                         <span style={{ fontWeight: 700, color: '#fff' }}>{r.pressure.toFixed(1)}</span>
-                        <div style={{ width: 80, height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ width: 80, height: 6, background: 'var(--wb-5)', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ width: `${barPct}%`, height: '100%', background: isJoola ? '#22c55e' : '#F5E625' }} />
                         </div>
                       </div>
@@ -636,7 +636,7 @@ export default function CampaignOfferIntelPage() {
           </div>
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%', minWidth: 980 }}>
-              <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+              <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                 <tr>
                   <SortTh col="brand" label="Brand" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} style={{ textAlign: 'left' }} />
                   <SortTh col="text" label="Promo text" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} style={{ textAlign: 'left' }} />
@@ -713,7 +713,7 @@ export default function CampaignOfferIntelPage() {
           </div>
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%', minWidth: 980 }}>
-              <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+              <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                 <tr>
                   <SortTh col="brand" label="Brand" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} style={{ textAlign: 'left' }} />
                   <SortTh col="platform" label="Platform" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} />
@@ -886,7 +886,7 @@ export default function CampaignOfferIntelPage() {
           </div>
           <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%', minWidth: 980 }}>
-              <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+              <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                 <tr>
                   <th style={{ textAlign: 'left' }}>Brand</th>
                   <th style={{ textAlign: 'center' }}>Promo type</th>
@@ -949,7 +949,7 @@ export default function CampaignOfferIntelPage() {
             <h6 style={{ marginTop: 0 }}>Theme details</h6>
             <div className="table-wrap" style={{ maxHeight: 420, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th style={{ textAlign: 'left' }}>Brand</th>
                     <th style={{ textAlign: 'left' }}>Theme</th>
@@ -1068,8 +1068,8 @@ function CampaignTrendChart({ points, name }: { points: ActivityTrendPoint[]; na
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {TABS.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
-            background: tab === t.key ? 'rgba(255,255,255,0.08)' : 'none',
-            border: `1px solid ${tab === t.key ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.07)'}`,
+            background: tab === t.key ? 'var(--wb-8)' : 'none',
+            border: `1px solid ${tab === t.key ? 'var(--wb-14)' : 'var(--line)'}`,
             color: tab === t.key ? '#fff' : '#6b7280',
             borderRadius: 6, padding: '5px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 150ms',
           }}>{t.label}</button>
@@ -1091,7 +1091,7 @@ function CampaignTrendChart({ points, name }: { points: ActivityTrendPoint[]; na
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0, boxShadow: isHov ? `0 0 6px ${color}` : 'none', transition: 'box-shadow 150ms' }} />
                   <span style={{ fontSize: 13, fontWeight: isJ ? 800 : 600, color: isJ ? '#22c55e' : '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name(b)}</span>
                 </div>
-                <div style={{ height: 10, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ height: 10, background: 'var(--wb-6)', borderRadius: 99, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${(total / maxTotal) * 100}%`,
                     background: isHov ? `linear-gradient(90deg, ${color}, ${color}cc)` : `linear-gradient(90deg, ${color}cc, ${color}66)`,
                     borderRadius: 99, transition: 'width 400ms cubic-bezier(0.16,1,0.3,1), background 150ms',
@@ -1102,7 +1102,7 @@ function CampaignTrendChart({ points, name }: { points: ActivityTrendPoint[]; na
               </div>
             )
           })}
-          <div style={{ marginTop: 4, fontSize: 11, color: '#4b5563', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 8 }}>
+          <div style={{ marginTop: 4, fontSize: 11, color: '#4b5563', borderTop: '1px solid var(--wb-6)', paddingTop: 8 }}>
             {brands.length} brands · {totalAll} total ads · hover to highlight
           </div>
         </div>
@@ -1133,7 +1133,7 @@ function CampaignTrendChart({ points, name }: { points: ActivityTrendPoint[]; na
                     <div key={`${b}-${p.weekLabel}`}
                       title={`${name(b)} · ${p.weekLabel}: ${val} ads`}
                       style={{ height: 32, borderRadius: 4, cursor: 'default',
-                        background: val === 0 ? 'rgba(255,255,255,0.04)' : color,
+                        background: val === 0 ? 'var(--line-2)' : color,
                         opacity: val === 0 ? 1 : Math.max(0.18, intensity),
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         transition: 'opacity 150ms' }}>
@@ -1163,7 +1163,7 @@ function CampaignTrendChart({ points, name }: { points: ActivityTrendPoint[]; na
             return (
               <div key={b} onMouseEnter={() => setHovBrand(b)} onMouseLeave={() => setHovBrand(null)}
                 style={{ display: 'grid', gridTemplateColumns: '28px 150px 56px 56px 130px', alignItems: 'center', gap: 12,
-                  padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  padding: '8px 0', borderBottom: '1px solid var(--wb-5)',
                   opacity: hovBrand && !isHov ? 0.4 : 1, transition: 'opacity 150ms' }}>
                 <span style={{ fontSize: 10, color: '#4b5563', fontWeight: 700, textAlign: 'right' }}>#{idx + 1}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
@@ -1439,7 +1439,7 @@ function MessageThemeBarChart({ rows, name }: { rows: MessageThemeRow[]; name: (
                 <span style={{ fontSize: 12, fontWeight: isHov ? 700 : 500, color: isHov ? '#fff' : '#cbd1dc', transition: 'color 150ms' }}>{themeLabelMap[t]}</span>
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{total}</span>
               </div>
-              <div style={{ height: 28, background: 'rgba(255,255,255,0.04)', borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
+              <div style={{ height: 28, background: 'var(--line-2)', borderRadius: 6, overflow: 'hidden', position: 'relative' }}>
                 <div style={{ display: 'flex', height: '100%', width: `${barW}%`, transition: 'width 500ms cubic-bezier(0.16,1,0.3,1)', borderRadius: 6, overflow: 'hidden' }}>
                   {allBrands.map(b => {
                     const v = m.get(b) || 0
@@ -1474,7 +1474,7 @@ function MessageThemeBarChart({ rows, name }: { rows: MessageThemeRow[]; name: (
         })}
       </div>
       {/* Brand legend */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid var(--wb-6)' }}>
         {allBrands.map(b => (
           <span key={b} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#94a3b8' }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: pgColor(b), flexShrink: 0, opacity: b === 'joola' ? 1 : 0.75 }} />
@@ -1530,10 +1530,10 @@ function ScatterBubbleDialog({ row: r, brands, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 540, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 540, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 12, height: 12, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{brandName}</div>
@@ -1544,14 +1544,14 @@ function ScatterBubbleDialog({ row: r, brands, onClose }: {
         </div>
 
         {/* Quadrant explanation */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: qColor + '08' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', background: qColor + '08' }}>
           <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.65 }}>{QUADRANT_DESC[quadrant]}</div>
         </div>
 
         {/* Metrics */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {metrics.map(m => (
-            <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+            <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
               <div style={{ fontSize: 20, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
               <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
             </div>
@@ -1590,10 +1590,10 @@ function OfferDetailDialog({ offer: p, brands, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: isJoola ? '#22c55e' : '#fff' }}>{pgName(p.brand, brands)}</div>
@@ -1604,28 +1604,28 @@ function OfferDetailDialog({ offer: p, brands, onClose }: {
         </div>
 
         {/* Promo text */}
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Promotion Text</div>
-          <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.65, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '12px 16px', wordBreak: 'break-word' }}>
+          <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.65, background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '12px 16px', wordBreak: 'break-word' }}>
             {p.text || '(no text)'}
           </div>
         </div>
 
         {/* Type explanation */}
-        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid var(--line)', background: 'rgba(255,255,255,0.02)' }}>
           <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>
             <b style={{ color: '#cbd1dc' }}>{p.type}</b> — {TYPE_DESC[p.type] || 'Promotional content detected on the brand storefront.'}
           </div>
         </div>
 
         {/* Meta grid */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {[
             { label: 'Discount', value: p.discount != null && p.discount > 0 ? `${p.discount}%` : '—', color: p.discount ? '#F5E625' : '#3a4150' },
             { label: 'Detected', value: p.detectedAt ? formatCalendarDate(p.detectedAt) : '—', color: '#94a3b8' },
             { label: 'Status', value: p.active ? 'Active' : 'Inactive', color: p.active ? '#22c55e' : '#6b7280' },
           ].map(m => (
-            <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
+            <div key={m.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', textAlign: 'center' }}>
               <div style={{ fontSize: 16, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
               <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
             </div>
@@ -1661,10 +1661,10 @@ function AdCreativeDialog({ ad: a, brands, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 15, color: isJoola ? '#22c55e' : '#fff' }}>{pgName(a.brand, brands)}</div>
@@ -1676,15 +1676,15 @@ function AdCreativeDialog({ ad: a, brands, onClose }: {
         </div>
 
         {/* Ad copy */}
-        <div style={{ padding: '16px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Ad Copy</div>
           {a.copy
-            ? <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.65, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '12px 16px', wordBreak: 'break-word' }}>{a.copy}</div>
+            ? <div style={{ fontSize: 14, color: '#e2e8f0', lineHeight: 1.65, background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '12px 16px', wordBreak: 'break-word' }}>{a.copy}</div>
             : <div style={{ fontSize: 12, color: '#4b5563', fontStyle: 'italic' }}>No copy available — {a.rawPlatform === 'google' ? 'Google Ads Transparency does not expose ad text.' : 'Ad copy not scraped for this creative.'}</div>}
         </div>
 
         {/* CTA + creative image */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: a.creativeUrl ? '1fr 1fr' : '1fr', gap: 12 }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: a.creativeUrl ? '1fr 1fr' : '1fr', gap: 12 }}>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Call to Action</div>
             {a.cta
@@ -1694,18 +1694,18 @@ function AdCreativeDialog({ ad: a, brands, onClose }: {
           {a.creativeUrl && (
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Creative</div>
-              <img src={a.creativeUrl} alt="Ad creative" style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', objectFit: 'contain' }} onError={e => (e.currentTarget.style.display = 'none')} />
+              <img src={a.creativeUrl} alt="Ad creative" style={{ maxWidth: '100%', maxHeight: 120, borderRadius: 6, border: '1px solid var(--wb-10)', objectFit: 'contain' }} onError={e => (e.currentTarget.style.display = 'none')} />
             </div>
           )}
         </div>
 
         {/* Meta row */}
-        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
           {[
             { label: 'First seen', value: a.startedAt ? formatCalendarDate(a.startedAt) : '—' },
             { label: 'Platform', value: a.platform },
           ].map(m => (
-            <div key={m.label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '8px 14px' }}>
+            <div key={m.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 14px' }}>
               <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 3 }}>{m.label}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{m.value}</div>
             </div>
@@ -1772,10 +1772,10 @@ function StrategyBubbleDialog({ point: p, stat, brands, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 540, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 540, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 12, height: 12, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{pgName(p.brand, brands)}</div>
@@ -1788,15 +1788,15 @@ function StrategyBubbleDialog({ point: p, stat, brands, onClose }: {
         </div>
 
         {/* Quadrant description */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: qColor + '08' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', background: qColor + '08' }}>
           <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.65 }}>{qDesc}</div>
         </div>
 
         {/* Metrics */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
             {metrics.slice(0, 3).map(m => (
-              <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+              <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
                 <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
               </div>
@@ -1804,7 +1804,7 @@ function StrategyBubbleDialog({ point: p, stat, brands, onClose }: {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
             {metrics.slice(3).map(m => (
-              <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+              <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
                 <div style={{ fontSize: 18, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
                 <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
               </div>
@@ -1814,7 +1814,7 @@ function StrategyBubbleDialog({ point: p, stat, brands, onClose }: {
 
         {/* JOOLA counter-strategy (if not JOOLA itself) */}
         {!isJoola && joolaCounter && (
-          <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(34,197,94,0.05)' }}>
+          <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', background: 'rgba(34,197,94,0.05)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>JOOLA Counter-Strategy</div>
             <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.6 }}>{joolaCounter}</div>
           </div>
@@ -1863,10 +1863,10 @@ function PlaybookRowDialog({ row: r, brands, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 10, height: 10, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{pgName(r.brand, brands)}</div>
@@ -1877,19 +1877,19 @@ function PlaybookRowDialog({ row: r, brands, onClose }: {
         </div>
 
         {/* Promo type explanation */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.02)' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', background: 'rgba(255,255,255,0.02)' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>What this promo type means</div>
           <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.65 }}>{TYPE_EXPLAIN[r.promoType] || 'Promotional activity detected on this brand storefront.'}</div>
         </div>
 
         {/* Metrics */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
           {[
             { label: 'Discount depth', value: r.discountDepth && r.discountDepth > 0 ? `${r.discountDepth}%` : '—', color: r.discountDepth ? '#F5E625' : '#3a4150', tip: 'Average % discount across promotions of this type from this brand' },
             { label: 'Frequency', value: String(r.frequency), color: '#60a5fa', tip: 'Number of times this promo type was detected across all scrapes' },
             { label: 'Last detected', value: r.lastDetected ? formatCalendarDate(r.lastDetected) : '—', color: '#94a3b8', tip: 'Most recent scrape that surfaced this promotion' },
           ].map(m => (
-            <div key={m.label} title={m.tip} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+            <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
               <div style={{ fontSize: 18, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
               <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{m.label}</div>
             </div>
@@ -1897,7 +1897,7 @@ function PlaybookRowDialog({ row: r, brands, onClose }: {
         </div>
 
         {/* Product affected */}
-        <div style={{ padding: '12px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid var(--line)' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Product Affected</div>
           <div style={{ fontSize: 13, color: r.productAffected ? '#e2e8f0' : '#4b5563' }}>
             {r.productAffected || 'No specific product linked — promotion applies to the full storefront or product was not matched in the catalog.'}
@@ -1905,7 +1905,7 @@ function PlaybookRowDialog({ row: r, brands, onClose }: {
         </div>
 
         {/* JOOLA Response */}
-        <div style={{ padding: '14px 22px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(34,197,94,0.05)' }}>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', background: 'rgba(34,197,94,0.05)' }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Recommended JOOLA Response</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: responseExplain ? 6 : 0 }}>{r.joolaResponse}</div>
           {responseExplain && <div style={{ fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>{responseExplain}</div>}

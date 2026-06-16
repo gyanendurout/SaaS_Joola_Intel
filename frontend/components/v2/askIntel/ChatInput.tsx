@@ -42,14 +42,14 @@ export function ChatInput({
 
   return (
     <div style={{
-      borderTop: '1px solid rgba(255,255,255,0.06)',
+      borderTop: '1px solid var(--wb-6)',
       padding: 16,
       background: 'rgba(7,9,14,0.55)',
     }}>
       <div style={{
         display: 'flex', gap: 8, alignItems: 'flex-end',
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'var(--wb-3)',
+        border: '1px solid var(--wb-8)',
         borderRadius: 4, padding: 8,
       }}>
         <textarea
@@ -81,7 +81,7 @@ export function ChatInput({
             onClick={submit}
             disabled={!value.trim()}
             style={{
-              background: value.trim() ? '#22c55e' : 'rgba(255,255,255,0.06)',
+              background: value.trim() ? '#22c55e' : 'var(--wb-6)',
               color: value.trim() ? '#000' : 'var(--fg-4)', border: 'none',
               padding: '7px 14px', borderRadius: 3,
               cursor: value.trim() ? 'pointer' : 'not-allowed',
@@ -96,7 +96,7 @@ export function ChatInput({
           style={{
             background: 'transparent',
             color: 'var(--fg-4)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--wb-8)',
             padding: '6px 10px', borderRadius: 3,
             cursor: 'pointer', fontSize: 11, fontWeight: 600,
           }}

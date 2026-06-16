@@ -142,7 +142,7 @@ export default function DataHealthPage() {
         <div className="card">
           <div className="table-wrap" style={{ maxHeight: 720, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                 <tr>
                   <th>Area</th>
                   <th>Table</th>

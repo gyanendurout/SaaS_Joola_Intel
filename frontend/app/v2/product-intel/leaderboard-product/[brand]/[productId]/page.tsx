@@ -250,7 +250,7 @@ export default function LeaderboardProductPage() {
                 const h = Math.max(3, (r.mention_count / maxDaily) * 100)
                 return (
                   <div key={i} title={`${r.date}: ${r.mention_count} mentions`}
-                    style={{ flex: 1, height: `${h}%`, background: r.mention_count > 0 ? (isJoola ? '#22c55e' : brandColor) : 'rgba(255,255,255,0.06)', borderRadius: '2px 2px 0 0', opacity: r.mention_count > 0 ? 0.85 : 1, transition: 'height 400ms cubic-bezier(0.16,1,0.3,1)', cursor: 'default', minHeight: 3 }}
+                    style={{ flex: 1, height: `${h}%`, background: r.mention_count > 0 ? (isJoola ? '#22c55e' : brandColor) : 'var(--wb-6)', borderRadius: '2px 2px 0 0', opacity: r.mention_count > 0 ? 0.85 : 1, transition: 'height 400ms cubic-bezier(0.16,1,0.3,1)', cursor: 'default', minHeight: 3 }}
                   />
                 )
               })}

@@ -91,7 +91,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 function statusBorderColor(status: string): string {
-  return STATUS_COLORS[status] ?? 'rgba(255,255,255,0.08)'
+  return STATUS_COLORS[status] ?? 'var(--wb-8)'
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -604,7 +604,7 @@ export default function SalesIntelPage() {
                       <td>
                         {row.total > 0 ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', minWidth: 60 }}>
+                            <div style={{ flex: 1, height: 6, background: 'var(--wb-6)', borderRadius: 99, overflow: 'hidden', minWidth: 60 }}>
                               <div style={{ height: '100%', width: `${inPct}%`, background: inPct > 70 ? '#22c55e' : inPct > 40 ? '#F5E625' : '#ef4444', borderRadius: 99 }} />
                             </div>
                             <span style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--fg-3)', minWidth: 30 }}>{inPct}%</span>
@@ -753,7 +753,7 @@ export default function SalesIntelPage() {
                     style={{
                       fontSize: 11,
                       color: '#9ca3af',
-                      borderTop: '1px solid rgba(255,255,255,0.06)',
+                      borderTop: '1px solid var(--wb-6)',
                       paddingTop: 8,
                     }}
                   >
@@ -792,7 +792,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
               <table className="data">
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="time" label="Time" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} style={{ width: 130 }} />
                     <SortTh col="brandName" label="Brand" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
@@ -875,7 +875,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
               <table className="data">
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="productName" label="Product" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} />
                     <SortTh col="brandName" label="Brand" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} style={{ width: 140 }} />
@@ -904,7 +904,7 @@ export default function SalesIntelPage() {
                           </span>
                         </td>
                         <td>
-                          <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                          <div style={{ background: 'var(--line-2)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
                             <div style={{ background: `linear-gradient(90deg, ${color}66, ${color}1a)`, borderRadius: 4, height: 8, width: `${Math.max(2, pct)}%` }} />
                           </div>
                         </td>
@@ -963,7 +963,7 @@ export default function SalesIntelPage() {
             <>
               <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
                 <table className="data">
-                  <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                     <tr>
                       <th style={{ width: 40 }}>#</th>
                       <SortTh col="brand" label="Brand" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} />
@@ -1009,7 +1009,7 @@ export default function SalesIntelPage() {
                   </tbody>
                 </table>
               </div>
-              <div style={{ fontSize: 10, color: '#6b7280', padding: '8px 16px 12px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+              <div style={{ fontSize: 10, color: '#6b7280', padding: '8px 16px 12px', borderTop: '1px solid var(--line-2)' }}>
                 Tracking {variants.length} product variants across {kpis.brandsWithData} brands.
               </div>
             </>
@@ -1042,7 +1042,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Brand</th>
                     <th>Product</th>
@@ -1110,7 +1110,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Brand</th>
                     <th>Product</th>
@@ -1178,7 +1178,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Brand</th>
                     <th>Product</th>

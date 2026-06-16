@@ -127,7 +127,7 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { 
         onMouseLeave={() => setHoverIdx(null)}>
         {ticks.map((t, i) => (
           <g key={i}>
-            <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,0.04)" />
+            <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="var(--line-2)" />
             <text x={padL - 8} y={y(t) + 3} textAnchor="end" className="scatter-axis">{fmt(t)}</text>
           </g>
         ))}
@@ -280,7 +280,7 @@ export function StackedArea({ series, weeks = 13, w = 760, h = 240 }: {
         onMouseLeave={() => { setHoverIdx(null); setHoverLayer(null) }}>
         {yticks.map((t, i) => (
           <g key={i}>
-            <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,0.04)" />
+            <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="var(--line-2)" />
             <text x={padL - 6} y={y(t) + 3} textAnchor="end" className="scatter-axis">{Math.round(t)}</text>
           </g>
         ))}
@@ -580,7 +580,7 @@ export function Donut({ data, size = 200, thickness = 36, centerLabel, centerSub
   return (
     <div className="scatter-wrap" style={{ width: size, height: size, position: 'relative' }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={thickness} />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--line-2)" strokeWidth={thickness} />
         {arcs.map((a, i) => (
           <path
             key={i}
@@ -649,7 +649,7 @@ export function BoxPlot({ data, w = 760, h = 280 }: { data: BoxPlotDatum[]; w?: 
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{ overflow: 'visible' }}>
         {xTicks.map((v, i) => (
           <g key={i}>
-            <line x1={x(v)} x2={x(v)} y1={padT} y2={padT + innerH} stroke="rgba(255,255,255,0.04)" />
+            <line x1={x(v)} x2={x(v)} y1={padT} y2={padT + innerH} stroke="var(--line-2)" />
             <text x={x(v)} y={h - 12} textAnchor="middle" className="scatter-axis">${v}</text>
           </g>
         ))}
@@ -719,7 +719,7 @@ export function SentimentBar({ data }: {
             title={`${d.name} · ${d.mentions} mentions · ${posPct}% positive · ${neuPct}% neutral · ${negPct}% negative`}
             style={{ display: 'grid', gridTemplateColumns: '100px 1fr 80px 60px', gap: 10, alignItems: 'center' }}>
             <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 600, color: isJ ? '#22c55e' : '#cbd1dc' }}>{d.name}</div>
-            <div style={{ display: 'flex', height: 20, borderRadius: 3, overflow: 'hidden', background: 'rgba(255,255,255,0.03)' }}>
+            <div style={{ display: 'flex', height: 20, borderRadius: 3, overflow: 'hidden', background: 'var(--wb-3)' }}>
               <div style={{ width: (d.positive / total) * 100 + '%', background: '#22c55e', opacity: 0.9 }} title={`Positive: ${d.positive}`} />
               {/* VIZ-25: use neutral gray for the neutral band so it never collides with the green=positive convention */}
               <div style={{ width: (d.neutral / total) * 100 + '%', background: '#94a3b8', opacity: 0.5 }} title={`Neutral: ${d.neutral}`} />
