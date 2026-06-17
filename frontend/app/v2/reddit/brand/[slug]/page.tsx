@@ -11,6 +11,7 @@ import {
 import { fmt, LineChart } from '@/components/v2/charts'
 import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
+import { Breadcrumb } from '@/components/v2/Breadcrumb'
 
 function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
   return (
@@ -110,6 +111,10 @@ export default function RedditBrandPage() {
       {/* Hero */}
       <div style={{ background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
         <div style={{ marginBottom: 20 }}>
+          <Breadcrumb crumbs={[
+            { label: 'Reddit', href: '/v2/reddit' },
+            { label: brandName },
+          ]} />
           <button onClick={() => router.back()} style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>← Back</button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>

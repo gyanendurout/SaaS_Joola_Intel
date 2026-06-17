@@ -9,7 +9,8 @@ import {
   type V2TikTokCommentStats, type V2TikTokPaddleMention,
 } from '@/lib/v2/data'
 import { fmt, Donut } from '@/components/v2/charts'
-import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter, exportCSV } from '@/components/v2/PageShell'
+import { Pagination } from '@/components/v2/Pagination'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { tiktokPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
@@ -53,6 +54,8 @@ export default function TikTokPage() {
   const [bwSortKey, setBwSortKey] = useState<string>('followers')
   const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
   const [selectedVideo, setSelectedVideo] = useState<V2TikTokVideo | null>(null)
+  const [ttPage, setTtPage] = useState(1)
+  const TT_PAGE_SIZE = 50
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, effectiveFrom, effectiveTo } = useDateRange()
   const router = useRouter()
@@ -84,6 +87,8 @@ export default function TikTokPage() {
       setLoading(false)
     })
   }, [setAllBrands])
+
+  useEffect(() => { setTtPage(1) }, [sortKey, sortDir, colFilter])
 
   if (loading) return <LoadingPage />
   if (error) return (
@@ -179,6 +184,8 @@ export default function TikTokPage() {
       ? String(av ?? '').localeCompare(String(bv ?? ''))
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredVideos
+
+  const pageTTVideos = sortedVideos.slice((ttPage - 1) * TT_PAGE_SIZE, ttPage * TT_PAGE_SIZE)
 
   function toggleBwSort(col: string) {
     if (bwSortKey === col) setBwSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -662,20 +669,32 @@ export default function TikTokPage() {
       </section>
 
       <section id="tiktok-videos-table">
-        <div className="section-head"><div>
-          <h2>
-            Top {sortedVideos.length} videos · by views
-            <SectionInfo
-              title="Top TikTok Videos"
-              description="Up to the 200 most-viewed TikTok videos across the tracked brands, ranked by view count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Short-form tutorials and challenge content tend to dominate; high share counts indicate viral potential."
-              source="tiktok_videos · scraped via clockworks/tiktok-scraper. Click column headers to sort."
-            />
-          </h2>
-          <div className="sub">
-            Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 200 ·
-            {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+        <div className="section-head">
+          <div>
+            <h2>
+              Top {sortedVideos.length} videos · by views
+              <SectionInfo
+                title="Top TikTok Videos"
+                description="Up to the 200 most-viewed TikTok videos across the tracked brands, ranked by view count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Short-form tutorials and challenge content tend to dominate; high share counts indicate viral potential."
+                source="tiktok_videos · scraped via clockworks/tiktok-scraper. Click column headers to sort."
+              />
+            </h2>
+            <div className="sub">
+              Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 200 ·
+              {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+            </div>
           </div>
-        </div></div>
+          <div className="actions">
+            <button
+              onClick={() => exportCSV('joola-tiktok-videos.csv', sortedVideos as unknown as Record<string, unknown>[])}
+              className="btn btn-ghost"
+              aria-label="Export table as CSV"
+              style={{ fontSize: 11 }}
+            >
+              ↓ CSV
+            </button>
+          </div>
+        </div>
         <div className="card">
           {sortedVideos.length > 0 ? (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
@@ -697,7 +716,7 @@ export default function TikTokPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedVideos.map((v, i) => (
+                  {pageTTVideos.map((v, i) => (
                     <tr key={i} className={v.brand === 'joola' ? 'joola' : ''}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -741,6 +760,7 @@ export default function TikTokPage() {
               </div>
             </div>
           )}
+          <Pagination total={sortedVideos.length} page={ttPage} pageSize={TT_PAGE_SIZE} onChange={setTtPage} />
         </div>
       </section>
     </>

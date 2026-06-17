@@ -9,7 +9,7 @@ import {
   type V2RedditViral, type V2RedditRemoved, type V2RedditCrisisCluster, type V2RedditReplyVsOp,
 } from '@/lib/v2/data'
 import { fmt, LineChart, SentimentBar } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, ColumnFilter, FilterBanner } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, ColumnFilter, FilterBanner, exportCSV } from '@/components/v2/PageShell'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { redditPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
@@ -478,20 +478,32 @@ export default function RedditPage() {
       </section>
 
       <section id="reddit-mentions-table">
-        <div className="section-head"><div>
-          <h2>
-            Top {sortedMentions.length} mentions · by score
-            <SectionInfo
-              title="Top Reddit Mentions"
-              description="Up to the 20 highest-scoring Reddit posts that mention the tracked brands. Narrow with the brand filter (top right), the date range (top right), or per-column search below. A high score means the community upvoted that thread — strong organic signal."
-              source="reddit_mentions · scraped via trudax/reddit-scraper-lite. Click column headers to sort."
-            />
-          </h2>
-          <div className="sub">
-            Showing <strong style={{ color: 'var(--fg)' }}>{sortedMentions.length}</strong> of up to 20 ·
-            {' '}sorted by score · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+        <div className="section-head">
+          <div>
+            <h2>
+              Top {sortedMentions.length} mentions · by score
+              <SectionInfo
+                title="Top Reddit Mentions"
+                description="Up to the 20 highest-scoring Reddit posts that mention the tracked brands. Narrow with the brand filter (top right), the date range (top right), or per-column search below. A high score means the community upvoted that thread — strong organic signal."
+                source="reddit_mentions · scraped via trudax/reddit-scraper-lite. Click column headers to sort."
+              />
+            </h2>
+            <div className="sub">
+              Showing <strong style={{ color: 'var(--fg)' }}>{sortedMentions.length}</strong> of up to 20 ·
+              {' '}sorted by score · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+            </div>
           </div>
-        </div></div>
+          <div className="actions">
+            <button
+              onClick={() => exportCSV('joola-reddit-mentions.csv', sortedMentions as unknown as Record<string, unknown>[])}
+              className="btn btn-ghost"
+              aria-label="Export table as CSV"
+              style={{ fontSize: 11 }}
+            >
+              ↓ CSV
+            </button>
+          </div>
+        </div>
         <div className="card">
           {sortedMentions.length > 0 ? (
             <div className="table-wrap">

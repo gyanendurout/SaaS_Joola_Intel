@@ -7,7 +7,9 @@ import {
   type V2Brand, type V2YTRow, type V2TopYTVideo, type V2YTVideoAnalysis,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter, exportCSV } from '@/components/v2/PageShell'
+import { Pagination } from '@/components/v2/Pagination'
+import { useBookmarks } from '@/lib/v2/useBookmarks'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { youtubePlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
@@ -57,8 +59,11 @@ export default function YouTubePage() {
   const [vpvBrandFilter, setVpvBrandFilter] = useState('')
   const [bwSortKey, setBwSortKey] = useState<string>('subs')
   const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
+  const [ytPage, setYtPage] = useState(1)
+  const YT_PAGE_SIZE = 50
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, effectiveFrom, effectiveTo } = useDateRange()
+  const { toggle: toggleBookmark, isBookmarked } = useBookmarks()
 
   useEffect(() => { document.title = 'JOOLA INTEL — YouTube' }, [])
 
@@ -78,6 +83,8 @@ export default function YouTubePage() {
       setLoading(false)
     })
   }, [setAllBrands])
+
+  useEffect(() => { setYtPage(1) }, [sortKey, sortDir, colFilter])
 
   if (loading) return <LoadingPage />
   if (error) return (
@@ -215,6 +222,8 @@ export default function YouTubePage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredVideos
 
+  const pageVideos = sortedVideos.slice((ytPage - 1) * YT_PAGE_SIZE, ytPage * YT_PAGE_SIZE)
+
   return (
     <>
       <PageHead title="YOUTUBE" />
@@ -256,6 +265,7 @@ export default function YouTubePage() {
                   <SortTh col="avgViews" label="Avg Views/Vid" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
                   <th style={{ minWidth: 200 }}>Top Video</th>
                   <th style={{ width: 72, textAlign: 'center' }}>Channel</th>
+                  <th style={{ width: 36, textAlign: 'center' }}>★</th>
                 </tr>
               </thead>
               <tbody>
@@ -331,6 +341,12 @@ export default function YouTubePage() {
                             View ↗
                           </a>
                         ) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => { e.stopPropagation(); toggleBookmark(d.brand) }}>
+                        <span style={{ cursor: 'pointer', fontSize: 14, color: isBookmarked(d.brand) ? '#F5E625' : 'var(--fg-4)' }}
+                          title={isBookmarked(d.brand) ? 'Remove bookmark' : 'Bookmark this brand'}>
+                          {isBookmarked(d.brand) ? '★' : '☆'}
+                        </span>
                       </td>
                     </tr>
                   )
@@ -523,25 +539,37 @@ export default function YouTubePage() {
       </section>
 
       <section id="youtube-videos-table">
-        <div className="section-head"><div>
-          <h2>
-            Top {sortedVideos.length} videos · by views
-            <SectionInfo
-              title="Top YouTube Videos"
-              description="Up to the 200 most-viewed YouTube videos across the tracked brands, ranked by view count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Long-form coaching content tends to dominate."
-              source="yt_videos · scraped weekly via streamers/youtube-scraper. Click column headers to sort."
-            />
-          </h2>
-          <div className="sub">
-            Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 200 ·
-            {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
-            {offTopicHidden > 0 && (
-              <span style={{ marginLeft: 6, color: 'var(--fg-4)' }}>
-                · {offTopicHidden} off-topic row{offTopicHidden === 1 ? '' : 's'} hidden
-              </span>
-            )}
+        <div className="section-head">
+          <div>
+            <h2>
+              Top {sortedVideos.length} videos · by views
+              <SectionInfo
+                title="Top YouTube Videos"
+                description="Up to the 200 most-viewed YouTube videos across the tracked brands, ranked by view count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Long-form coaching content tends to dominate."
+                source="yt_videos · scraped weekly via streamers/youtube-scraper. Click column headers to sort."
+              />
+            </h2>
+            <div className="sub">
+              Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 200 ·
+              {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+              {offTopicHidden > 0 && (
+                <span style={{ marginLeft: 6, color: 'var(--fg-4)' }}>
+                  · {offTopicHidden} off-topic row{offTopicHidden === 1 ? '' : 's'} hidden
+                </span>
+              )}
+            </div>
           </div>
-        </div></div>
+          <div className="actions">
+            <button
+              onClick={() => exportCSV('joola-yt-videos.csv', sortedVideos as unknown as Record<string, unknown>[])}
+              className="btn btn-ghost"
+              aria-label="Export table as CSV"
+              style={{ fontSize: 11 }}
+            >
+              ↓ CSV
+            </button>
+          </div>
+        </div>
         <div className="card">
           {sortedVideos.length > 0 ? (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
@@ -564,7 +592,7 @@ export default function YouTubePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedVideos.map((v, i) => {
+                  {pageVideos.map((v, i) => {
                     const hasDirectLink = !!v.url
                     const watchHref = hasDirectLink
                       ? v.url
@@ -622,6 +650,7 @@ export default function YouTubePage() {
               </div>
             </div>
           )}
+          <Pagination total={sortedVideos.length} page={ytPage} pageSize={YT_PAGE_SIZE} onChange={setYtPage} />
         </div>
       </section>
     </>

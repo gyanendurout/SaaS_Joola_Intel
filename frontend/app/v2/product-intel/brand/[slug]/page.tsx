@@ -8,6 +8,7 @@ import {
 } from '@/components/v2/PageShell'
 import { fmt, Sparkline } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
+import { Breadcrumb } from '@/components/v2/Breadcrumb'
 import {
   fetchProductIntel,
   type RawCatalogProduct,
@@ -183,6 +184,10 @@ export default function BrandProductPage() {
           onClose={() => setDrillProduct(null)}
         />
       )}
+      <Breadcrumb crumbs={[
+        { label: 'Product Intel', href: '/v2/product-intel' },
+        { label: brandName },
+      ]} />
       <PageHead
         eyebrow="Product Intel"
         title={brandName}

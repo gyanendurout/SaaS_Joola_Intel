@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { PageHead, LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
 import { fmt } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
+import { Breadcrumb } from '@/components/v2/Breadcrumb'
 import {
   fetchCampaignOfferIntel,
   buildOfferPlaybook,
@@ -108,6 +109,10 @@ export default function BrandCampaignPage() {
 
   return (
     <>
+      <Breadcrumb crumbs={[
+        { label: 'Campaign & Offer Intel', href: '/v2/campaign-offer-intel' },
+        { label: brandName },
+      ]} />
       <PageHead
         eyebrow="Campaign & Offer Intel"
         title={brandName}

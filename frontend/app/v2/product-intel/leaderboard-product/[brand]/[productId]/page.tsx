@@ -8,6 +8,7 @@ import {
 } from '@/components/v2/PageShell'
 import { fmt, Sparkline } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
+import { Breadcrumb } from '@/components/v2/Breadcrumb'
 import {
   fetchProductIntel,
   type CuratedProduct,
@@ -122,6 +123,10 @@ export default function LeaderboardProductPage() {
 
   return (
     <>
+      <Breadcrumb crumbs={[
+        { label: 'Product Intel', href: '/v2/product-intel' },
+        { label: 'Product Detail' },
+      ]} />
       <style>{`.v2-root .page-head h1 { white-space: normal !important; font-size: clamp(18px, 2.2vw, 28px) !important; line-height: 1.25 !important; word-break: break-word; }`}</style>
       <PageHead
         eyebrow={`${brandName} · Product Intel`}

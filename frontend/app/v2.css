@@ -487,38 +487,86 @@
 .v2-root .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.7); background-clip: padding-box; border: 2px solid transparent; }
 
 /* Date-range dropdown (global, top-right next to brand filter) */
-.v2-root .drd-wrap { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; }
-.v2-root .drd-ic { color: var(--fg-3); flex-shrink: 0; }
-.v2-root .drd-select {
-  background: rgba(0,0,0,0.4); color: var(--fg);
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
-  padding: 6px 28px 6px 10px; font-size: 12px; font-weight: 600;
-  cursor: pointer; appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a93a4' stroke-width='2.5'><polyline points='6 9 12 15 18 9'/></svg>");
-  background-repeat: no-repeat; background-position: right 8px center;
+/* ── Date Range Picker — unified pill design ──────────────────────── */
+.v2-root .drd-wrap {
+  display: inline-flex; align-items: center;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px;
+  padding: 0;
+  margin-right: 8px;
+  overflow: hidden;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
 }
-.v2-root .drd-select:hover { border-color: rgba(255,255,255,0.25); color: var(--fg); }
-.v2-root .drd-select.is-filtered { color: var(--yellow); border-color: rgba(245,230,37,0.45); background-color: rgba(245,230,37,0.08); }
-.v2-root .drd-select:focus { outline: 2px solid var(--yellow); outline-offset: 1px; }
-/* From → To calendar date picker (replaces single preset dropdown). */
+.v2-root .drd-wrap:hover {
+  border-color: rgba(255,255,255,0.20);
+}
+.v2-root .drd-wrap:focus-within {
+  border-color: rgba(245,230,37,0.5);
+  box-shadow: 0 0 0 2px rgba(245,230,37,0.10);
+}
+.v2-root .drd-ic { display: none; }
+/* Each date segment */
+.v2-root .drd-segment {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  position: relative;
+}
+.v2-root .drd-segment + .drd-segment {
+  border-left: 1px solid rgba(255,255,255,0.08);
+}
 .v2-root .drd-label-inline {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--fg-4);
-  user-select: none;
+  user-select: none; flex-shrink: 0;
 }
 .v2-root .drd-date {
-  padding: 6px 8px; min-width: 130px;
-  background-image: none;
-  font-family: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  min-width: 96px;
+  padding: 0;
   color-scheme: dark;
+  letter-spacing: 0.02em;
 }
+.v2-root .drd-date::-webkit-calendar-picker-indicator {
+  opacity: 0; width: 16px; cursor: pointer; position: absolute; right: 10px;
+}
+/* Divider arrow between segments */
 .v2-root .drd-arrow {
-  color: var(--fg-4); font-size: 12px; opacity: 0.7; padding: 0 2px;
+  color: var(--fg-4); font-size: 11px; padding: 0 4px;
+  display: flex; align-items: center; flex-shrink: 0;
+  background: rgba(255,255,255,0.03);
+  align-self: stretch;
 }
+/* Active / filtered state */
+.v2-root .drd-wrap.is-filtered {
+  border-color: rgba(245,230,37,0.4);
+  background: rgba(245,230,37,0.05);
+}
+.v2-root .drd-wrap.is-filtered .drd-label-inline {
+  color: rgba(245,230,37,0.7);
+}
+.v2-root .drd-wrap.is-filtered .drd-date {
+  color: #F5E625;
+}
+/* Light theme */
+html.theme-light .v2-root .drd-wrap {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.12);
+}
+html.theme-light .v2-root .drd-wrap:hover { border-color: rgba(0,0,0,0.22); }
+html.theme-light .v2-root .drd-date { color: var(--fg); color-scheme: light; }
+html.theme-light .v2-root .drd-arrow { background: rgba(0,0,0,0.03); }
+html.theme-light .v2-root .drd-segment + .drd-segment { border-color: rgba(0,0,0,0.08); }
 @media (max-width: 768px) {
   .v2-root .drd-label-inline { display: none; }
-  .v2-root .drd-arrow { display: none; }
-  .v2-root .drd-date { min-width: 110px; }
+  .v2-root .drd-date { min-width: 80px; }
 }
 .v2-root .topbar { display: inline-flex; align-items: center; gap: 8px; }
 .v2-root table.data {
@@ -2414,4 +2462,277 @@ html.theme-light {
   --sticky-bg: rgba(240,242,248,0.95);
   --line-2:    rgba(0,0,0,0.04);
   --line:      rgba(0,0,0,0.08);
+}
+
+/* ─── Accent text: yellow in dark, dark-amber in light ─────────────── */
+:root { --text-accent: #F5E625; --text-accent-muted: rgba(245,230,37,0.75); }
+html.theme-light { --text-accent: #7c5200; --text-accent-muted: #a06c00; }
+
+/* Catch any remaining hardcoded #F5E625 text in cards/sections for light mode */
+html.theme-light .v2-root .card *[style*="F5E625"],
+html.theme-light .v2-root .section-head *[style*="F5E625"],
+html.theme-light .v2-root .card-pad *[style*="F5E625"],
+html.theme-light .v2-root .card-pad-lg *[style*="F5E625"] {
+  color: var(--text-accent) !important;
+}
+/* Badge/pill backgrounds using yellow alpha stay subtle but keep border visible */
+html.theme-light .v2-root *[style*="245,230,37"] {
+  border-color: rgba(140,90,0,0.4) !important;
+  background: rgba(140,90,0,0.10) !important;
+}
+
+:root {
+  --text-accent-bg:     rgba(245,230,37,0.12);
+  --text-accent-border: rgba(245,230,37,0.3);
+}
+html.theme-light {
+  --text-accent-bg:     rgba(140,90,0,0.10);
+  --text-accent-border: rgba(140,90,0,0.35);
+}
+
+/* ── Print / PDF export ─────────────────────────────────────────── */
+@media print {
+  .v2-root .sidebar,
+  .v2-root .topbar,
+  .v2-root .collapse-btn,
+  .v2-root .theme-toggle-btn,
+  .v2-root .foot,
+  .v2-root .filter-banner { display: none !important; }
+  .v2-root .main { margin-left: 0 !important; }
+  .v2-root .card { break-inside: avoid; border: 1px solid #ccc !important; background: #fff !important; }
+  body { background: #fff !important; color: #000 !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATIONS
+   All transforms/opacity only — no layout thrash. Each has a
+   prefers-reduced-motion fallback at the bottom.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Keyframes ──────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes popIn {
+  0%   { opacity: 0; transform: scale(0.88); }
+  70%  { transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmerSlide {
+  from { background-position: -400px 0; }
+  to   { background-position:  400px 0; }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes numberPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+@keyframes badgeBounce {
+  0%   { transform: scale(0); }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* ── Page content entrance ──────────────────────────────────────── */
+/* PageHead fades up */
+.v2-root .page-head {
+  animation: fadeInUp 0.35s ease both;
+}
+/* Filter banner slides down */
+.v2-root .filter-banner {
+  animation: slideDown 0.22s ease both;
+}
+
+/* ── KPI grid — staggered pop-in ────────────────────────────────── */
+.v2-root .kpi-grid .kpi { animation: popIn 0.3s ease both; }
+.v2-root .kpi-grid .kpi:nth-child(1) { animation-delay: 0ms; }
+.v2-root .kpi-grid .kpi:nth-child(2) { animation-delay: 55ms; }
+.v2-root .kpi-grid .kpi:nth-child(3) { animation-delay: 110ms; }
+.v2-root .kpi-grid .kpi:nth-child(4) { animation-delay: 165ms; }
+.v2-root .kpi-grid .kpi:nth-child(5) { animation-delay: 220ms; }
+.v2-root .kpi-grid .kpi:nth-child(6) { animation-delay: 275ms; }
+
+/* ── Cards — staggered fade up ──────────────────────────────────── */
+.v2-root section > .card,
+.v2-root section > div > .card {
+  animation: fadeInUp 0.38s ease both;
+}
+.v2-root section:nth-child(1) .card { animation-delay: 60ms; }
+.v2-root section:nth-child(2) .card { animation-delay: 100ms; }
+.v2-root section:nth-child(3) .card { animation-delay: 140ms; }
+.v2-root section:nth-child(4) .card { animation-delay: 180ms; }
+.v2-root section:nth-child(5) .card { animation-delay: 220ms; }
+
+/* ── Table rows — stagger on load ───────────────────────────────── */
+.v2-root table.data tbody tr {
+  animation: fadeIn 0.2s ease both;
+}
+.v2-root table.data tbody tr:nth-child(1)  { animation-delay: 20ms; }
+.v2-root table.data tbody tr:nth-child(2)  { animation-delay: 40ms; }
+.v2-root table.data tbody tr:nth-child(3)  { animation-delay: 60ms; }
+.v2-root table.data tbody tr:nth-child(4)  { animation-delay: 80ms; }
+.v2-root table.data tbody tr:nth-child(5)  { animation-delay: 100ms; }
+.v2-root table.data tbody tr:nth-child(6)  { animation-delay: 120ms; }
+.v2-root table.data tbody tr:nth-child(7)  { animation-delay: 140ms; }
+.v2-root table.data tbody tr:nth-child(8)  { animation-delay: 160ms; }
+.v2-root table.data tbody tr:nth-child(n+9){ animation-delay: 180ms; }
+
+/* ── Nav items — smooth active state ───────────────────────────── */
+.v2-root .nav-item {
+  transition: background 180ms ease, color 180ms ease, padding-left 180ms ease;
+}
+.v2-root .nav-item.active {
+  animation: fadeIn 0.2s ease both;
+}
+
+/* ── Bar rows — entrance ────────────────────────────────────────── */
+.v2-root .bar-row {
+  animation: fadeIn 0.25s ease both;
+}
+
+/* ── Bar fill width animations ──────────────────────────────────── */
+.v2-root .bar-row .fill {
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── MiniKpi value — pop when updated ──────────────────────────── */
+.v2-root .kpi .val {
+  transition: color 0.3s ease;
+}
+.v2-root .kpi .val:hover {
+  animation: numberPop 0.3s ease;
+}
+
+/* ── Buttons — press feedback ───────────────────────────────────── */
+.v2-root .btn:active,
+.v2-root button:not(:disabled):active {
+  transform: scale(0.96);
+  transition: transform 80ms ease;
+}
+
+/* ── Sidebar brand mark — subtle pulse on load ──────────────────── */
+.v2-root .brand-mark {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.v2-root .brand-mark:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 16px rgba(245,230,37,0.5);
+}
+
+/* ── Sidebar collapse toggle ────────────────────────────────────── */
+.v2-root .collapse-btn {
+  transition: background 180ms, color 180ms, border-color 180ms;
+}
+
+/* ── Crisis badge — bounce in ───────────────────────────────────── */
+.v2-root .crisis-badge {
+  animation: badgeBounce 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* ── Command palette dialog ─────────────────────────────────────── */
+.v2-root .cmd-dialog {
+  animation: scaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Brand filter popover ───────────────────────────────────────── */
+.v2-root .bfd-popover {
+  animation: slideDown 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Detail page hero fade up ───────────────────────────────────── */
+.v2-root .main [style*="gradient"] {
+  animation: fadeIn 0.4s ease both;
+}
+
+/* ── Scatter/bubble chart dots ──────────────────────────────────── */
+.v2-root .scatter-dot {
+  transition: r 200ms ease, filter 200ms ease, opacity 200ms ease;
+}
+
+/* ── Line chart paths ───────────────────────────────────────────── */
+.v2-root .scatter-wrap path {
+  transition: stroke-width 200ms ease, opacity 200ms ease, filter 200ms ease;
+}
+
+/* ── Pill / badge pop ───────────────────────────────────────────── */
+.v2-root .pill {
+  transition: background 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+
+/* ── Back to top button ─────────────────────────────────────────── */
+.v2-root .back-to-top-btn {
+  animation: slideUp 0.2s ease both;
+  transition: background 150ms, transform 150ms;
+}
+
+/* ── Pagination buttons ─────────────────────────────────────────── */
+.v2-root .pagination-btn {
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms ease;
+}
+.v2-root .pagination-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+.v2-root .pagination-btn:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+/* ── Modal overlays — fade + scale ─────────────────────────────── */
+/* Targets the fixed overlay divs used in TikTok, Twitter, Instagram modals */
+.v2-root [style*="position: fixed"][style*="z-index: 200"] > div,
+.v2-root [style*="position: fixed"][style*="zIndex: 200"] > div {
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Section info popup ─────────────────────────────────────────── */
+.v2-root .si-popup {
+  animation: scaleIn 0.15s ease both;
+  transform-origin: top left;
+}
+
+/* ── Breadcrumb ─────────────────────────────────────────────────── */
+.v2-root nav[aria-label="Breadcrumb"] {
+  animation: fadeIn 0.3s ease both;
+}
+
+/* ── Heatmap cells hover scale (already defined — add transition) ── */
+.v2-root .cadence-cell {
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+/* ── Section head sticky — smooth background ────────────────────── */
+.v2-root .section-head {
+  transition: background 200ms ease;
+}
+
+/* ══ prefers-reduced-motion — strip everything to instant ══════════ */
+@media (prefers-reduced-motion: reduce) {
+  .v2-root *,
+  .v2-root *::before,
+  .v2-root *::after {
+    animation-duration:   0.01ms !important;
+    animation-delay:      0ms    !important;
+    transition-duration:  0.01ms !important;
+    scroll-behavior:      auto   !important;
+  }
 }

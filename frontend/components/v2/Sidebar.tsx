@@ -92,6 +92,18 @@ export function V2Sidebar() {
   const [collapsed, setCollapsed] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
+  const [crisisCount, setCrisisCount] = useState(0)
+
+  useEffect(() => {
+    import('@/lib/shared/supabase').then(({ supabase }) => {
+      supabase
+        .from('mention_facts')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_crisis', true)
+        .gte('posted_at', new Date(Date.now() - 7 * 86400000).toISOString())
+        .then(({ count }) => { if (count) setCrisisCount(count) })
+    })
+  }, [])
 
   useEffect(() => {
     // Restore collapse state
@@ -165,8 +177,8 @@ export function V2Sidebar() {
           {/* Home entry — always at top */}
           <div className="nav-group">
             <Link
-              href="/v2/ask-intel"
-              className={'nav-item ' + (path === '/v2' || path === '/v2/ask-intel' ? 'active' : '')}
+              href="/v2/overview"
+              className={'nav-item ' + (path === '/v2' || path === '/v2/overview' ? 'active' : '')}
               onClick={() => setOpen(false)}
               title={collapsed ? 'Home' : undefined}
               aria-label="Home"
@@ -192,6 +204,15 @@ export function V2Sidebar() {
                     <span className="ic">{item.ic}</span>
                     {!collapsed && <span>{item.label}</span>}
                     {!collapsed && item.badge && <span className="badge">{item.badge}</span>}
+                    {item.href === '/v2/community-intel' && crisisCount > 0 && !collapsed && (
+                      <span style={{
+                        marginLeft: 'auto', fontSize: 9, fontWeight: 800,
+                        background: '#ef4444', color: '#fff',
+                        borderRadius: 99, padding: '1px 6px', minWidth: 16, textAlign: 'center',
+                      }} title={`${crisisCount} crisis signals in last 7 days`}>
+                        {crisisCount > 99 ? '99+' : crisisCount}
+                      </span>
+                    )}
                   </Link>
                 )
               })}

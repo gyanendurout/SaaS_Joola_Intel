@@ -9,6 +9,7 @@ import {
 import { fmt, LineChart, Donut } from '@/components/v2/charts'
 import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
+import { Breadcrumb } from '@/components/v2/Breadcrumb'
 
 const YT_HANDLES: Record<string, string> = {
   joola: 'joolapickleball', selkirk: 'SelkirkSport', crbn: 'CRBNPickleball',
@@ -203,10 +204,24 @@ export default function YoutubeBrandPage() {
       }}>
         {/* Back nav */}
         <div style={{ marginBottom: 20 }}>
-          <button onClick={() => router.back()}
-            style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            ← Back
-          </button>
+          <Breadcrumb crumbs={[
+            { label: 'YouTube', href: '/v2/youtube' },
+            { label: brandName },
+          ]} />
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => router.back()}
+              style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              ← Back
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="btn btn-ghost"
+              aria-label="Print or save as PDF"
+              style={{ fontSize: 11 }}
+            >
+              ⎙ Print
+            </button>
+          </div>
         </div>
 
         {/* Brand identity */}

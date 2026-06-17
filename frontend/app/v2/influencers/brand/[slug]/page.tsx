@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { pgColor, pgName, PageHead, LoadingPage, SectionInfo } from '@/components/v2/PageShell'
 import { fmt } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
+import { Breadcrumb } from '@/components/v2/Breadcrumb'
 import {
   fetchInfluencerIntel,
   type BrandPlayerStats,
@@ -120,6 +121,10 @@ export default function BrandStrengthDetailPage() {
 
   return (
     <>
+      <Breadcrumb crumbs={[
+        { label: 'Influencer Intel', href: '/v2/influencers' },
+        { label: brandName },
+      ]} />
       <PageHead
         eyebrow="Influencer Intel"
         title={brandName}

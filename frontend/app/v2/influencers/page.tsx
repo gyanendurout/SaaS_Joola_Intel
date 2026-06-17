@@ -966,8 +966,8 @@ export default function InfluencerIntelPage() {
             {data.pending.map((p, i) => (
               <div key={i} className="card"><div className="card-pad-lg">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                  <span style={{ fontWeight: 700, color: '#F5E625', fontSize: 13 }}>{p.section}</span>
-                  <span style={{ fontSize: 10, color: '#F5E625', fontWeight: 700, background: 'rgba(245,230,37,0.12)', padding: '2px 8px', borderRadius: 99, border: '1px solid rgba(245,230,37,0.3)' }}>WAITING FOR DATA</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text-accent)', fontSize: 13 }}>{p.section}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-accent)', fontWeight: 700, background: 'var(--text-accent-bg, rgba(245,230,37,0.12))', padding: '2px 8px', borderRadius: 99, border: '1px solid var(--text-accent-border, rgba(245,230,37,0.3))' }}>WAITING FOR DATA</span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 6 }}><strong>Why it&apos;s empty:</strong> {p.why}</div>
                 <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 6 }}><strong>What&apos;s needed:</strong> {p.requiredSource}</div>

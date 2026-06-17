@@ -7,7 +7,7 @@ import {
   type V2Brand, type V2XRow, type V2XPost,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter, exportCSV } from '@/components/v2/PageShell'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { twitterPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
@@ -603,20 +603,32 @@ export default function TwitterPage() {
       </section>
 
       <section id="twitter-posts-table">
-        <div className="section-head"><div>
-          <h2>
-            Top {sortedPosts.length} posts · by likes
-            <SectionInfo
-              title="Top X Posts"
-              description="Up to the 200 highest-engagement posts across the tracked X accounts, ranked by like count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Product launches, pro player news, and community posts tend to dominate."
-              source="x_posts · scraped via apidojo/twitter-scraper-lite. Click column headers to sort."
-            />
-          </h2>
-          <div className="sub">
-            Showing <strong style={{ color: 'var(--fg)' }}>{sortedPosts.length}</strong> of up to 200 ·
-            {' '}sorted by likes · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+        <div className="section-head">
+          <div>
+            <h2>
+              Top {sortedPosts.length} posts · by likes
+              <SectionInfo
+                title="Top X Posts"
+                description="Up to the 200 highest-engagement posts across the tracked X accounts, ranked by like count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Product launches, pro player news, and community posts tend to dominate."
+                source="x_posts · scraped via apidojo/twitter-scraper-lite. Click column headers to sort."
+              />
+            </h2>
+            <div className="sub">
+              Showing <strong style={{ color: 'var(--fg)' }}>{sortedPosts.length}</strong> of up to 200 ·
+              {' '}sorted by likes · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+            </div>
           </div>
-        </div></div>
+          <div className="actions">
+            <button
+              onClick={() => exportCSV('joola-x-posts.csv', sortedPosts as unknown as Record<string, unknown>[])}
+              className="btn btn-ghost"
+              aria-label="Export table as CSV"
+              style={{ fontSize: 11 }}
+            >
+              ↓ CSV
+            </button>
+          </div>
+        </div>
         <div className="card">
           {sortedPosts.length > 0 ? (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>

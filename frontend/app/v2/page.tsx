@@ -6,5 +6,5 @@
 import { redirect } from 'next/navigation'
 
 export default function V2Root(): never {
-  redirect('/v2/ask-intel')
+  redirect('/v2/overview')
 }

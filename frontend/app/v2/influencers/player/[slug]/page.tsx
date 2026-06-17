@@ -6,6 +6,7 @@ import { pgColor, pgName, PageHead, LoadingPage, SectionInfo } from '@/component
 import { fmt } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import { fetchInfluencerIntel, type InfluencerRow, type RosterRow, type PlatformAttention, type InfluencerPostRow } from '@/lib/v2/influencerIntel'
+import { Breadcrumb } from '@/components/v2/Breadcrumb'
 import { formatCalendarDate } from '@/lib/v2/format'
 
 const SENT_PILL: Record<string, string> = {
@@ -85,15 +86,30 @@ export default function PlayerDetailPage() {
 
   return (
     <>
+      <Breadcrumb crumbs={[
+        { label: 'Influencer Intel', href: '/v2/influencers' },
+        { label: brandName, href: `/v2/influencers/brand/${encodeURIComponent(brandSlug)}` },
+        { label: playerName },
+      ]} />
       <PageHead
         eyebrow="Influencer Intel"
         title={playerName}
         accent={brandName}
         sub={`Sponsored player · ${brandName}`}
         actions={
-          <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid var(--wb-14)', color: 'var(--fg-3)', borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
-            ← Back
-          </button>
+          <>
+            <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid var(--wb-14)', color: 'var(--fg-3)', borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
+              ← Back
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="btn btn-ghost"
+              aria-label="Print or save as PDF"
+              style={{ fontSize: 11 }}
+            >
+              ⎙ Print
+            </button>
+          </>
         }
       />
 

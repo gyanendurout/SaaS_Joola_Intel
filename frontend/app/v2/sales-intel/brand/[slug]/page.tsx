@@ -10,6 +10,7 @@ import {
 } from '@/lib/v2/productIntel'
 import { fmt } from '@/components/v2/charts'
 import { LoadingPage, pgName } from '@/components/v2/PageShell'
+import { Breadcrumb } from '@/components/v2/Breadcrumb'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -139,6 +140,10 @@ export default function SalesIntelBrandPage() {
         borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32,
       }}>
         <div style={{ marginBottom: 20 }}>
+          <Breadcrumb crumbs={[
+            { label: 'Sales Intel', href: '/v2/sales-intel' },
+            { label: brandName },
+          ]} />
           <button onClick={() => router.back()}
             style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             ← Back

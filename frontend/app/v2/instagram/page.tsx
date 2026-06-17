@@ -7,7 +7,7 @@ import {
   type V2Brand, type V2IGRow, type V2TopIGPost, type V2IGMentionRow, type V2IGTheme,
 } from '@/lib/v2/data'
 import { fmt, LineChart, EngagementQualityMatrix, Sparkline } from '@/components/v2/charts'
-import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter, exportCSV } from '@/components/v2/PageShell'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { instagramPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
@@ -783,6 +783,14 @@ export default function InstagramPage() {
               <button className={'chip' + (formatFilter === 'carousels' ? ' on' : '')} onClick={() => setFormatFilter('carousels')}>Carousel</button>
               <button className={'chip' + (formatFilter === 'images' ? ' on' : '')} onClick={() => setFormatFilter('images')}>Image</button>
             </div>
+            <button
+              onClick={() => exportCSV('joola-ig-posts.csv', sortedPosts as unknown as Record<string, unknown>[])}
+              className="btn btn-ghost"
+              aria-label="Export table as CSV"
+              style={{ fontSize: 11 }}
+            >
+              ↓ CSV
+            </button>
           </div>
         </div>
         <div className="card">
