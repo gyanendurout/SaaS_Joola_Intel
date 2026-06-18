@@ -91,6 +91,7 @@ export function V2Sidebar() {
   const [open, setOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
   const [crisisCount, setCrisisCount] = useState(0)
 
@@ -122,7 +123,31 @@ export function V2Sidebar() {
       setDensity(savedDensity)
       document.documentElement.classList.toggle('density-compact', savedDensity === 'compact')
     }
+    // Restore group collapsed state
+    try {
+      const savedGroups = JSON.parse(localStorage.getItem('joola-nav-groups') || '{}')
+      if (typeof savedGroups === 'object') setCollapsedGroups(savedGroups)
+    } catch {}
   }, [])
+
+  // Auto-expand the group that contains the current page
+  useEffect(() => {
+    setCollapsedGroups(prev => {
+      let changed = false
+      const next = { ...prev }
+      navGroups.forEach(group => {
+        if (next[group.heading]) {
+          const hasActive = group.items.some(
+            item => path === item.href || (item.href !== '/v2' && path.startsWith(item.href))
+          )
+          if (hasActive) { next[group.heading] = false; changed = true }
+        }
+      })
+      if (!changed) return prev
+      localStorage.setItem('joola-nav-groups', JSON.stringify(next))
+      return next
+    })
+  }, [path])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '60px' : '232px')
@@ -188,36 +213,79 @@ export function V2Sidebar() {
             </Link>
           </div>
 
-          {navGroups.map((group, gi) => (
-            <div key={group.heading} className="nav-group" style={gi > 0 ? { marginTop: 12 } : undefined}>
-              {!collapsed && <h6>{group.heading}</h6>}
-              {group.items.map(item => {
-                const active = path === item.href || (item.href !== '/v2' && path.startsWith(item.href))
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={'nav-item ' + (active ? 'active' : '')}
-                    onClick={() => setOpen(false)}
-                    title={collapsed ? item.label : undefined}
+          {navGroups.map((group, gi) => {
+            const isGroupCollapsed = !collapsed && !!collapsedGroups[group.heading]
+            function toggleGroup() {
+              setCollapsedGroups(prev => {
+                const next = { ...prev, [group.heading]: !prev[group.heading] }
+                localStorage.setItem('joola-nav-groups', JSON.stringify(next))
+                return next
+              })
+            }
+            return (
+              <div key={group.heading} className="nav-group" style={{ marginTop: gi === 0 ? 16 : 12 }}>
+                {/* Clickable heading with chevron */}
+                {!collapsed && (
+                  <button
+                    onClick={toggleGroup}
+                    aria-expanded={!isGroupCollapsed}
+                    aria-label={`${isGroupCollapsed ? 'Expand' : 'Collapse'} ${group.heading}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                      padding: '0 8px 4px', marginBottom: 2,
+                    }}
                   >
-                    <span className="ic">{item.ic}</span>
-                    {!collapsed && <span>{item.label}</span>}
-                    {!collapsed && item.badge && <span className="badge">{item.badge}</span>}
-                    {item.href === '/v2/community-intel' && crisisCount > 0 && !collapsed && (
-                      <span style={{
-                        marginLeft: 'auto', fontSize: 9, fontWeight: 800,
-                        background: '#ef4444', color: '#fff',
-                        borderRadius: 99, padding: '1px 6px', minWidth: 16, textAlign: 'center',
-                      }} title={`${crisisCount} crisis signals in last 7 days`}>
-                        {crisisCount > 99 ? '99+' : crisisCount}
-                      </span>
-                    )}
-                  </Link>
-                )
-              })}
-            </div>
-          ))}
+                    <h6 style={{ margin: 0, pointerEvents: 'none' }}>{group.heading}</h6>
+                    <svg
+                      width="10" height="10" viewBox="0 0 24 24" fill="none"
+                      stroke="rgba(255,255,255,0.3)" strokeWidth="2.5"
+                      style={{
+                        flexShrink: 0,
+                        transition: 'transform 220ms ease',
+                        transform: isGroupCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                      }}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                )}
+                {/* Items — slide up/down */}
+                <div style={{
+                  overflow: 'hidden',
+                  maxHeight: isGroupCollapsed ? '0px' : '800px',
+                  opacity: isGroupCollapsed ? 0 : 1,
+                  transition: 'max-height 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms ease',
+                }}>
+                  {group.items.map(item => {
+                    const active = path === item.href || (item.href !== '/v2' && path.startsWith(item.href))
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={'nav-item ' + (active ? 'active' : '')}
+                        onClick={() => setOpen(false)}
+                        title={collapsed ? item.label : undefined}
+                      >
+                        <span className="ic">{item.ic}</span>
+                        {!collapsed && <span>{item.label}</span>}
+                        {!collapsed && item.badge && <span className="badge">{item.badge}</span>}
+                        {item.href === '/v2/community-intel' && crisisCount > 0 && !collapsed && (
+                          <span className="crisis-badge" style={{
+                            marginLeft: 'auto', fontSize: 9, fontWeight: 800,
+                            background: '#ef4444', color: '#fff',
+                            borderRadius: 99, padding: '1px 6px', minWidth: 16, textAlign: 'center',
+                          }} title={`${crisisCount} crisis signals in last 7 days`}>
+                            {crisisCount > 99 ? '99+' : crisisCount}
+                          </span>
+                        )}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
         </div>
 
         {/* Theme toggle */}
