@@ -142,13 +142,18 @@ export default function OverviewPage() {
         {/* JOOLA KPI strip — full width row, well below the fixed topbar */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12 }}>
           {[
-            { label: 'IG Followers',    value: joolaIG     ? fmt(joolaIG.followers)        : '—', sub: joolaIG     ? `${joolaIG.engRate.toFixed(2)}% ER`                                                  : '',  color: '#e1306c' },
-            { label: 'YT Subscribers',  value: joolaYT     ? fmt(joolaYT.subs)             : '—', sub: joolaYT     ? `${fmt(joolaYT.views)} views`                                                        : '',  color: '#ff0000' },
-            { label: 'Ad SOV',          value: joolaSoV + '%',                                     sub: `of ${fmt(totalAds)} ads in market`,                                                               color: '#F5E625' },
-            { label: 'Reddit Mentions', value: joolaReddit ? fmt(joolaReddit.mentions)     : '—', sub: joolaReddit ? `${Math.round((joolaReddit.positive / Math.max(1, joolaReddit.mentions)) * 100)}% positive` : '', color: '#ff4500' },
-            { label: 'Athletes',        value: String(influencers.filter(i => i.brand === 'joola').length), sub: 'sponsored athletes',                                                                     color: '#818cf8' },
-          ].map(({ label, value, sub, color: c }) => (
-            <div key={label} style={{ background: 'var(--wb-3)', border: `1px solid ${c}33`, borderRadius: 10, padding: '14px 16px', borderTop: `3px solid ${c}` }}>
+            { label: 'IG Followers',    value: joolaIG     ? fmt(joolaIG.followers)        : '—', sub: joolaIG     ? `${joolaIG.engRate.toFixed(2)}% ER`                                                  : '',  color: '#e1306c', href: '/v2/instagram' },
+            { label: 'YT Subscribers',  value: joolaYT     ? fmt(joolaYT.subs)             : '—', sub: joolaYT     ? `${fmt(joolaYT.views)} views`                                                        : '',  color: '#ff0000', href: '/v2/youtube' },
+            { label: 'Ad SOV',          value: joolaSoV + '%',                                     sub: `of ${fmt(totalAds)} ads in market`,                                                               color: '#F5E625', href: '/v2/campaign-offer-intel' },
+            { label: 'Reddit Mentions', value: joolaReddit ? fmt(joolaReddit.mentions)     : '—', sub: joolaReddit ? `${Math.round((joolaReddit.positive / Math.max(1, joolaReddit.mentions)) * 100)}% positive` : '', color: '#ff4500', href: '/v2/reddit' },
+            { label: 'Athletes',        value: String(influencers.filter(i => i.brand === 'joola').length), sub: 'sponsored athletes',                                                                     color: '#818cf8', href: '/v2/influencers' },
+          ].map(({ label, value, sub, color: c, href }) => (
+            <div key={label}
+              onClick={() => router.push(href)}
+              style={{ background: 'var(--wb-3)', border: `1px solid ${c}33`, borderRadius: 10, padding: '14px 16px', borderTop: `3px solid ${c}`, cursor: 'pointer', transition: 'background 150ms, transform 150ms, box-shadow 150ms' }}
+              onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.background = c + '12'; el.style.transform = 'translateY(-2px)'; el.style.boxShadow = `0 8px 24px ${c}22` }}
+              onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.background = 'var(--wb-3)'; el.style.transform = ''; el.style.boxShadow = '' }}
+            >
               <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 8 }}>{label}</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: c, fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
               {sub && <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 6 }}>{sub}</div>}
