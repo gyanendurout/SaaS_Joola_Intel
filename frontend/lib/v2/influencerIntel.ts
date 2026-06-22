@@ -796,46 +796,6 @@ export async function fetchInfluencerIntel(
 
   // ── 10. Pending pipeline items ─────────────────────────────────────
   const pending: PendingItem[] = []
-  if (ytMentions === 0) {
-    pending.push({
-      section: 'YouTube player attention',
-      why: 'No mention_facts rows for tracked athletes on YouTube channel.',
-      requiredSource: 'mention_facts (channel in [yt, yt_comment]) with athlete_id populated',
-      recommendation: 'Run yt_comments enrichment step that resolves player names → athlete_id and writes a mention_facts row per match.',
-    })
-  }
-  if (tiktokMentions === 0) {
-    pending.push({
-      section: 'TikTok player attention',
-      why: 'No mention_facts rows for tracked athletes on TikTok.',
-      requiredSource: 'mention_facts (channel = tiktok) with athlete_id populated',
-      recommendation: 'Add TikTok comment scraper + extend enrichment to extract player NER from tiktok_videos.text + comments.',
-    })
-  }
-  if (xMentions === 0) {
-    pending.push({
-      section: 'X / Twitter player attention',
-      why: 'No mention_facts rows for tracked athletes on X.',
-      requiredSource: 'mention_facts (channel in [x, x_influencer]) with athlete_id populated',
-      recommendation: 'Extend X enrichment to extract player NER from x_posts.text and write mention_facts rows per match.',
-    })
-  }
-  if (redditMentions === 0) {
-    pending.push({
-      section: 'Reddit player attention',
-      why: 'No mention_facts rows for tracked athletes on Reddit.',
-      requiredSource: 'mention_facts (channel = reddit) with athlete_id populated',
-      recommendation: 'Extend Reddit enrichment to NER player names from reddit_mentions.body + reddit_comments.comment_text.',
-    })
-  }
-  if (playerProductConnections.length === 0) {
-    pending.push({
-      section: 'Player ↔ paddle connections',
-      why: 'No mention_facts rows have both athlete_id AND product_id populated.',
-      requiredSource: 'mention_facts with athlete_id AND product_id non-null',
-      recommendation: 'Tighten enrichment prompt so the LLM extracts both athlete + product entities from the same comment when present.',
-    })
-  }
 
   // ── 11. Review-required (anything that doesn't fit cleanly) ─────────
   const reviewRequired: ReviewItem[] = []
