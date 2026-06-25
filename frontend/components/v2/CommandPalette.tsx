@@ -366,7 +366,7 @@ export function CommandPalette() {
         style={{
           maxWidth: 580,
           width: '100%',
-          background: '#0f1219',
+          background: 'var(--bg-2)',
           border: '1px solid rgba(255,255,255,0.12)',
           borderRadius: 14,
           boxShadow: '0 32px 80px rgba(0,0,0,0.7)',

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import {
   fetchBrands, fetchReddit, fetchRedditTrend, fetchTopRedditMentions,
   fetchRedditViral, fetchRedditCrisisClusters,
@@ -12,16 +12,8 @@ import { fmt, LineChart } from '@/components/v2/charts'
 import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
-
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div style={{ background: 'var(--wb-6)', border: '1px solid var(--wb-10)', borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: color || '#fff', fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>{sub}</div>}
-    </div>
-  )
-}
+import { StatCard } from '@/components/v2/StatCard'
+import { BackButton } from '@/components/v2/BackButton'
 
 function PostCard({ m, color }: { m: V2RedditMention; color: string }) {
   return (
@@ -47,7 +39,6 @@ function PostCard({ m, color }: { m: V2RedditMention; color: string }) {
 
 export default function RedditBrandPage() {
   const { slug } = useParams<{ slug: string }>()
-  const router = useRouter()
   const brandSlug = decodeURIComponent(slug)
 
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -109,13 +100,13 @@ export default function RedditBrandPage() {
   return (
     <div style={{ minHeight: '100vh' }}>
       {/* Hero */}
-      <div style={{ background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
+      <div style={{ background: `linear-gradient(135deg, ${color}22 0%, transparent 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
         <div style={{ marginBottom: 20 }}>
           <Breadcrumb crumbs={[
             { label: 'Reddit', href: '/v2/reddit' },
             { label: brandName },
           ]} />
-          <button onClick={() => router.back()} style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>← Back</button>
+          <BackButton />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -123,8 +114,8 @@ export default function RedditBrandPage() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : '#fff', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Reddit · Community Intelligence</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
+              <div style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>Reddit · Community Intelligence</div>
             </div>
           </div>
           <a href={`https://www.reddit.com/search/?q=${encodeURIComponent(brandName)}&sort=top`} target="_blank" rel="noopener noreferrer"

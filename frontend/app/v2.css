@@ -533,9 +533,17 @@
   padding: 0;
   color-scheme: dark;
   letter-spacing: 0.02em;
+  position: relative;
 }
 .v2-root .drd-date::-webkit-calendar-picker-indicator {
-  opacity: 0; width: 16px; cursor: pointer; position: absolute; right: 10px;
+  opacity: 0.01;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
 }
 /* Divider arrow between segments */
 .v2-root .drd-arrow {
@@ -1413,14 +1421,14 @@ html { scroll-behavior: smooth; }
     width: 40px;
     height: 40px;
     border-radius: 8px;
-    background: rgba(10,13,18,0.92);
+    background: var(--surface);
     backdrop-filter: blur(12px);
     border: 1px solid var(--line);
     color: var(--fg);
     cursor: pointer;
-    transition: border-color 140ms;
+    transition: border-color 140ms, background 140ms;
   }
-  .v2-root .mobile-menu-btn:hover { border-color: rgba(255,255,255,0.2); }
+  .v2-root .mobile-menu-btn:hover { border-color: var(--fg-3); background: var(--surface-2); }
 
   .v2-root .sidebar-overlay {
     position: fixed;
@@ -1961,9 +1969,9 @@ html { scroll-behavior: smooth; }
   background: rgba(0,0,0,0.55);
   border: 1px solid var(--line);
   border-radius: 4px;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff;
-  caret-color: #ffffff;
+  color: var(--fg);
+  -webkit-text-fill-color: var(--fg);
+  caret-color: var(--fg);
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 500;
@@ -1971,7 +1979,7 @@ html { scroll-behavior: smooth; }
   outline: none;
   transition: border-color 140ms, background 140ms;
 }
-.v2-root .col-filter-input::placeholder { color: #9aa2b0; opacity: 0.85; }
+.v2-root .col-filter-input::placeholder { color: var(--fg-4); opacity: 0.85; }
 .v2-root .col-filter-input:focus {
   border-color: var(--yellow-edge);
   background: rgba(0,0,0,0.7);
@@ -2093,9 +2101,18 @@ html.theme-light .v2-root .main { background: var(--bg); }
 
 /* Sidebar stays dark */
 html.theme-light .v2-root .sidebar {
-  background: #0f1219;
-  border-right-color: rgba(255,255,255,0.06);
+  background: #ffffff;
+  border-right-color: rgba(0,0,0,0.08);
+  box-shadow: 2px 0 12px rgba(0,0,0,0.06);
 }
+html.theme-light .v2-root .sidebar .nav-group-label { color: #9aa2b0; }
+html.theme-light .v2-root .sidebar .nav-item { color: #374151; }
+html.theme-light .v2-root .sidebar .nav-item:hover { background: rgba(0,0,0,0.04); color: #0d1117; }
+html.theme-light .v2-root .sidebar .nav-item.active { background: rgba(34,197,94,0.10); color: #16a34a; }
+html.theme-light .v2-root .sidebar .collapse-btn { color: #6b7280; border-color: rgba(0,0,0,0.10); }
+html.theme-light .v2-root .sidebar .collapse-btn:hover { color: #0d1117; border-color: rgba(0,0,0,0.20); }
+html.theme-light .v2-root .sidebar .brand-text .a { color: #0d1117; }
+html.theme-light .v2-root .sidebar .brand-text .s { color: #6b7280; }
 
 /* Cards */
 html.theme-light .v2-root .card {
@@ -2302,7 +2319,19 @@ html.density-compact .v2-root .card-pad-lg {
   }
 }
 
+/* ─── Color-scheme: tells browser which native UI (scrollbars, inputs) to render ── */
+html:not(.theme-light) { color-scheme: dark; }
+html.theme-light        { color-scheme: light; }
+
 /* ─── Light theme — comprehensive pass ─────────────────────────────── */
+
+/* Ambient background gradient — tone down for light mode */
+html.theme-light .v2-root .app-bg {
+  background:
+    radial-gradient(900px 600px at 12% -10%, rgba(245,230,37,0.06), transparent 60%),
+    radial-gradient(800px 600px at 95% 8%,  rgba(129,140,248,0.05), transparent 60%),
+    radial-gradient(700px 500px at 60% 95%, rgba(34,197,94,0.04),  transparent 60%);
+}
 
 /* Dot grid: light dots on light bg = invisible — switch to dark dots */
 html.theme-light .v2-root .dot-grid {
@@ -2340,8 +2369,11 @@ html.theme-light .v2-root .col-filter-input {
   background: rgba(0,0,0,0.04);
   border-color: rgba(0,0,0,0.12);
   color: var(--fg);
+  -webkit-text-fill-color: var(--fg);
+  caret-color: var(--fg);
 }
-html.theme-light .v2-root .col-filter-input::placeholder { color: var(--fg-4); }
+html.theme-light .v2-root .col-filter-input::placeholder { color: var(--fg-4); opacity: 0.7; }
+html.theme-light .v2-root .col-filter-input:focus { background: rgba(0,0,0,0.06); }
 
 /* Scrollbar */
 html.theme-light .v2-root .table-wrap::-webkit-scrollbar-track { background: rgba(0,0,0,0.04); }
@@ -2735,4 +2767,203 @@ html.theme-light {
     transition-duration:  0.01ms !important;
     scroll-behavior:      auto   !important;
   }
+}
+
+/* ── Skeleton shimmer loading ──────────────────────────────────────── */
+@keyframes shimmer { 0%,100% { opacity:0.6 } 50% { opacity:1 } }
+@keyframes shimmerSlide { 0% { transform:translateX(-100%) } 100% { transform:translateX(100%) } }
+.skeleton { background:rgba(255,255,255,0.04); border-radius:6px; animation:shimmer 1.5s ease-in-out infinite; }
+.skeleton-text { height:12px; border-radius:3px; background:rgba(255,255,255,0.06); animation:shimmer 1.5s ease-in-out infinite; }
+.skeleton-chart { height:200px; border-radius:8px; position:relative; overflow:hidden; background:rgba(255,255,255,0.03); }
+.skeleton-chart::after { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.05) 50%,transparent 100%); animation:shimmerSlide 1.8s ease-in-out infinite; }
+
+/* ── Empty states ──────────────────────────────────────────────────── */
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 24px; gap:12px; text-align:center; }
+.empty-state-icon { font-size:40px; opacity:0.35; }
+.empty-state-title { font-size:14px; font-weight:700; color:var(--fg-3); }
+.empty-state-sub { font-size:12px; color:var(--fg-4); max-width:280px; line-height:1.5; }
+
+/* ── Keyboard shortcut hints ───────────────────────────────────────── */
+kbd.shortcut-hint { display:inline-block; font-size:10px; padding:1px 5px; border-radius:3px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.14); color:var(--fg-4); font-family:ui-monospace,monospace; line-height:1.4; }
+
+/* ── Light mode: fix any remaining elements that still look dark ──── */
+
+/* Brand hero gradient sections on detail pages */
+html.theme-light .v2-root [style*="linear-gradient"] { color: var(--fg); }
+
+/* Sticky table header — catch remaining inline bg  */
+html.theme-light .v2-root table thead tr { background: var(--surface) !important; }
+html.theme-light .v2-root table thead th { background: var(--surface); }
+
+/* Modal / overlay panels */
+html.theme-light .v2-root [class*="modal"],
+html.theme-light .v2-root [class*="dialog"] { background: var(--surface); border-color: var(--line); }
+
+/* Topbar date-picker area */
+html.theme-light .v2-root .topbar { background: rgba(240,242,248,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(0,0,0,0.07); }
+
+/* Sidebar links / nav items in light */
+html.theme-light .v2-root .nav-item { color: var(--fg-3); }
+html.theme-light .v2-root .nav-item:hover { background: rgba(0,0,0,0.04); color: var(--fg); }
+html.theme-light .v2-root .nav-item.active { background: rgba(34,197,94,0.10); color: var(--joola); }
+
+/* Footer */
+html.theme-light .v2-root .foot { border-top-color: rgba(0,0,0,0.08); color: var(--fg-4); }
+
+/* CmdK palette in light mode */
+html.theme-light .v2-root ~ * [style*="#141821"],
+html.theme-light [style*="background: 'var(--surface)'"] { background: #ffffff; }
+
+/* Text that was white on dark — ensure it reads on light */
+html.theme-light .v2-root h1,
+html.theme-light .v2-root h2,
+html.theme-light .v2-root h3,
+html.theme-light .v2-root h4,
+html.theme-light .v2-root h5,
+html.theme-light .v2-root h6 { color: var(--fg); }
+
+/* Pills / badges that were semi-transparent white */
+html.theme-light .v2-root .pill-ghost { background: rgba(0,0,0,0.06); color: var(--fg-3); border-color: rgba(0,0,0,0.10); }
+html.theme-light .v2-root kbd.shortcut-hint { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.12); }
+
+/* Skeleton in light */
+html.theme-light .skeleton { background: rgba(0,0,0,0.05); }
+html.theme-light .skeleton-text { background: rgba(0,0,0,0.07); }
+html.theme-light .skeleton-chart { background: rgba(0,0,0,0.03); }
+
+/* ── Light mode: all inputs, textareas, selects project-wide ─────── */
+html.theme-light .v2-root input,
+html.theme-light .v2-root input[type="text"],
+html.theme-light .v2-root input[type="search"],
+html.theme-light .v2-root input[type="date"],
+html.theme-light .v2-root input[type="number"],
+html.theme-light .v2-root textarea,
+html.theme-light .v2-root select {
+  color: var(--fg) !important;
+  -webkit-text-fill-color: var(--fg) !important;
+  caret-color: var(--fg);
+  background-color: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.14);
+}
+html.theme-light .v2-root input::placeholder,
+html.theme-light .v2-root textarea::placeholder { color: var(--fg-4) !important; opacity: 0.75; }
+html.theme-light .v2-root input:focus,
+html.theme-light .v2-root textarea:focus,
+html.theme-light .v2-root select:focus { background-color: rgba(0,0,0,0.06); outline: none; }
+
+/* Search / filter inputs that have a dark semi-transparent bg in dark mode */
+html.theme-light .v2-root .table-search input,
+html.theme-light .v2-root .cmd-input { background: rgba(0,0,0,0.04) !important; }
+
+/* ── Light mode: fix remaining rgba-white CSS rules ──────────────── */
+
+/* Button hover border */
+html.theme-light .v2-root .btn:hover,
+html.theme-light .v2-root .select:hover { border-color: rgba(0,0,0,0.22); }
+
+/* Scrollbar thumbs */
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); }
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.32); }
+html.theme-light .v2-root *::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+html.theme-light .v2-root { scrollbar-color: rgba(0,0,0,0.2) transparent; }
+
+/* Date picker focus ring */
+html.theme-light .v2-root .drd-wrap:focus-within { border-color: rgba(0,0,0,0.28); }
+
+/* Topbar border/separator */
+html.theme-light .v2-root .topbar { border-bottom: 1px solid rgba(0,0,0,0.08); }
+
+/* Dropdown items */
+html.theme-light .v2-root .cmd-results::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); }
+
+/* Tables: row borders that use rgba-white */
+html.theme-light .v2-root .data tbody tr { border-bottom-color: rgba(0,0,0,0.05); }
+html.theme-light .v2-root .section-nav { border-color: rgba(0,0,0,0.08); }
+
+/* Section nav active item */
+html.theme-light .v2-root .section-nav a { color: var(--fg-4); }
+html.theme-light .v2-root .section-nav a:hover { color: var(--fg); background: rgba(0,0,0,0.04); }
+html.theme-light .v2-root .section-nav a.active { color: var(--joola); background: rgba(34,197,94,0.08); }
+
+/* BrandFilterDropdown */
+html.theme-light .v2-root .bf-wrap { background: #fff; border-color: rgba(0,0,0,0.09); }
+html.theme-light .v2-root .bf-list { background: #fff; }
+
+/* MiniKpi delta colors remain readable */
+html.theme-light .v2-root .delta.up { color: #16a34a; }
+html.theme-light .v2-root .delta.down { color: #dc2626; }
+
+/* Pill ghost in light */
+html.theme-light .v2-root .pill { border-color: rgba(0,0,0,0.10); }
+
+/* ─── Overview page animations ───────────────────────────────────────────── */
+
+@keyframes ov-fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ov-scale-pop {
+  from { opacity: 0; transform: scale(0.93) translateY(14px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes ov-slide-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ov-num-glow {
+  0%   { filter: brightness(1); }
+  40%  { filter: brightness(1.55) drop-shadow(0 0 10px currentColor); }
+  100% { filter: brightness(1); }
+}
+
+/* Hero eyebrow + title entrance */
+.ov-eyebrow {
+  opacity: 0;
+  animation: ov-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0ms forwards;
+}
+.ov-title {
+  opacity: 0;
+  animation: ov-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) 80ms forwards;
+}
+
+/* KPI card staggered pop */
+.ov-kpi {
+  opacity: 0;
+  animation: ov-scale-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--ov-d, 0ms);
+}
+
+/* KPI number glow when count-up finishes */
+.ov-num-done {
+  animation: ov-num-glow 0.75s ease forwards;
+}
+
+/* Scroll-reveal wrapper — invisible until .is-vis added via IntersectionObserver */
+.ov-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity  0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--ov-d, 0ms);
+}
+.ov-reveal.is-vis {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Quick-nav button stagger */
+.ov-nav-btn {
+  opacity: 0;
+  animation: ov-scale-pop 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--ov-d, 0ms);
+}
+
+/* Section title slide-in */
+.ov-section-label {
+  opacity: 0;
+  animation: ov-slide-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) 60ms forwards;
 }

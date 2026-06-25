@@ -22,6 +22,11 @@ export function DateRangePicker() {
   const { customFrom, customTo, setCustomFrom, setCustomTo, mode } = useDateRange()
   const isFiltered = mode === 'custom'
 
+  const todayStr = toInputValue(new Date())
+
+  // Clamp a stale "To" date that somehow ended up in the future
+  const clampedTo = customTo > new Date() ? new Date() : customTo
+
   return (
     <div
       className={'drd-wrap' + (isFiltered ? ' is-filtered' : '')}
@@ -36,7 +41,7 @@ export function DateRangePicker() {
           type="date"
           className="drd-date"
           value={toInputValue(customFrom)}
-          max={toInputValue(customTo)}
+          max={toInputValue(clampedTo)}
           onChange={(e) => {
             const d = fromInputValue(e.target.value)
             if (d) setCustomFrom(d)
@@ -55,8 +60,9 @@ export function DateRangePicker() {
           id="v2-date-to"
           type="date"
           className="drd-date"
-          value={toInputValue(customTo)}
+          value={toInputValue(clampedTo)}
           min={toInputValue(customFrom)}
+          max={todayStr}
           onChange={(e) => {
             const d = fromInputValue(e.target.value)
             if (d) setCustomTo(d)

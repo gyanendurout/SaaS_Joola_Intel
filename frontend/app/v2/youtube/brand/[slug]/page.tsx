@@ -1,13 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import {
   fetchBrands, fetchYT, fetchTopYTVideos, fetchYTVideoAnalysis, fetchYTTrend,
   type V2Brand, type V2YTRow, type V2TopYTVideo, type V2YTVideoAnalysis,
 } from '@/lib/v2/data'
 import { fmt, LineChart, Donut } from '@/components/v2/charts'
 import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
+import { StatCard } from '@/components/v2/StatCard'
+import { BackButton } from '@/components/v2/BackButton'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
 
@@ -47,19 +49,6 @@ function AnalysisRow({ a, color }: { a: V2YTVideoAnalysis; color: string }) {
           <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 4, background: 'var(--wb-6)', color: 'var(--fg-3)', fontWeight: 600, whiteSpace: 'nowrap' }}>{a.contentType}</span>
         )}
       </div>
-    </div>
-  )
-}
-
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div style={{
-      background: 'var(--wb-6)', border: '1px solid var(--wb-10)',
-      borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110,
-    }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: color || '#fff', fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>{sub}</div>}
     </div>
   )
 }
@@ -128,7 +117,6 @@ function VideoCard({ v, color }: { v: V2TopYTVideo; color: string }) {
 
 export default function YoutubeBrandPage() {
   const { slug } = useParams<{ slug: string }>()
-  const router = useRouter()
   const brandSlug = decodeURIComponent(slug)
 
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -196,7 +184,7 @@ export default function YoutubeBrandPage() {
     <div style={{ minHeight: '100vh' }}>
       {/* ── Hero ── */}
       <div style={{
-        background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`,
+        background: `linear-gradient(135deg, ${color}22 0%, transparent 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`,
         borderBottom: `1px solid ${color}33`,
         padding: '28px 0 32px',
         marginBottom: 32,
@@ -209,10 +197,7 @@ export default function YoutubeBrandPage() {
             { label: brandName },
           ]} />
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button onClick={() => router.back()}
-              style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              ← Back
-            </button>
+            <BackButton />
             <button
               onClick={() => window.print()}
               className="btn btn-ghost"
@@ -231,8 +216,8 @@ export default function YoutubeBrandPage() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : '#fff', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
-              {handle && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>@{handle} · YouTube</div>}
+              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
+              {handle && <div style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>@{handle} · YouTube</div>}
             </div>
           </div>
           {handle && (
@@ -334,7 +319,7 @@ export default function YoutubeBrandPage() {
                 style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.72)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
                 <div
                   onClick={e => e.stopPropagation()}
-                  style={{ background: '#0d1117', border: `1px solid ${color}44`, borderRadius: 16, width: '100%', maxWidth: 780, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px ${color}22` }}>
+                  style={{ background: 'var(--bg)', border: `1px solid ${color}44`, borderRadius: 16, width: '100%', maxWidth: 780, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px ${color}22` }}>
                   {/* Modal header */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: `1px solid var(--wb-8)`, flexShrink: 0 }}>
                     <div>

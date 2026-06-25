@@ -8,6 +8,9 @@ import { DateRangeProvider } from '@/lib/v2/DateRangeContext'
 import { DateRangePicker } from '@/components/v2/DateRangePicker'
 import { CommandPalette } from '@/components/v2/CommandPalette'
 import { BackToTop } from '@/components/v2/BackToTop'
+import { LayoutClientExtras } from '@/components/v2/LayoutClientExtras'
+import { ThemeToggle } from '@/components/v2/ThemeToggle'
+import { DensityToggle } from '@/components/v2/DensityToggle'
 
 export const metadata: Metadata = {
   title: 'JOOLA INTEL — Competitive Intelligence',
@@ -22,8 +25,11 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
       <BrandFilterProvider>
        <DateRangeProvider>
         <div className="topbar">
+          <ThemeToggle />
+          <DensityToggle />
           <DateRangePicker />
           <BrandFilterDropdown />
+          <LayoutClientExtras />
         </div>
         <CommandPalette />
         <div className="shell">

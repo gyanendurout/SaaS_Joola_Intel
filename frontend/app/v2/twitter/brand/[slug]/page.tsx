@@ -1,28 +1,20 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { fetchBrands, fetchX, fetchTopXPosts, type V2Brand, type V2XRow, type V2XPost } from '@/lib/v2/data'
 import { fmt, LineChart } from '@/components/v2/charts'
 import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
+import { StatCard } from '@/components/v2/StatCard'
+import { BackButton } from '@/components/v2/BackButton'
 
 const X_HANDLES: Record<string, string> = {
   joola: 'JOOLApickleball', selkirk: 'SelkirkSport', crbn: 'CRBNPickleball',
   paddletek: 'Paddletek', 'six-zero': 'SixZeroPB', engage: 'EngagePickleball',
   onix: 'ONIXPickleball', franklin: 'FranklinSports', head: 'HEADPickleball',
   wilson: 'WilsonSportingGoods', gamma: 'GammaSports',
-}
-
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div style={{ background: 'var(--wb-6)', border: '1px solid var(--wb-10)', borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: color || '#fff', fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>{sub}</div>}
-    </div>
-  )
 }
 
 function TweetCard({ p, color }: { p: V2XPost; color: string }) {
@@ -50,7 +42,6 @@ function TweetCard({ p, color }: { p: V2XPost; color: string }) {
 
 export default function TwitterBrandPage() {
   const { slug } = useParams<{ slug: string }>()
-  const router = useRouter()
   const brandSlug = decodeURIComponent(slug)
 
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -94,13 +85,13 @@ export default function TwitterBrandPage() {
   return (
     <div style={{ minHeight: '100vh' }}>
       {/* Hero */}
-      <div style={{ background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
+      <div style={{ background: `linear-gradient(135deg, ${color}22 0%, transparent 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
         <div style={{ marginBottom: 20 }}>
           <Breadcrumb crumbs={[
             { label: 'X / Twitter', href: '/v2/twitter' },
             { label: brandName },
           ]} />
-          <button onClick={() => router.back()} style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>← Back</button>
+          <BackButton />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -108,8 +99,8 @@ export default function TwitterBrandPage() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.26 5.632 5.903-5.632z"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : '#fff', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
-              {handle && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>@{handle} · X / Twitter</div>}
+              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
+              {handle && <div style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>@{handle} · X / Twitter</div>}
             </div>
           </div>
           {handle && (

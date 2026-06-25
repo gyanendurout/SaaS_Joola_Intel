@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { useRecentPages } from '@/hooks/useRecentPages'
 
 const I = {
   home: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
@@ -71,29 +72,14 @@ const navGroups: NavGroup[] = [
   },
 ]
 
-const SunIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <circle cx="12" cy="12" r="5"/>
-    <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-    <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-  </svg>
-)
-const MoonIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
-  </svg>
-)
 
 export function V2Sidebar() {
   const path = usePathname() || '/v2'
   const [open, setOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('joola-sidebar-collapsed') === '1' } catch { return false } })
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
-  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
   const [crisisCount, setCrisisCount] = useState(0)
+  const recentPages = useRecentPages()
 
   useEffect(() => {
     import('@/lib/shared/supabase').then(({ supabase }) => {
@@ -111,18 +97,6 @@ export function V2Sidebar() {
     const savedCollapsed = localStorage.getItem('joola-sidebar-collapsed') === 'true'
     setCollapsed(savedCollapsed)
     document.documentElement.style.setProperty('--sidebar-w', savedCollapsed ? '60px' : '232px')
-    // Restore theme
-    const savedTheme = localStorage.getItem('joola-theme') as 'dark' | 'light' | null
-    if (savedTheme) {
-      setTheme(savedTheme)
-      document.documentElement.classList.toggle('theme-light', savedTheme === 'light')
-    }
-    // Restore density
-    const savedDensity = localStorage.getItem('joola-density') as 'comfortable' | 'compact' | null
-    if (savedDensity) {
-      setDensity(savedDensity)
-      document.documentElement.classList.toggle('density-compact', savedDensity === 'compact')
-    }
     // Restore group collapsed state
     try {
       const savedGroups = JSON.parse(localStorage.getItem('joola-nav-groups') || '{}')
@@ -151,21 +125,9 @@ export function V2Sidebar() {
 
   useEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '60px' : '232px')
+    try { localStorage.setItem('joola-sidebar-collapsed', collapsed ? '1' : '0') } catch {}
   }, [collapsed])
 
-  function toggleDensity() {
-    const next = density === 'comfortable' ? 'compact' : 'comfortable'
-    setDensity(next)
-    document.documentElement.classList.toggle('density-compact', next === 'compact')
-    localStorage.setItem('joola-density', next)
-  }
-
-  function toggleTheme() {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    setTheme(next)
-    document.documentElement.classList.toggle('theme-light', next === 'light')
-    localStorage.setItem('joola-theme', next)
-  }
 
   return (
     <>
@@ -213,6 +175,21 @@ export function V2Sidebar() {
             </Link>
           </div>
 
+          {recentPages.length > 0 && (
+            <div style={{ padding: '8px 0 4px', borderBottom: '1px solid var(--line)', marginBottom: 4 }}>
+              {!collapsed && <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 16px', marginBottom: 4 }}>Recent</div>}
+              {recentPages.slice(0, 4).map(p => (
+                <a key={p.href} href={p.href}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: collapsed ? '6px 0' : '5px 16px', justifyContent: collapsed ? 'center' : 'flex-start', textDecoration: 'none', color: 'var(--fg-4)', fontSize: 11, borderRadius: 6, margin: '0 4px', transition: 'background 0.15s, color 0.15s', whiteSpace: 'nowrap', overflow: 'hidden' }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = 'var(--wb-6)'; el.style.color = 'var(--fg)' }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = ''; el.style.color = 'var(--fg-4)' }}>
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>{p.icon}</span>
+                  {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.label}</span>}
+                </a>
+              ))}
+            </div>
+          )}
+
           {navGroups.map((group, gi) => {
             const isGroupCollapsed = !collapsed && !!collapsedGroups[group.heading]
             function toggleGroup() {
@@ -239,7 +216,7 @@ export function V2Sidebar() {
                     <h6 style={{ margin: 0, pointerEvents: 'none' }}>{group.heading}</h6>
                     <svg
                       width="10" height="10" viewBox="0 0 24 24" fill="none"
-                      stroke="rgba(255,255,255,0.3)" strokeWidth="2.5"
+                      stroke="var(--fg-4)" strokeWidth="2.5"
                       style={{
                         flexShrink: 0,
                         transition: 'transform 220ms ease',
@@ -287,32 +264,6 @@ export function V2Sidebar() {
             )
           })}
         </div>
-
-        {/* Theme toggle */}
-        <button
-          className={`theme-toggle-btn${collapsed ? ' collapsed-mode' : ''}`}
-          onClick={toggleTheme}
-          title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-          aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-        >
-          {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-          {!collapsed && <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>}
-        </button>
-
-        {/* Density toggle */}
-        <button
-          className={`theme-toggle-btn${collapsed ? ' collapsed-mode' : ''}`}
-          onClick={toggleDensity}
-          title={density === 'comfortable' ? 'Switch to compact view' : 'Switch to comfortable view'}
-          aria-label={density === 'comfortable' ? 'Switch to compact view' : 'Switch to comfortable view'}
-        >
-          {density === 'comfortable' ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="5" x2="21" y2="5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="13" x2="21" y2="13"/><line x1="3" y1="17" x2="21" y2="17"/><line x1="3" y1="21" x2="21" y2="21"/></svg>
-          )}
-          {!collapsed && <span>{density === 'comfortable' ? 'Compact view' : 'Comfortable view'}</span>}
-        </button>
 
         {/* Collapse toggle — desktop only */}
         <button

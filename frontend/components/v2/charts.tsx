@@ -139,6 +139,22 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { 
           <line x1={x(tipIdx)} x2={x(tipIdx)} y1={padT} y2={padT + innerH}
             stroke="rgba(245,230,37,0.35)" strokeDasharray="3 3" strokeWidth="1" />
         )}
+        {/* JOOLA benchmark line */}
+        {(() => {
+          const jSeries = series.find((s: LineSeries) => s.id === 'joola')
+          if (!jSeries || jSeries.data.length === 0) return null
+          const lastVal = jSeries.data[jSeries.data.length - 1]
+          if (!isFinite(lastVal) || lastVal === 0) return null
+          const yJ = y(lastVal)
+          if (!isFinite(yJ)) return null
+          return (
+            <g>
+              <line x1={padL} x2={padL + innerW} y1={yJ} y2={yJ}
+                stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1} strokeOpacity={0.3} />
+              <text x={padL + innerW + 4} y={yJ + 3} fontSize={8} fill="#22c55e" opacity={0.5}>JOOLA</text>
+            </g>
+          )
+        })()}
         {cleanSeries.map((s, si) => {
           const path = s.data.map((v, i) => (i === 0 ? 'M' : 'L') + x(i) + ',' + y(v)).join(' ')
           const isJoola = s.id === 'joola'

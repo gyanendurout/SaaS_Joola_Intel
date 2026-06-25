@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import {
   fetchBrands, fetchTikTok, fetchTopTikTokVideos, fetchTikTokCommentStats,
   fetchTikTokPaddleMentions, fetchTikTokTrend,
@@ -12,22 +12,14 @@ import { fmt, LineChart } from '@/components/v2/charts'
 import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
+import { StatCard } from '@/components/v2/StatCard'
+import { BackButton } from '@/components/v2/BackButton'
 
 const TIKTOK_HANDLES: Record<string, string> = {
   joola: 'joolapickleball', selkirk: 'selkirksport', crbn: 'crbnpickleball',
   paddletek: 'paddletek', 'six-zero': 'sixzeropickleball', engage: 'engage_pickleball',
   onix: 'onix_pickleball', franklin: 'franklinsports', head: 'headpickleball',
   wilson: 'wilsonsportinggoods', gamma: 'gammasports',
-}
-
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div style={{ background: 'var(--wb-6)', border: '1px solid var(--wb-10)', borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: color || '#fff', fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>{sub}</div>}
-    </div>
-  )
 }
 
 function VideoCard({ v, color }: { v: V2TikTokVideo; color: string }) {
@@ -53,7 +45,6 @@ function VideoCard({ v, color }: { v: V2TikTokVideo; color: string }) {
 
 export default function TikTokBrandPage() {
   const { slug } = useParams<{ slug: string }>()
-  const router = useRouter()
   const brandSlug = decodeURIComponent(slug)
 
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -114,13 +105,13 @@ export default function TikTokBrandPage() {
   return (
     <div style={{ minHeight: '100vh' }}>
       {/* Hero */}
-      <div style={{ background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
+      <div style={{ background: `linear-gradient(135deg, ${color}22 0%, transparent 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
         <div style={{ marginBottom: 20 }}>
           <Breadcrumb crumbs={[
             { label: 'TikTok', href: '/v2/tiktok' },
             { label: brandName },
           ]} />
-          <button onClick={() => router.back()} style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>← Back</button>
+          <BackButton />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -128,8 +119,8 @@ export default function TikTokBrandPage() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-2.47 12 12 0 00-11.64 0A4.83 4.83 0 01.41 6.69 49.11 49.11 0 000 12a49.11 49.11 0 00.41 5.31 4.83 4.83 0 003.77 2.47 12 12 0 0011.64 0 4.83 4.83 0 003.77-2.47A49.11 49.11 0 0024 12a49.11 49.11 0 00-.41-5.31zM9.75 15.02V8.98l6 3.02z"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : '#fff', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
-              {handle && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>@{handle} · TikTok</div>}
+              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
+              {handle && <div style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>@{handle} · TikTok</div>}
             </div>
           </div>
           {handle && (

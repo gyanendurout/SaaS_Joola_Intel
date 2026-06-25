@@ -112,7 +112,7 @@ export function ProductDetailModal({ brand, productId, intel, brands, onClose }:
       onClick={onClose}
     >
       <div
-        style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.85)' }}
+        style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 900, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.85)' }}
         onClick={e => e.stopPropagation()}
       >
 

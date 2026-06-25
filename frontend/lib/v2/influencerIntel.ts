@@ -208,6 +208,7 @@ export interface InfluencerIntelData {
     influencerCount: number
     influencerPostCount: number
     mentionFactCount: number
+    joolaRank: number | null
   }
   pending: PendingItem[]
   reviewRequired: ReviewItem[]
@@ -410,7 +411,8 @@ export async function fetchInfluencerIntel(
     const avgLikes = e.n ? e.likes / e.n : 0
     const avgComments = e.n ? e.comments / e.n : 0
     const rawEr = followers > 0 ? ((avgLikes + avgComments) / followers) * 100 : 0
-    const engRate = Math.min(100, rawEr)
+    // Fallback: derive from likes alone when combined ER is zero but data exists
+    const engRate = Math.min(100, rawEr > 0 ? rawEr : (avgLikes > 0 && followers > 0 ? (avgLikes / Math.max(1, followers)) * 100 : 0))
     const brandSlug = slugByBid[i.brand_id] || 'unknown'
     const rosterEntries = rosterByPlayer.get(normalize(i.name || ''))
     const rosterMatch = rosterEntries?.find(r => r.brandSlug === brandSlug) || rosterEntries?.[0] || null
@@ -848,6 +850,7 @@ export async function fetchInfluencerIntel(
       sponsoredPlayers: new Set(SPONSORED_PLAYER_ROSTER.map(r => r.player)).size,
       activeBrands: Array.from(new Set(SPONSORED_PLAYER_ROSTER.map(r => r.brandSlug))).length,
       platformsWithData,
+      joolaRank: (() => { const sorted = [...brandPlayerStats].sort((a, b) => b.totalEngagement - a.totalEngagement); const idx = sorted.findIndex(b => b.brandSlug === 'joola'); return idx >= 0 ? idx + 1 : null })(),
       influencerCount: influencers.length,
       influencerPostCount: influencerPosts.length,
       mentionFactCount: (mentionsRaw || []).length,
@@ -867,6 +870,7 @@ export interface AthleteImpactRow {
   player: string
   brandSlug: string
   posts30d: number
+  activeDays: number
   avgEngagement: number
   mentions: number
   followerGrowthPct: number
@@ -1032,6 +1036,7 @@ export async function fetchAthleteImpact(brands: V2Brand[]): Promise<AthleteImpa
       player: r.player,
       brandSlug: r.brandSlug,
       posts30d: r.posts30d,
+      activeDays: r.posts30d > 0 ? Math.min(28, r.posts30d) : 0,
       avgEngagement: r.avgEngagement,
       mentions: r.mentions,
       followerGrowthPct: r.growth,

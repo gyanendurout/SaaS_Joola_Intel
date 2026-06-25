@@ -34,6 +34,8 @@ import { fmt } from '@/components/v2/charts'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL, type DateRangeKey } from '@/lib/v2/DateRangeContext'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
+import { ScrollTable } from '@/components/v2/ScrollTable'
+import { BrandCell } from '@/components/v2/BrandCell'
 import {
   fetchInfluencerIntel,
   fetchAthleteImpact,
@@ -387,6 +389,40 @@ export default function InfluencerIntelPage() {
       <PageHead title="INFLUENCER INTEL" />
       <FilterBanner />
 
+      {/* ── Sticky section nav ── */}
+      <nav style={{
+        position: 'sticky', top: 0, zIndex: 40,
+        background: 'var(--bg)', backdropFilter: 'blur(8px)',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        overflowX: 'auto', whiteSpace: 'nowrap',
+        padding: '0 4px', marginBottom: 20,
+        scrollbarWidth: 'none',
+      }}>
+        <div style={{ display: 'inline-flex', gap: 2, padding: '4px 0' }}>
+          {[
+            ['#roster', 'Roster'],
+            ['#impact-map', 'Impact Map'],
+            ['#attention', 'Attention'],
+            ['#performance', 'Performance'],
+            ['#brand-strength', 'Brand Strength'],
+            ['#top-content', 'Top Content'],
+            ['#community-mentions', 'Community'],
+            ['#joola-focus', 'JOOLA Focus'],
+            ['#player-paddle', 'Player↔Paddle'],
+            ['#coverage', 'Coverage'],
+            ['#athlete-impact', 'Impact Score'],
+            ['#sponsored-vs-organic', 'Sponsored vs Organic'],
+          ].map(([href, label]) => (
+            <a key={href} href={href}
+              style={{ fontSize: 11, fontWeight: 600, padding: '6px 12px', borderRadius: 6, color: 'var(--fg-4)', textDecoration: 'none', transition: 'color 0.15s, background 0.15s', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.color = 'var(--fg)'; el.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.color = 'var(--fg-4)'; el.style.background = '' }}>
+              {label}
+            </a>
+          ))}
+        </div>
+      </nav>
+
       {/* ── Section 1 — Summary strip ─────────────────────────── */}
       {summary && (
         <section style={{ marginBottom: 16 }}>
@@ -402,6 +438,7 @@ export default function InfluencerIntelPage() {
             <SummaryStat label="Player signals" value={fmt(summary.playerSignals)} />
             <SummaryStat label="JOOLA players" value={summary.joolaPlayers} accent="#22c55e" />
             <SummaryStat label="Top player" value={summary.topPlayer || '—'} sub={summary.topPlayer ? `${fmt(summary.topPlayerSignals)} signals` : ''} />
+            <SummaryStat label="JOOLA rank" value={(() => { const r = filteredBrandStats.findIndex(b => b.brandSlug === 'joola'); return r >= 0 ? `#${r + 1} of ${filteredBrandStats.length}` : '—' })()} accent="#22c55e" sub="by athlete engagement" />
             <SummaryStat label="Avg ER" value={summary.avgER.toFixed(2) + '%'} />
           </div>
         </section>
@@ -430,23 +467,20 @@ export default function InfluencerIntelPage() {
         </div>
         <ScrollTable maxHeight={580}>
           <table className="data">
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#141821' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--surface)' }}>
               <tr>
                 <SortTh col="brandSlug" label="Brand" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <SortTh col="player" label="Player" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <SortTh col="status" label="Status" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <th>IG</th>
-                <th>YT</th>
-                <th>TikTok</th>
                 <th>X</th>
-                <th>Reddit</th>
                 <SortTh col="verification" label="Verification" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <SortTh col="lastSeenDays" label="Last seen" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
               </tr>
               <tr className="col-filter-row">
                 <th><ColumnFilter col="brandSlug" value={rosterColFilter.brandSlug} onChange={v => setRosterColFilter(p => ({ ...p, brandSlug: v }))} /></th>
                 <th><ColumnFilter col="player" value={rosterColFilter.player} onChange={v => setRosterColFilter(p => ({ ...p, player: v }))} /></th>
-                <th colSpan={8} />
+                <th colSpan={6} />
               </tr>
             </thead>
             <tbody>
@@ -465,10 +499,7 @@ export default function InfluencerIntelPage() {
                     </span>
                   </td>
                   <td>{r.igHandle ? <a className="ext-link" href={`https://www.instagram.com/${r.igHandle.replace(/^@/, '')}/`} target="_blank" rel="noopener noreferrer">@{r.igHandle.replace(/^@/, '')}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
-                  <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
-                  <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
                   <td>{r.xHandle ? <a className="ext-link" href={`https://x.com/${r.xHandle}`} target="_blank" rel="noreferrer">@{r.xHandle}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
-                  <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
                   <td title={VERIFICATION_DESC[r.verification] ?? `Verification status: ${r.verification}`}>
                     <span style={{
                       fontSize: 10, fontWeight: 700, cursor: 'pointer',
@@ -511,7 +542,7 @@ export default function InfluencerIntelPage() {
       >
         <ScrollTable maxHeight={520}>
           <table className="data">
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>#</th>
                 <SortTh col="player" label="Player" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
@@ -576,7 +607,7 @@ export default function InfluencerIntelPage() {
       >
         <ScrollTable maxHeight={520}>
           <table className="data">
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>#</th>
                 <SortTh col="name" label="Athlete" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
@@ -655,6 +686,52 @@ export default function InfluencerIntelPage() {
         source="playerRoster.ts + influencers + influencer_posts + mention_facts"
         sub={`${filteredBrandStats.length} brands`}
       >
+        {/* Brand strength visual bars */}
+        {(() => {
+          const sorted = [...filteredBrandStats].sort((a, b) => b.totalEngagement - a.totalEngagement)
+          const maxEng = sorted[0]?.totalEngagement || 1
+          const maxReach = Math.max(1, ...sorted.map(r => r.totalReach))
+          return (
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div className="card-pad">
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+                  Brand athlete engagement vs reach
+                </div>
+                {sorted.map(r => {
+                  const isJ = r.brandSlug === 'joola'
+                  const color = pgColor(r.brandSlug)
+                  const engPct = (r.totalEngagement / maxEng) * 100
+                  const reachPct = (r.totalReach / maxReach) * 100
+                  return (
+                    <div key={r.brandSlug} style={{ marginBottom: 12, cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/influencers/brand/${encodeURIComponent(r.brandSlug)}`)}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, fontWeight: isJ ? 800 : 600, color: isJ ? '#22c55e' : 'var(--fg)' }}>{pgName(r.brandSlug, brands)}</span>
+                          <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{r.playersActive}/{r.playersTracked} active</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 16, fontSize: 11, fontFamily: 'JetBrains Mono' }}>
+                          <span style={{ color: '#F5E625', fontWeight: 700 }}>{fmt(r.totalEngagement)} eng</span>
+                          <span style={{ color: 'var(--fg-4)' }}>{fmt(r.totalReach)} reach</span>
+                        </div>
+                      </div>
+                      <div style={{ height: 6, background: 'rgba(255,255,255,0.04)', borderRadius: 99, overflow: 'hidden', marginBottom: 3 }}>
+                        <div style={{ height: '100%', width: `${engPct}%`, background: isJ ? '#22c55e' : color, borderRadius: 99, transition: 'width 0.5s ease' }} />
+                      </div>
+                      <div style={{ height: 3, background: 'rgba(255,255,255,0.04)', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${reachPct}%`, background: color + '44', borderRadius: 99 }} />
+                      </div>
+                    </div>
+                  )
+                })}
+                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10, color: 'var(--fg-4)' }}>
+                  <span>── Engagement</span><span style={{ opacity: 0.5 }}>── Reach</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
         <ScrollTable>
           <table className="data">
             <thead>
@@ -703,15 +780,38 @@ export default function InfluencerIntelPage() {
       </Section>
 
       {/* ── Section 7 — Top performing player content ────────── */}
+      {(() => {
+        const typeFilteredContent = contentTypeFilter === 'all'
+          ? filteredContent
+          : filteredContent.filter(p => {
+              const t = (p.type || '').toLowerCase()
+              if (contentTypeFilter === 'reel') return t.includes('reel')
+              if (contentTypeFilter === 'video') return t.includes('video') || t.includes('reel')
+              if (contentTypeFilter === 'image') return t.includes('image') || t.includes('photo')
+              return true
+            })
+        return (
       <Section id="top-content"
         title="Top performing player content"
         info="Highest-engagement posts from tracked athletes in the selected window. Sourced from influencer_posts; today this is Instagram only. Add platform-specific scrapers and the table fills automatically."
         source="influencer_posts"
-        sub={`${filteredContent.length > 200 ? `showing 200 of ${filteredContent.length}` : filteredContent.length} posts`}
+        sub={`${typeFilteredContent.length > 200 ? `showing 200 of ${typeFilteredContent.length}` : typeFilteredContent.length} posts`}
       >
+        {/* Format filter tabs */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 12, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3, width: 'fit-content' }}>
+          {(['all', 'reel', 'video', 'image'] as const).map(ft => (
+            <button key={ft} onClick={() => setContentTypeFilter(ft)} style={{
+              padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
+              background: contentTypeFilter === ft ? pgColor('joola') : 'transparent',
+              color: contentTypeFilter === ft ? '#000' : 'var(--fg-4)',
+            }}>
+              {ft === 'all' ? 'All' : ft === 'reel' ? 'Reels' : ft === 'video' ? 'Video' : 'Image'}
+            </button>
+          ))}
+        </div>
         <ScrollTable maxHeight={520}>
           <table className="data">
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>Platform</th>
                 <SortTh col="athleteName" label="Player" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
@@ -737,7 +837,7 @@ export default function InfluencerIntelPage() {
               </tr>
             </thead>
             <tbody>
-              {sortBy(filteredContent, contentSort.key, contentSort.dir).slice(0, 200).map((p) => (
+              {sortBy(typeFilteredContent, contentSort.key, contentSort.dir).slice(0, 200).map((p) => (
                 <tr
                     key={p.id}
                     className={p.brandSlug === 'joola' ? 'joola' : ''}
@@ -762,18 +862,20 @@ export default function InfluencerIntelPage() {
                   <td>{p.url ? <a className="ext-link" href={p.url} target="_blank" rel="noreferrer">View</a> : '—'}</td>
                 </tr>
               ))}
-              {filteredContent.length === 0 && (
+              {typeFilteredContent.length === 0 && (
                 <tr><td colSpan={14} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No content matches current filters (try widening the date range).</td></tr>
               )}
             </tbody>
           </table>
         </ScrollTable>
       </Section>
+        )
+      })()}
 
       {/* ── Section 8 — Player mentions in community ──────────── */}
       <Section id="community-mentions"
         title="Player mentions in community conversation"
-        info="Cross-channel mention_facts rows where athlete_id is set. Today this is dominated by ig_comments; YouTube / TikTok / X / Reddit player extraction is pending — see Section 12."
+        info="Cross-channel signals where a player is mentioned by fans or community members. Dominated by Instagram comments today — YouTube, TikTok, X, and Reddit player mentions will populate automatically as the pipeline is extended."
         source="mention_facts (athlete_id not null)"
         sub={`${filteredMentions.length > 200 ? `showing 200 of ${filteredMentions.length}` : filteredMentions.length} mentions`}
       >
@@ -785,7 +887,7 @@ export default function InfluencerIntelPage() {
         ) : (
           <ScrollTable maxHeight={520}>
             <table className="data">
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
                 <tr>
                   <SortTh col="player" label="Player" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                   <SortTh col="brandSlug" label="Brand" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
@@ -888,6 +990,46 @@ export default function InfluencerIntelPage() {
             </table>
           </div>
         </div>
+        {/* Competitor benchmark */}
+        {filteredBrandStats.length > 1 && (() => {
+          const joolaStat = filteredBrandStats.find(b => b.brandSlug === 'joola')
+          const competitors = filteredBrandStats.filter(b => b.brandSlug !== 'joola').sort((a, b) => b.avgEngRate - a.avgEngRate)
+          const topComp = competitors[0]
+          if (!joolaStat || !topComp) return null
+          const jER = joolaStat.avgEngRate
+          const cER = topComp.avgEngRate
+          const diff = jER - cER
+          return (
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="card-pad">
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+                  JOOLA vs top competitor · athlete engagement rate
+                </div>
+                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--fg-4)', marginBottom: 4 }}>JOOLA avg ER</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: '#22c55e', fontFamily: 'JetBrains Mono' }}>{jER > 0 ? jER.toFixed(2) + '%' : '—'}</div>
+                  </div>
+                  <div style={{ fontSize: 24, color: diff >= 0 ? '#22c55e' : '#ef4444', fontWeight: 800 }}>{diff >= 0 ? '↑' : '↓'}</div>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--fg-4)', marginBottom: 4 }}>{pgName(topComp.brandSlug, brands)} avg ER</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: pgColor(topComp.brandSlug), fontFamily: 'JetBrains Mono' }}>{cER > 0 ? cER.toFixed(2) + '%' : '—'}</div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: diff >= 0 ? '#22c55e' : '#ef4444', marginBottom: 4 }}>
+                      {diff >= 0 ? `+${diff.toFixed(2)}% ahead` : `${diff.toFixed(2)}% behind`}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
+                      {diff >= 0
+                        ? `JOOLA athletes outperform ${pgName(topComp.brandSlug, brands)}'s roster`
+                        : `${pgName(topComp.brandSlug, brands)} athletes outperform JOOLA's roster`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </Section>
 
       {/* ── Section 10 — Player ↔ paddle connections ──────────── */}
@@ -955,7 +1097,7 @@ export default function InfluencerIntelPage() {
 
       {/* ── Section 12 — Pending pipeline work ────────────────── */}
       <Section id="pending"
-        title="Sections waiting for more data"
+        title={data.pending.length === 0 ? 'Pipeline status' : 'Sections waiting for more data'}
         info="These sections are empty or incomplete because we haven't collected enough data yet. Each card explains what's missing and what needs to happen to fill it in."
         source="Data coverage check"
       >
@@ -985,9 +1127,43 @@ export default function InfluencerIntelPage() {
         source="Instagram posts · community mentions · follower snapshots"
         sub={`${athleteImpact.length > 100 ? `top 100 of ${athleteImpact.length}` : athleteImpact.length} athletes scored`}
       >
+        {/* Top 3 podium */}
+        {athleteImpact.length >= 3 && (() => {
+          const top3 = athleteImpact.slice(0, 3)
+          const medals = ['🥇', '🥈', '🥉']
+          const heights = ['80px', '60px', '50px']
+          return (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 24, alignItems: 'flex-end' }}>
+              {[top3[1], top3[0], top3[2]].map((r, podiumIdx) => {
+                const rank = podiumIdx === 0 ? 2 : podiumIdx === 1 ? 1 : 3
+                const h = heights[rank - 1]
+                const medal = medals[rank - 1]
+                const color = pgColor(r.brandSlug)
+                const isJ = r.brandSlug === 'joola'
+                return (
+                  <div key={r.athleteId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                    onClick={() => setDrillImpact(r)}>
+                    <div style={{ fontSize: 20 }}>{medal}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)' }}>{r.player}</div>
+                    <div style={{ fontSize: 11, color, fontWeight: 700 }}>{pgName(r.brandSlug, brands)}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>{r.impactScore.toFixed(1)}</div>
+                    <div style={{
+                      width: 80, height: h,
+                      background: `linear-gradient(180deg, ${color}44, ${color}22)`,
+                      border: `1px solid ${color}55`,
+                      borderRadius: '6px 6px 0 0',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 22,
+                    }}>{medal}</div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
         <ScrollTable maxHeight={520}>
           <table className="data">
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>#</th>
                 <th>Player</th>
@@ -1025,7 +1201,7 @@ export default function InfluencerIntelPage() {
                     <td className="cell-num" style={{ textAlign: 'right', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                         <span style={{ fontWeight: 800, color: '#F5E625' }}>{r.impactScore.toFixed(1)}</span>
-                        <div style={{ width: 80, height: 5, background: 'var(--wb-5)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ width: 120, height: 6, background: 'var(--wb-5)', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ width: `${barPct}%`, height: '100%', background: r.brandSlug === 'joola' ? '#22c55e' : '#F5E625' }} />
                         </div>
                       </div>
@@ -1062,7 +1238,7 @@ export default function InfluencerIntelPage() {
         ) : (
           <ScrollTable maxHeight={520}>
             <table className="data">
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
                 <tr>
                   <th>Player</th>
                   <th>Brand</th>
@@ -1132,7 +1308,7 @@ export default function InfluencerIntelPage() {
         ) : (
           <ScrollTable maxHeight={520}>
             <table className="data">
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
                 <tr>
                   <th>Player</th>
                   <th>Brand</th>
@@ -1290,17 +1466,6 @@ function Section({ id, title, info, source, sub, children }: {
   )
 }
 
-function ScrollTable({ children, maxHeight }: { children: React.ReactNode; maxHeight?: number }) {
-  return (
-    <div
-      className="card"
-      style={maxHeight ? { maxHeight, overflowX: 'auto', overflowY: 'auto' } : undefined}
-    >
-      {children}
-    </div>
-  )
-}
-
 function SummaryStat({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 100 }}>
@@ -1308,17 +1473,6 @@ function SummaryStat({ label, value, sub, accent }: { label: string; value: stri
       <span style={{ fontSize: 16, fontWeight: 800, color: accent || 'var(--fg)' }}>{value}</span>
       {sub && <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{sub}</span>}
     </div>
-  )
-}
-
-function BrandCell({ slug, brands }: { slug: string; brands: V2Brand[] }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span className="brand-dot" style={{ background: pgColor(slug) }} />
-      <span style={{ fontWeight: 700, color: slug === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 12 }}>
-        {pgName(slug, brands)}
-      </span>
-    </span>
   )
 }
 
@@ -1668,7 +1822,7 @@ function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, t
       onClick={onClose}
     >
       <div
-        style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
+        style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -1868,7 +2022,7 @@ function BubbleDetailDialog({ bubble: b, brands, medianReach, medianEr, onClose 
   ]
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ width: 12, height: 12, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0, border: isJoola ? '2px solid #fff' : 'none' }} />
           <div style={{ flex: 1 }}>
@@ -1926,7 +2080,7 @@ function ContentDetailDialog({ post: p, brands, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 580, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 580, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -2005,7 +2159,7 @@ function ImpactDetailDialog({ row: r, brands, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -2054,7 +2208,7 @@ function PlayerPostsDialog({ player, posts, onPostClick, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
-      <div style={{ background: '#0d1117', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }} onClick={e => e.stopPropagation()}>
 
         {/* Header */}
         <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>

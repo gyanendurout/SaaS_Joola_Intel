@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import {
@@ -10,6 +10,8 @@ import {
 } from '@/lib/v2/productIntel'
 import { fmt } from '@/components/v2/charts'
 import { LoadingPage, pgName } from '@/components/v2/PageShell'
+import { StatCard } from '@/components/v2/StatCard'
+import { BackButton } from '@/components/v2/BackButton'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
 
 const supabase = createClient(
@@ -34,16 +36,6 @@ interface ProductRow {
   lastSeen: string | null
 }
 
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
-  return (
-    <div style={{ background: 'var(--wb-6)', border: '1px solid var(--wb-10)', borderRadius: 12, padding: '16px 20px', flex: 1, minWidth: 110 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 800, color: color || '#fff', fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>{sub}</div>}
-    </div>
-  )
-}
-
 function StatusPill({ status }: { status: string }) {
   const label = status.replace(/_/g, ' ')
   if (status === 'in_stock') return <span className="pill pill-green">{label}</span>
@@ -54,7 +46,6 @@ function StatusPill({ status }: { status: string }) {
 
 export default function SalesIntelBrandPage() {
   const { slug } = useParams<{ slug: string }>()
-  const router = useRouter()
   const brandSlug = decodeURIComponent(slug)
 
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -136,7 +127,7 @@ export default function SalesIntelBrandPage() {
 
       {/* ── Hero ── */}
       <div style={{
-        background: `linear-gradient(135deg, ${color}22 0%, rgba(13,17,23,0) 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`,
+        background: `linear-gradient(135deg, ${color}22 0%, transparent 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`,
         borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32,
       }}>
         <div style={{ marginBottom: 20 }}>
@@ -144,10 +135,7 @@ export default function SalesIntelBrandPage() {
             { label: 'Sales Intel', href: '/v2/sales-intel' },
             { label: brandName },
           ]} />
-          <button onClick={() => router.back()}
-            style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, padding: '6px 14px', color: 'var(--fg-3)', fontSize: 12, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            ← Back
-          </button>
+          <BackButton />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -155,8 +143,8 @@ export default function SalesIntelBrandPage() {
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : '#fff', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', marginTop: 4 }}>Sales Intelligence · Inventory & Pricing</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
+              <div style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>Sales Intelligence · Inventory & Pricing</div>
             </div>
           </div>
         </div>

@@ -1,8 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { PageHead, LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
+import { StatCard } from '@/components/v2/StatCard'
+import { BackButton } from '@/components/v2/BackButton'
 import { fmt } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
@@ -37,19 +39,8 @@ const QUADRANT_DESC: Record<string, string> = {
   'quiet':             'Low activity on both paid and promo fronts — either conserving budget or going organic.',
 }
 
-function StatCard({ label, value, sub, color, tip }: { label: string; value: string; sub?: string; color?: string; tip?: string }) {
-  return (
-    <div title={tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--wb-8)', borderRadius: 10, padding: '14px 16px', cursor: tip ? 'help' : 'default' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: value === '—' ? '#3a4150' : (color || '#fff'), fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 5 }}>{sub}</div>}
-    </div>
-  )
-}
-
 export default function BrandCampaignPage() {
   const { slug } = useParams<{ slug: string }>()
-  const router = useRouter()
   const brandSlug = decodeURIComponent(slug)
 
   const [brands, setBrands] = useState<V2Brand[]>([])
@@ -117,11 +108,7 @@ export default function BrandCampaignPage() {
         eyebrow="Campaign & Offer Intel"
         title={brandName}
         sub="Brand campaign intelligence"
-        actions={
-          <button onClick={() => router.back()} style={{ background: 'none', border: '1px solid var(--wb-14)', color: 'var(--fg-3)', borderRadius: 8, padding: '6px 14px', fontSize: 12, cursor: 'pointer' }}>
-            ← Back
-          </button>
-        }
+        actions={<BackButton />}
       />
 
       {/* ── Hero stats strip ── */}
