@@ -13,6 +13,7 @@ import { instagramPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 
 /** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
 function relativeLabel(days: number): string {
@@ -105,6 +106,10 @@ export default function InstagramPage() {
       setLoading(false)
     })
   }, [setAllBrands])
+
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
 
   if (loading) return <LoadingPage />
   if (error) return (
@@ -218,7 +223,7 @@ export default function InstagramPage() {
   const maxPlayer = displayPlayerMentions[0]?.mentions || 1
 
   return (
-    <>
+    <div className="ov-page-enter">
       <PageHead
         title="INSTAGRAM"
         actions={
@@ -421,7 +426,7 @@ export default function InstagramPage() {
       })()}
 
       {/* ── Brand-wise Analysis Table ── */}
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>Brand-wise analysis <SectionInfo title="Brand-wise Instagram Analysis" description="Per-brand summary of all Instagram signals. Click any row for full details." source="ig_profiles_weekly · ig_posts" /></h2>
@@ -538,7 +543,7 @@ export default function InstagramPage() {
         brands={brands}
       />
 
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 28 }}>
         <div className="two-col-even">
           <div>
             <div className="section-head">
@@ -760,7 +765,7 @@ export default function InstagramPage() {
         </div>
       </section>
 
-      <section id="instagram-posts-table">
+      <section id="instagram-posts-table" ref={sec3.ref} className={revealCls(sec3.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -1247,7 +1252,7 @@ export default function InstagramPage() {
           </table>
         </div></div>
       </section>
-    </>
+    </div>
   )
 }
 

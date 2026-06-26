@@ -8,6 +8,7 @@ import {
 import { fmt } from '@/components/v2/charts'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL, type DateRangeKey } from '@/lib/v2/DateRangeContext'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import {
   fetchCommunityIntel,
@@ -340,6 +341,17 @@ export default function CommunityIntelPage() {
     return arr
   }, [topicLifecycle, topicSort])
 
+  // ─── Scroll-reveal refs ─────────────────────────────────────────────
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+  const sec4 = useReveal()
+  const sec5 = useReveal()
+  const sec6 = useReveal()
+  const sec7 = useReveal()
+  const sec8 = useReveal()
+  const sec9 = useReveal()
+
   // ─── Early returns ──────────────────────────────────────────────────
 
   if (loading) return <LoadingPage />
@@ -399,7 +411,7 @@ export default function CommunityIntelPage() {
   const toInputValue = effectiveTo.toISOString().slice(0, 10)
 
   return (
-    <>
+    <div className="ov-page-enter">
       {drillSignal && (
         <SignalDetailDialog signal={drillSignal} brandName={name(drillSignal.brand)} onClose={() => setDrillSignal(null)} />
       )}
@@ -479,7 +491,7 @@ export default function CommunityIntelPage() {
       </section>
 
       {/* ─── Section 2: Brand discussion volume ────────────────────── */}
-      <section>
+      <section ref={sec1.ref} className={"ov-reveal" + (sec1.vis ? " is-vis" : "")}>
         <div className="section-head">
           <div>
             <h2>
@@ -556,7 +568,7 @@ export default function CommunityIntelPage() {
       </section>
 
       {/* ─── Section 3: Community trend over time ──────────────────── */}
-      <section>
+      <section ref={sec2.ref} className={"ov-reveal" + (sec2.vis ? " is-vis" : "")}>
         <div className="section-head">
           <div>
             <h2>
@@ -581,7 +593,7 @@ export default function CommunityIntelPage() {
       </section>
 
       {/* ─── Section 4: Channel + heatmap two-up ──────────────────── */}
-      <section>
+      <section ref={sec3.ref} className={"ov-reveal" + (sec3.vis ? " is-vis" : "")}>
         <div className="two-col">
           <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column' }}>
             <h6 style={{ marginTop: 0 }}>
@@ -611,7 +623,7 @@ export default function CommunityIntelPage() {
       </section>
 
       {/* ─── Section 5: Sentiment + risk ──────────────────────────── */}
-      <section>
+      <section ref={sec4.ref} className={revealCls(sec4.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -727,7 +739,7 @@ export default function CommunityIntelPage() {
       </section>
 
       {/* ─── Section 6: Live community intel feed (merged) ──────────── */}
-      <section>
+      <section ref={sec5.ref} className={revealCls(sec5.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -838,7 +850,7 @@ export default function CommunityIntelPage() {
       </section>
 
       {/* ─── Section 7: Crisis watchlist ──────────────────────────── */}
-      <section>
+      <section ref={sec6.ref} className={revealCls(sec6.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -936,7 +948,7 @@ export default function CommunityIntelPage() {
       </section>
 
       {/* ─── Section 9: JOOLA community mentions ──────────────────── */}
-      <section>
+      <section ref={sec7.ref} className={revealCls(sec7.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -958,7 +970,7 @@ export default function CommunityIntelPage() {
       </section>
 
       {/* ─── Section A: Competitor Complaint Map ───────────────────── */}
-      <section>
+      <section ref={sec8.ref} className={revealCls(sec8.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -1036,7 +1048,7 @@ export default function CommunityIntelPage() {
       </section>
 
       {/* ─── Section B: Defection Signals ───────────────────────────── */}
-      <section>
+      <section ref={sec9.ref} className={revealCls(sec9.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -1052,10 +1064,10 @@ export default function CommunityIntelPage() {
         </div>
         {defection && (
           <div className="kpi-grid" style={{ marginBottom: 10 }}>
-            <MiniKpi label="JOOLA inflow" value={fmt(defection.kpis.joolaInflow)} color="#22c55e" customVs="switches into JOOLA" flavor="joola" />
-            <MiniKpi label="JOOLA outflow" value={fmt(defection.kpis.joolaOutflow)} color={defection.kpis.joolaOutflow > 0 ? '#ef4444' : '#22c55e'} customVs="switches away from JOOLA" />
-            <MiniKpi label="JOOLA net" value={(defection.kpis.joolaNet >= 0 ? '+' : '') + fmt(defection.kpis.joolaNet)} color={defection.kpis.joolaNet >= 0 ? '#22c55e' : '#ef4444'} customVs="inflow − outflow" />
-            <MiniKpi label="Total switches" value={fmt(defection.kpis.totalSwitches)} color="#06b6d4" customVs="all brand-pair moves" />
+            <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}><MiniKpi label="JOOLA inflow" value={fmt(defection.kpis.joolaInflow)} color="#22c55e" customVs="switches into JOOLA" flavor="joola" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}><MiniKpi label="JOOLA outflow" value={fmt(defection.kpis.joolaOutflow)} color={defection.kpis.joolaOutflow > 0 ? '#ef4444' : '#22c55e'} customVs="switches away from JOOLA" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}><MiniKpi label="JOOLA net" value={(defection.kpis.joolaNet >= 0 ? '+' : '') + fmt(defection.kpis.joolaNet)} color={defection.kpis.joolaNet >= 0 ? '#22c55e' : '#ef4444'} customVs="inflow − outflow" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}><MiniKpi label="Total switches" value={fmt(defection.kpis.totalSwitches)} color="#06b6d4" customVs="all brand-pair moves" /></div>
           </div>
         )}
         <div className="card" style={{ overflowX: 'auto' }}>
@@ -1272,7 +1284,7 @@ export default function CommunityIntelPage() {
           </div>
         </section>
       )}
-    </>
+    </div>
   )
 }
 

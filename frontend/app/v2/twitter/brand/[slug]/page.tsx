@@ -9,6 +9,7 @@ import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
 import { StatCard } from '@/components/v2/StatCard'
 import { BackButton } from '@/components/v2/BackButton'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 
 const X_HANDLES: Record<string, string> = {
   joola: 'JOOLApickleball', selkirk: 'SelkirkSport', crbn: 'CRBNPickleball',
@@ -60,6 +61,10 @@ export default function TwitterBrandPage() {
     })
   }, [brandSlug])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
 
   const brandName = pgName(brandSlug, brands)
@@ -83,7 +88,7 @@ export default function TwitterBrandPage() {
   const trendLabels = (xRow?.trend ?? []).map((_, i) => `W${i + 1}`)
 
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div className="ov-page-enter" style={{ minHeight: '100vh' }}>
       {/* Hero */}
       <div style={{ background: `linear-gradient(135deg, ${color}22 0%, transparent 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
         <div style={{ marginBottom: 20 }}>
@@ -112,18 +117,24 @@ export default function TwitterBrandPage() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <StatCard label="Followers" value={xRow?.followers ? fmt(xRow.followers) : '—'} sub="current snapshot" color={isJ ? '#22c55e' : color} />
-          <StatCard label="Following" value={xRow?.following ? fmt(xRow.following) : '—'} sub="accounts followed" />
-          <StatCard label="Flw Growth (wk)" value={xRow?.delta != null ? (xRow.delta >= 0 ? '+' : '') + fmt(xRow.delta) : '—'} color={xRow?.delta != null ? (xRow.delta >= 0 ? '#22c55e' : '#ef4444') : undefined} />
-          <StatCard label="Tweets" value={xRow?.tweets ? String(xRow.tweets) : '—'} sub="total tweets" />
-          <StatCard label="Eng Rate" value={xRow?.engRate ? xRow.engRate.toFixed(2) + '%' : '—'} color={xRow?.engRate && xRow.engRate > 3 ? '#22c55e' : xRow?.engRate && xRow.engRate > 1 ? '#F5E625' : '#ef4444'} />
-          <StatCard label="Posts Tracked" value={String(posts.length)} sub="in window" />
+          {[
+            <StatCard key="followers" label="Followers" value={xRow?.followers ? fmt(xRow.followers) : '—'} sub="current snapshot" color={isJ ? '#22c55e' : color} />,
+            <StatCard key="following" label="Following" value={xRow?.following ? fmt(xRow.following) : '—'} sub="accounts followed" />,
+            <StatCard key="delta" label="Flw Growth (wk)" value={xRow?.delta != null ? (xRow.delta >= 0 ? '+' : '') + fmt(xRow.delta) : '—'} color={xRow?.delta != null ? (xRow.delta >= 0 ? '#22c55e' : '#ef4444') : undefined} />,
+            <StatCard key="tweets" label="Tweets" value={xRow?.tweets ? String(xRow.tweets) : '—'} sub="total tweets" />,
+            <StatCard key="eng" label="Eng Rate" value={xRow?.engRate ? xRow.engRate.toFixed(2) + '%' : '—'} color={xRow?.engRate && xRow.engRate > 3 ? '#22c55e' : xRow?.engRate && xRow.engRate > 1 ? '#F5E625' : '#ef4444'} />,
+            <StatCard key="posts" label="Posts Tracked" value={String(posts.length)} sub="in window" />,
+          ].map((card, i) => (
+            <div key={i} className="ov-kpi" style={{ '--ov-d': `${160 + i * 75}ms` } as React.CSSProperties}>
+              {card}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Trend */}
       {trendSeries.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Follower growth trend</h2><div className="sub">{xRow!.trend.length} weekly snapshots</div></div>
           <div className="card"><div className="card-pad"><LineChart series={trendSeries} xLabels={trendLabels} h={180} /></div></div>
         </section>
@@ -131,7 +142,7 @@ export default function TwitterBrandPage() {
 
       {/* Top performer highlight */}
       {topPost && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Best performing post</h2></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
             {[{ label: '♥ Total Likes', val: fmt(totalLikes), c: '#f97316' }, { label: '🔁 Total Retweets', val: fmt(totalRetweets), c: '#22c55e' }, { label: '💬 Total Replies', val: fmt(totalReplies), c: '#a78bfa' }, { label: '👁 Total Views', val: totalViews > 0 ? fmt(totalViews) : '—', c: '#F5E625' }].map(({ label, val, c }) => (
@@ -145,7 +156,7 @@ export default function TwitterBrandPage() {
       )}
 
       {/* Posts grid */}
-      <section>
+      <section ref={sec3.ref} className={revealCls(sec3.vis)}>
         <div className="section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Posts · {posts.length} tracked</h2>

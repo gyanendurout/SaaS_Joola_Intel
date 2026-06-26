@@ -55,12 +55,12 @@ export function PageHead({ eyebrow, title, accent, sub, actions }: PageHeadProps
     <header className="page-head">
       <div>
         {eyebrow && (
-          <div className="eyebrow">
+          <div className="eyebrow ov-eyebrow">
             <span style={{ width: 6, height: 6, borderRadius: 99, background: '#F5E625', boxShadow: '0 0 0 4px rgba(245,230,37,0.18)', display: 'inline-block' }} />
             {eyebrow}
           </div>
         )}
-        <h1>{title}{accent && <> <em>{accent}</em></>}</h1>
+        <h1 className="ov-title">{title}{accent && <> <em>{accent}</em></>}</h1>
         {sub && <div className="sub">{sub}</div>}
       </div>
       {actions && <div className="head-actions">{actions}</div>}

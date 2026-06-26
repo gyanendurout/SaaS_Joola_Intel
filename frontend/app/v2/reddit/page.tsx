@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import { useRouter } from 'next/navigation'
 import {
   fetchBrands, fetchReddit, fetchRedditTrend, fetchRedditSubreddits, fetchTopRedditMentions,
@@ -79,6 +80,10 @@ export default function RedditPage() {
       setLoading(false)
     })
   }, [setAllBrands])
+
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
 
   if (loading) return <LoadingPage />
 
@@ -180,7 +185,7 @@ export default function RedditPage() {
   })
 
   return (
-    <>
+    <div className="ov-page-enter">
       <PageHead
         eyebrow={`REDDIT · ${totalMentions} MENTIONS · ${subreddits.length} SUBREDDITS`}
         title="Community"
@@ -280,35 +285,43 @@ export default function RedditPage() {
 
       <section>
         <div className="kpi-grid">
-          <MiniKpi
-            label="JOOLA mentions" src="Reddit data" flavor="joola"
-            value={joolaR ? fmt(joolaR.mentions) : '0'}
-            color="#22c55e"
-            spark={displayTrend['joola'] || []}
-            customVs={`#${displayReddit.findIndex((d) => d.brand === 'joola') + 1} of ${displayReddit.length} brands`}
-            tip="How many times 'JOOLA' (brand and product names) appeared in Reddit posts and comments during the selected time window. Source: Reddit scrape via Apify -> mention_facts table. The '#3 of 11' rank means JOOLA is the 3rd most-talked-about paddle brand right now vs the other 10 we track."
-          />
-          <MiniKpi
-            label="JOOLA sentiment" src="net score" flavor="joola"
-            value={allNeutral ? '—' : (parseFloat(netScore) >= 0 ? '+' : '') + netScore}
-            color="#22c55e"
-            customVs={allNeutral ? 'Sentiment classifier still calibrating — bars render 100% neutral until next enrichment pass' : `${joolaPositivePct}% positive · ${joolaNegativePct}% negative`}
-            tip="Overall mood of JOOLA mentions on Reddit. Formula: Net score = % positive − % negative. Each mention is scored by GPT-4o-mini as positive/neutral/negative. Above 0 = more love than hate; below 0 = more complaints than compliments."
-          />
-          <MiniKpi
-            label="Total mentions" src="Reddit data"
-            value={fmt(totalMentions)}
-            color="#F5E625"
-            customVs={`across ${displayReddit.length} brands`}
-            tip="Total paddle-brand mentions across all 11 tracked brands in this window. This is the denominator used to compute share of voice for any individual brand."
-          />
-          <MiniKpi
-            label="Top subreddit" src="distribution"
-            value={topSubreddit ? topSubreddit.name : '—'}
-            color="#818cf8"
-            customVs={topSubreddit ? `${fmt(topSubreddit.mentions)} mentions` : 'No subreddit data'}
-            tip="The Reddit community where paddle conversation is most concentrated right now. Useful for knowing where JOOLA community managers should focus listening and engagement."
-          />
+          <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="JOOLA mentions" src="Reddit data" flavor="joola"
+              value={joolaR ? fmt(joolaR.mentions) : '0'}
+              color="#22c55e"
+              spark={displayTrend['joola'] || []}
+              customVs={`#${displayReddit.findIndex((d) => d.brand === 'joola') + 1} of ${displayReddit.length} brands`}
+              tip="How many times 'JOOLA' (brand and product names) appeared in Reddit posts and comments during the selected time window. Source: Reddit scrape via Apify -> mention_facts table. The '#3 of 11' rank means JOOLA is the 3rd most-talked-about paddle brand right now vs the other 10 we track."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="JOOLA sentiment" src="net score" flavor="joola"
+              value={allNeutral ? '—' : (parseFloat(netScore) >= 0 ? '+' : '') + netScore}
+              color="#22c55e"
+              customVs={allNeutral ? 'Sentiment classifier still calibrating — bars render 100% neutral until next enrichment pass' : `${joolaPositivePct}% positive · ${joolaNegativePct}% negative`}
+              tip="Overall mood of JOOLA mentions on Reddit. Formula: Net score = % positive − % negative. Each mention is scored by GPT-4o-mini as positive/neutral/negative. Above 0 = more love than hate; below 0 = more complaints than compliments."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Total mentions" src="Reddit data"
+              value={fmt(totalMentions)}
+              color="#F5E625"
+              customVs={`across ${displayReddit.length} brands`}
+              tip="Total paddle-brand mentions across all 11 tracked brands in this window. This is the denominator used to compute share of voice for any individual brand."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Top subreddit" src="distribution"
+              value={topSubreddit ? topSubreddit.name : '—'}
+              color="#818cf8"
+              customVs={topSubreddit ? `${fmt(topSubreddit.mentions)} mentions` : 'No subreddit data'}
+              tip="The Reddit community where paddle conversation is most concentrated right now. Useful for knowing where JOOLA community managers should focus listening and engagement."
+            />
+          </div>
         </div>
       </section>
 
@@ -338,7 +351,7 @@ export default function RedditPage() {
             <div className="sub">Mention volume across {displayReddit.length} brands · sentiment scores update weekly.</div>
           </div>
         </div>
-        <div className="card"><div className="card-pad">
+        <div ref={sec1.ref} className={`card ${revealCls(sec1.vis)}`}><div className="card-pad">
           <SentimentBar data={sentimentData} />
           <div className="legend" style={{ marginTop: 14 }}>
             <span className="item"><span className="swatch" style={{ background: '#22c55e' }} />Positive</span>
@@ -370,7 +383,7 @@ export default function RedditPage() {
       )}
 
       <section>
-        <div className="two-col">
+        <div ref={sec2.ref} className={`two-col ${revealCls(sec2.vis)}`}>
           <div>
             <div className="section-head"><div>
               <h2>
@@ -482,6 +495,7 @@ export default function RedditPage() {
           <div>
             <h2>
               Top {sortedMentions.length} mentions · by score
+
               <SectionInfo
                 title="Top Reddit Mentions"
                 description="Up to the 20 highest-scoring Reddit posts that mention the tracked brands. Narrow with the brand filter (top right), the date range (top right), or per-column search below. A high score means the community upvoted that thread — strong organic signal."
@@ -504,7 +518,7 @@ export default function RedditPage() {
             </button>
           </div>
         </div>
-        <div className="card">
+        <div ref={sec3.ref} className={`card ${revealCls(sec3.vis)}`}>
           {sortedMentions.length > 0 ? (
             <div className="table-wrap">
               <table className="data">
@@ -575,6 +589,6 @@ export default function RedditPage() {
           )}
         </div>
       </section>
-    </>
+    </div>
   )
 }

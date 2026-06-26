@@ -9,6 +9,7 @@ import {
 import { fmt } from '@/components/v2/charts'
 import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter, exportCSV } from '@/components/v2/PageShell'
 import { Pagination } from '@/components/v2/Pagination'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import { useBookmarks } from '@/lib/v2/useBookmarks'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { youtubePlaybook } from '@/lib/v2/playbook'
@@ -85,6 +86,10 @@ export default function YouTubePage() {
   }, [setAllBrands])
 
   useEffect(() => { setYtPage(1) }, [sortKey, sortDir, colFilter])
+
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
 
   if (loading) return <LoadingPage />
   if (error) return (
@@ -225,7 +230,7 @@ export default function YouTubePage() {
   const pageVideos = sortedVideos.slice((ytPage - 1) * YT_PAGE_SIZE, ytPage * YT_PAGE_SIZE)
 
   return (
-    <>
+    <div className="ov-page-enter">
       <PageHead title="YOUTUBE" />
       <FilterBanner />
 
@@ -237,7 +242,7 @@ export default function YouTubePage() {
       />
 
       {/* ── Brand-wise Overview Table ── */}
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>
@@ -357,7 +362,7 @@ export default function YouTubePage() {
         </div>
       </section>
 
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>
@@ -418,7 +423,7 @@ export default function YouTubePage() {
         </div>
       </section>
 
-      <section>
+      <section ref={sec3.ref} className={revealCls(sec3.vis)}>
         <div className="two-col">
           <div>
             <div className="section-head"><div>
@@ -653,6 +658,6 @@ export default function YouTubePage() {
           <Pagination total={sortedVideos.length} page={ytPage} pageSize={YT_PAGE_SIZE} onChange={setYtPage} />
         </div>
       </section>
-    </>
+    </div>
   )
 }

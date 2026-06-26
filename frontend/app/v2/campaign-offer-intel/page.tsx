@@ -30,6 +30,7 @@ import {
   type MessageTheme,
 } from '@/lib/v2/campaignOfferIntel'
 import { formatCalendarDate } from '@/lib/v2/format'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 
 type PlatformKey = 'all' | 'meta' | 'google' | 'other'
 type PromoTypeKey = 'all' | 'discount' | 'free_shipping' | 'launch' | 'bundle' | 'general' | 'other'
@@ -327,6 +328,10 @@ export default function CampaignOfferIntelPage() {
     return buildMessageThemeRows(filteredAds)
   }, [filteredAds])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   // ─── Early returns ──────────────────────────────────────────────────
   if (loading) return <LoadingPage />
 
@@ -375,7 +380,7 @@ export default function CampaignOfferIntelPage() {
   }))
 
   return (
-    <>
+    <div className="ov-page-enter">
       {drillScatter && (
         <ScatterBubbleDialog row={drillScatter} brands={brands} onClose={() => setDrillScatter(null)} />
       )}
@@ -409,23 +414,23 @@ export default function CampaignOfferIntelPage() {
             marginBottom: 18,
           }}
         >
-          <SummaryItem label="Active ads" value={fmt(activeAds)} />
-          <SummaryItem label="Active promos" value={fmt(activePromos)} />
-          <SummaryItem label="Brands advertising" value={fmt(brandsAdvertising)} />
-          <SummaryItem label="Brands discounting" value={fmt(brandsDiscounting)} />
-          <SummaryItem label="JOOLA ad share" value={`${joolaAdShare.toFixed(1)}%`} color="#22c55e" />
-          <SummaryItem label="JOOLA promos" value={fmt(joolaPromo?.count || 0)} color={(joolaPromo?.count || 0) === 0 ? '#ef4444' : '#22c55e'} />
-          <SummaryItem
+          <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}><SummaryItem label="Active ads" value={fmt(activeAds)} /></div>
+          <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}><SummaryItem label="Active promos" value={fmt(activePromos)} /></div>
+          <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}><SummaryItem label="Brands advertising" value={fmt(brandsAdvertising)} /></div>
+          <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}><SummaryItem label="Brands discounting" value={fmt(brandsDiscounting)} /></div>
+          <div className="ov-kpi" style={{ '--ov-d': '460ms' } as React.CSSProperties}><SummaryItem label="JOOLA ad share" value={`${joolaAdShare.toFixed(1)}%`} color="#22c55e" /></div>
+          <div className="ov-kpi" style={{ '--ov-d': '535ms' } as React.CSSProperties}><SummaryItem label="JOOLA promos" value={fmt(joolaPromo?.count || 0)} color={(joolaPromo?.count || 0) === 0 ? '#ef4444' : '#22c55e'} /></div>
+          <div className="ov-kpi" style={{ '--ov-d': '610ms' } as React.CSSProperties}><SummaryItem
             label="Top ad brand"
             value={topAdBrand ? name(topAdBrand.brand) : '—'}
             color={topAdBrand ? pgColor(topAdBrand.brand) : undefined}
-          />
-          <SummaryItem
+          /></div>
+          <div className="ov-kpi" style={{ '--ov-d': '685ms' } as React.CSSProperties}><SummaryItem
             label="Top promo brand"
             value={topPromoBrand ? name(topPromoBrand.brand) : '—'}
             color={topPromoBrand ? pgColor(topPromoBrand.brand) : undefined}
-          />
-          <SummaryItem label="Avg discount" value={avgDiscountAll > 0 ? `${avgDiscountAll}%` : '—'} />
+          /></div>
+          <div className="ov-kpi" style={{ '--ov-d': '760ms' } as React.CSSProperties}><SummaryItem label="Avg discount" value={avgDiscountAll > 0 ? `${avgDiscountAll}%` : '—'} /></div>
         </div>
 
       </section>
@@ -456,7 +461,7 @@ export default function CampaignOfferIntelPage() {
             />
           </div>
         </div>
-        <div className="card" style={{ overflowX: 'auto' }}>
+        <div ref={sec1.ref} className={`card ${revealCls(sec1.vis)}`} style={{ overflowX: 'auto' }}>
           <table className="data" style={{ width: '100%', minWidth: 940 }}>
             <thead>
               <tr>
@@ -523,7 +528,7 @@ export default function CampaignOfferIntelPage() {
             <div className="sub">Ad volume stack and weekly promo cadence.</div>
           </div>
         </div>
-        <div className="card" style={{ padding: 16, marginBottom: 12 }}>
+        <div ref={sec2.ref} className={`card ${revealCls(sec2.vis)}`} style={{ padding: 16, marginBottom: 12 }}>
           <h6 style={{ marginTop: 0 }}>Weekly ad volume by brand</h6>
           <CampaignTrendChart points={data.activityTrend} name={name} />
         </div>
@@ -548,7 +553,7 @@ export default function CampaignOfferIntelPage() {
             <div className="sub">Where each brand sits on paid + discount axes.</div>
           </div>
         </div>
-        <div className="card" style={{ padding: 16 }}>
+        <div ref={sec3.ref} className={`card ${revealCls(sec3.vis)}`} style={{ padding: 16 }}>
           <AdsVsPromosScatter rows={recomputedPressure} name={name} onBubbleClick={setDrillScatter} />
         </div>
       </section>
@@ -1023,7 +1028,7 @@ export default function CampaignOfferIntelPage() {
           </div>
         </section>
       )}
-    </>
+    </div>
   )
 }
 

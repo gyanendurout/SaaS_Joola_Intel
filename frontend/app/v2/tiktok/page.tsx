@@ -16,6 +16,7 @@ import { tiktokPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
+import { useReveal } from '@/lib/v2/animations'
 
 /** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
 function relativeLabel(days: number): string {
@@ -89,6 +90,10 @@ export default function TikTokPage() {
   }, [setAllBrands])
 
   useEffect(() => { setTtPage(1) }, [sortKey, sortDir, colFilter])
+
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
 
   if (loading) return <LoadingPage />
   if (error) return (
@@ -214,7 +219,7 @@ export default function TikTokPage() {
   })
 
   return (
-    <>
+    <div className="ov-page-enter">
       <PageHead title="TIKTOK" />
       <FilterBanner />
 
@@ -226,7 +231,7 @@ export default function TikTokPage() {
       />
 
       {/* ── Brand-wise Overview Table ── */}
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec1.ref} className={"ov-reveal" + (sec1.vis ? " is-vis" : "")} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>Brand-wise overview <SectionInfo title="TikTok Channel Overview" description="One row per brand — followers, growth, video count, total hearts, avg views per video, and best post. Click any row for full brand TikTok activity." source="tiktok_profiles_weekly · tiktok_videos · latest snapshot" /></h2>
@@ -308,7 +313,7 @@ export default function TikTokPage() {
         </div>
       </section>
 
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec2.ref} className={"ov-reveal" + (sec2.vis ? " is-vis" : "")} style={{ marginBottom: 28 }}>
         <div className="two-col-even">
           <div>
             <div className="section-head">
@@ -549,7 +554,7 @@ export default function TikTokPage() {
         })()}
       </section>
 
-      <section>
+      <section ref={sec3.ref} className={"ov-reveal" + (sec3.vis ? " is-vis" : "")}>
         <div className="two-col">
           <div>
             <div className="section-head"><div>
@@ -763,6 +768,6 @@ export default function TikTokPage() {
           <Pagination total={sortedVideos.length} page={ttPage} pageSize={TT_PAGE_SIZE} onChange={setTtPage} />
         </div>
       </section>
-    </>
+    </div>
   )
 }

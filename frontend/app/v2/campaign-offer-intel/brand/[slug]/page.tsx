@@ -19,6 +19,7 @@ import {
   type ActivityTrendPoint,
 } from '@/lib/v2/campaignOfferIntel'
 import { formatCalendarDate } from '@/lib/v2/format'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 
 const QUADRANT_LABEL: Record<string, string> = {
   'aggressive-growth': 'Aggressive Growth Push',
@@ -96,6 +97,10 @@ export default function BrandCampaignPage() {
     : null
   const qColor = quadrant ? QUADRANT_COLOR[quadrant] : '#6b7280'
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
 
   return (
@@ -113,20 +118,26 @@ export default function BrandCampaignPage() {
 
       {/* ── Hero stats strip ── */}
       <div className="card" style={{ padding: '16px 20px', marginBottom: 20, display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12 }}>
-        <StatCard label="Active Ads"     value={String(ads.filter(a => a.active).length)}        color="#818cf8" tip="Paid ad creatives currently running" />
-        <StatCard label="Total Ads"      value={String(ads.length)}                               color="#60a5fa" tip="All ad creatives in the 90-day window" />
-        <StatCard label="Active Promos"  value={String(offers.filter(o => o.active).length)}      color="#ef4444" tip="Active promotional offers on their storefront" />
-        <StatCard label="Ad Share"       value={pressure ? `${pressure.adShare.toFixed(1)}%` : '—'} color="#a78bfa" tip="Share of all tracked brand ads" />
-        <StatCard label="Avg Discount"   value={pressure?.avgDiscount ? `${pressure.avgDiscount}%` : '—'} color="#F5E625" tip="Average % discount across active promotions" />
-        <StatCard label="Pressure Score"
-          value={pressure ? pressure.pressure.toFixed(1) : '—'}
-          color={pressure ? (pressure.pressure >= 50 ? '#ef4444' : pressure.pressure >= 25 ? '#F5E625' : '#22c55e') : '#6b7280'}
-          sub={quadrant ? QUADRANT_LABEL[quadrant] : undefined}
-          tip="Composite 0–100 competitive pressure score" />
+        {[
+          <StatCard key="active-ads"    label="Active Ads"     value={String(ads.filter(a => a.active).length)}        color="#818cf8" tip="Paid ad creatives currently running" />,
+          <StatCard key="total-ads"     label="Total Ads"      value={String(ads.length)}                               color="#60a5fa" tip="All ad creatives in the 90-day window" />,
+          <StatCard key="active-promos" label="Active Promos"  value={String(offers.filter(o => o.active).length)}      color="#ef4444" tip="Active promotional offers on their storefront" />,
+          <StatCard key="ad-share"      label="Ad Share"       value={pressure ? `${pressure.adShare.toFixed(1)}%` : '—'} color="#a78bfa" tip="Share of all tracked brand ads" />,
+          <StatCard key="avg-disc"      label="Avg Discount"   value={pressure?.avgDiscount ? `${pressure.avgDiscount}%` : '—'} color="#F5E625" tip="Average % discount across active promotions" />,
+          <StatCard key="pressure"      label="Pressure Score"
+            value={pressure ? pressure.pressure.toFixed(1) : '—'}
+            color={pressure ? (pressure.pressure >= 50 ? '#ef4444' : pressure.pressure >= 25 ? '#F5E625' : '#22c55e') : '#6b7280'}
+            sub={quadrant ? QUADRANT_LABEL[quadrant] : undefined}
+            tip="Composite 0–100 competitive pressure score" />,
+        ].map((card, i) => (
+          <div key={i} className="ov-kpi" style={{ '--ov-d': `${160 + i * 75}ms` } as React.CSSProperties}>
+            {card}
+          </div>
+        ))}
       </div>
 
       {/* ── Two-column main layout ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+      <div ref={sec1.ref} className={revealCls(sec1.vis)} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
 
         {/* Left: Weekly trend + quadrant */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -215,7 +226,7 @@ export default function BrandCampaignPage() {
       </div>
 
       {/* ── Ad Creatives full width ── */}
-      <div className="card" style={{ padding: '16px 20px', marginBottom: 20 }}>
+      <div ref={sec2.ref} className={revealCls(sec2.vis, 'card')} style={{ padding: '16px 20px', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
           <h6 style={{ margin: 0 }}>Ad Creatives</h6>
           <div style={{ display: 'flex', gap: 4 }}>
@@ -253,7 +264,7 @@ export default function BrandCampaignPage() {
 
       {/* ── JOOLA Playbook ── */}
       {playbook.length > 0 && (
-        <div className="card" style={{ padding: '16px 20px' }}>
+        <div ref={sec3.ref} className={revealCls(sec3.vis, 'card')} style={{ padding: '16px 20px' }}>
           <h6 style={{ marginTop: 0, marginBottom: 14 }}>JOOLA Counter-Strategy Playbook</h6>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
             {playbook.map((p, i) => (

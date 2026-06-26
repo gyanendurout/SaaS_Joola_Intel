@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 import { PageHead, MiniKpi, SectionInfo, LoadingPage, SortTh, ColumnFilter, pgColor } from '@/components/v2/PageShell'
 import { fmt, ScatterChart, type ScatterDatum } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import {
   fetchStockoutOpportunities,
   fetchRestockCadence,
@@ -491,6 +492,14 @@ export default function SalesIntelPage() {
     })
   }, [brandCards, stockoutRows, priceRows2, cadenceRows, revenueRows, ovSortKey, ovSortDir])
 
+  // ─── Reveal hooks (must be before early return) ───────────────────
+  const row2 = useReveal()
+  const row3 = useReveal()
+  const row4 = useReveal()
+  const row5 = useReveal()
+  const row6 = useReveal()
+  const row7 = useReveal()
+
   // ─── Render ────────────────────────────────────────────────────────
   if (loading) return <LoadingPage />
 
@@ -519,43 +528,51 @@ export default function SalesIntelPage() {
       {/* ─── KPI Bar ───────────────────────────────────────────────── */}
       <section>
         <div className="kpi-grid">
-          <MiniKpi
-            label="Products tracked"
-            src="product_snapshots · latest per product"
-            value={fmt(kpis.totalProducts)}
-            color="#F5E625"
-            customVs={`${products.length} in catalog`}
-            tip="How many distinct paddle SKUs across the 11 brands had a stock snapshot during this window. Each SKU is checked weekly on the brand's own product page (Add-to-cart button visible = in stock; 'Sold out' = out of stock)."
-          />
-          <MiniKpi
-            label="In stock"
-            src="latest snapshot availability"
-            flavor="joola"
-            value={kpis.inStockPct.toFixed(1) + '%'}
-            color="#22c55e"
-            customVs={`${Math.round((kpis.inStockPct / 100) * kpis.totalProducts)} of ${kpis.totalProducts} SKUs`}
-            tip="Share of tracked paddles currently available to buy. Formula: in_stock_pct = (SKUs in stock at most recent snapshot ÷ total SKUs tracked) × 100. Source: weekly scrape of each brand's own product page."
-          />
-          <MiniKpi
-            label="Out of stock"
-            src="latest snapshot availability"
-            value={kpis.outStockPct.toFixed(1) + '%'}
-            color="#ef4444"
-            customVs={`${Math.round((kpis.outStockPct / 100) * kpis.totalProducts)} SKUs unavailable`}
-            tip="Share of tracked paddles unavailable to buy right now. High out-of-stock % at a competitor = demand-transfer opportunity for JOOLA (their buyers are looking for alternatives). Source: brand product page snapshots."
-          />
-          <MiniKpi
-            label="Brands with data"
-            value={fmt(kpis.brandsWithData)}
-            color="#818cf8"
-            customVs={`of ${brands.length} tracked`}
-            tip="How many of the 11 tracked brands returned at least one stock snapshot this window. If this is low, scraper coverage needs a check before drawing conclusions from the page."
-          />
+          <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Products tracked"
+              src="product_snapshots · latest per product"
+              value={fmt(kpis.totalProducts)}
+              color="#F5E625"
+              customVs={`${products.length} in catalog`}
+              tip="How many distinct paddle SKUs across the 11 brands had a stock snapshot during this window. Each SKU is checked weekly on the brand's own product page (Add-to-cart button visible = in stock; 'Sold out' = out of stock)."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="In stock"
+              src="latest snapshot availability"
+              flavor="joola"
+              value={kpis.inStockPct.toFixed(1) + '%'}
+              color="#22c55e"
+              customVs={`${Math.round((kpis.inStockPct / 100) * kpis.totalProducts)} of ${kpis.totalProducts} SKUs`}
+              tip="Share of tracked paddles currently available to buy. Formula: in_stock_pct = (SKUs in stock at most recent snapshot ÷ total SKUs tracked) × 100. Source: weekly scrape of each brand's own product page."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Out of stock"
+              src="latest snapshot availability"
+              value={kpis.outStockPct.toFixed(1) + '%'}
+              color="#ef4444"
+              customVs={`${Math.round((kpis.outStockPct / 100) * kpis.totalProducts)} SKUs unavailable`}
+              tip="Share of tracked paddles unavailable to buy right now. High out-of-stock % at a competitor = demand-transfer opportunity for JOOLA (their buyers are looking for alternatives). Source: brand product page snapshots."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Brands with data"
+              value={fmt(kpis.brandsWithData)}
+              color="#818cf8"
+              customVs={`of ${brands.length} tracked`}
+              tip="How many of the 11 tracked brands returned at least one stock snapshot this window. If this is low, scraper coverage needs a check before drawing conclusions from the page."
+            />
+          </div>
         </div>
       </section>
 
       {/* ─── Brand Overview Table ──────────────────────────────────── */}
-      <section style={{ marginBottom: 28 }}>
+      <section ref={row2.ref} className={revealCls(row2.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>Brand-wise overview
@@ -641,7 +658,7 @@ export default function SalesIntelPage() {
       </section>
 
       {/* ─── Section 1: Inventory Status Grid ─────────────────────── */}
-      <section>
+      <section ref={row3.ref} className={revealCls(row3.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -768,7 +785,7 @@ export default function SalesIntelPage() {
       </section>
 
       {/* ─── Section 2: Stock Events Timeline ─────────────────────── */}
-      <section>
+      <section ref={row4.ref} className={revealCls(row4.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -851,7 +868,7 @@ export default function SalesIntelPage() {
       </section>
 
       {/* ─── Section 3: Price Landscape ───────────────────────────── */}
-      <section>
+      <section ref={row5.ref} className={revealCls(row5.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -922,7 +939,7 @@ export default function SalesIntelPage() {
       </section>
 
       {/* ─── Section 4: Revenue Estimate ──────────────────────────── */}
-      <section>
+      <section ref={row6.ref} className={revealCls(row6.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -1020,7 +1037,7 @@ export default function SalesIntelPage() {
       {/* ─── NEW SECTIONS · Sales Intel Expansion (2026-05-25) ──── */}
 
       {/* ── F. Competitor stockout opportunity ──────────────────── */}
-      <section>
+      <section ref={row7.ref} className={revealCls(row7.vis)}>
         <div className="section-head">
           <div>
             <h2>

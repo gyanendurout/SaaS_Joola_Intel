@@ -12,6 +12,7 @@ import { StatCard } from '@/components/v2/StatCard'
 import { BackButton } from '@/components/v2/BackButton'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 
 const YT_HANDLES: Record<string, string> = {
   joola: 'joolapickleball', selkirk: 'SelkirkSport', crbn: 'CRBNPickleball',
@@ -146,6 +147,10 @@ export default function YoutubeBrandPage() {
     })
   }, [brandSlug])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
 
   const brandName = pgName(brandSlug, brands)
@@ -181,7 +186,7 @@ export default function YoutubeBrandPage() {
   const topByComments = [...videos].sort((a, b) => b.comments - a.comments)[0]
 
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div className="ov-page-enter" style={{ minHeight: '100vh' }}>
       {/* ── Hero ── */}
       <div style={{
         background: `linear-gradient(135deg, ${color}22 0%, transparent 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`,
@@ -216,8 +221,8 @@ export default function YoutubeBrandPage() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
-              {handle && <div style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>@{handle} · YouTube</div>}
+              <div className="ov-title" style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
+              {handle && <div className="ov-eyebrow" style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>@{handle} · YouTube</div>}
             </div>
           </div>
           {handle && (
@@ -231,21 +236,24 @@ export default function YoutubeBrandPage() {
 
         {/* KPI stat cards */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <StatCard label="Subscribers" value={ytRow?.subs ? fmt(ytRow.subs) : '—'} sub="current snapshot" color={isJ ? '#22c55e' : color} />
-          <StatCard label="Sub Growth (wk)"
-            value={ytRow?.delta != null ? (ytRow.delta >= 0 ? '+' : '') + fmt(ytRow.delta) : '—'}
-            sub="vs previous week"
-            color={ytRow?.delta != null ? (ytRow.delta >= 0 ? '#22c55e' : '#ef4444') : undefined} />
-          <StatCard label="Total Videos" value={ytRow?.videos ? String(ytRow.videos) : '—'} sub="all uploads" />
-          <StatCard label="Total Views" value={ytRow?.views ? fmt(ytRow.views) : '—'} sub="channel lifetime" color="#F5E625" />
-          <StatCard label="Avg Views / Video" value={avgViews > 0 ? fmt(avgViews) : '—'} sub="efficiency score" color={isJ ? '#22c55e' : '#a78bfa'} />
-          <StatCard label="Videos Tracked" value={String(videos.length)} sub="in current window" />
+          {[
+            <StatCard key="subs" label="Subscribers" value={ytRow?.subs ? fmt(ytRow.subs) : '—'} sub="current snapshot" color={isJ ? '#22c55e' : color} />,
+            <StatCard key="growth" label="Sub Growth (wk)" value={ytRow?.delta != null ? (ytRow.delta >= 0 ? '+' : '') + fmt(ytRow.delta) : '—'} sub="vs previous week" color={ytRow?.delta != null ? (ytRow.delta >= 0 ? '#22c55e' : '#ef4444') : undefined} />,
+            <StatCard key="videos" label="Total Videos" value={ytRow?.videos ? String(ytRow.videos) : '—'} sub="all uploads" />,
+            <StatCard key="views" label="Total Views" value={ytRow?.views ? fmt(ytRow.views) : '—'} sub="channel lifetime" color="#F5E625" />,
+            <StatCard key="avg" label="Avg Views / Video" value={avgViews > 0 ? fmt(avgViews) : '—'} sub="efficiency score" color={isJ ? '#22c55e' : '#a78bfa'} />,
+            <StatCard key="tracked" label="Videos Tracked" value={String(videos.length)} sub="in current window" />,
+          ].map((card, i) => (
+            <div key={i} className="ov-kpi" style={{ '--ov-d': `${160 + i * 75}ms` } as React.CSSProperties}>
+              {card}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* ── Subscriber Trend ── */}
       {trendSeries.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head">
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Subscriber growth trend</h2>
             <div className="sub">{trend.length} weekly snapshots · {fmt(trend[0])} → {fmt(trend[trend.length - 1])}</div>
@@ -258,7 +266,7 @@ export default function YoutubeBrandPage() {
 
       {/* ── Top Performers ── */}
       {videos.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head">
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Top performers</h2>
           </div>
@@ -283,7 +291,7 @@ export default function YoutubeBrandPage() {
 
       {/* ── Content Analysis ── */}
       {(analyses.length > 0 || typeEntries.length > 0) && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec3.ref} className={revealCls(sec3.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head">
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Content analysis · AI performance theses</h2>
             <div className="sub">{analyses.length} videos analysed · showing top 5 · hover a row for full thesis</div>

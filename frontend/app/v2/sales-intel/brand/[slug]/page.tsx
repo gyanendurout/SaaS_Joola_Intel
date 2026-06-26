@@ -8,6 +8,7 @@ import {
   fetchStockoutOpportunities, fetchRestockCadence, fetchPricePressure,
   type StockoutOpportunityRow, type RestockCadenceRow, type PricePressureRow,
 } from '@/lib/v2/productIntel'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import { fmt } from '@/components/v2/charts'
 import { LoadingPage, pgName } from '@/components/v2/PageShell'
 import { StatCard } from '@/components/v2/StatCard'
@@ -96,6 +97,10 @@ export default function SalesIntelBrandPage() {
     })
   }, [brandSlug])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
 
   const brandName = pgName(brandSlug, brands)
@@ -123,7 +128,7 @@ export default function SalesIntelBrandPage() {
   const maxPressureDiscount = Math.max(1, ...pressure.map(r => Math.abs(r.discountPct ?? 0)))
 
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div className="ov-page-enter" style={{ minHeight: '100vh' }}>
 
       {/* ── Hero ── */}
       <div style={{
@@ -149,18 +154,24 @@ export default function SalesIntelBrandPage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <StatCard label="Products Tracked" value={String(products.length)} sub="in catalog" color={isJ ? '#22c55e' : color} />
-          <StatCard label="In Stock" value={String(inStock)} sub={`${inPct}% available`} color="#22c55e" />
-          <StatCard label="Out of Stock" value={String(outStock)} sub={`${limited} limited`} color={outStock > 0 ? '#ef4444' : 'var(--fg-4)'} />
-          <StatCard label="Stockout Opps" value={String(stockouts.length)} sub="competitor gaps" color={stockouts.length > 0 ? '#fb923c' : 'var(--fg-4)'} />
-          <StatCard label="Avg Price" value={avgPrice > 0 ? `$${Math.round(avgPrice)}` : '—'} sub="tracked SKUs" color="#F5E625" />
-          <StatCard label="Demand 30d" value={totalDemand > 0 ? fmt(totalDemand) : '—'} sub="mention signals" color="#818cf8" />
+          {[
+            <StatCard key="tracked"  label="Products Tracked" value={String(products.length)} sub="in catalog" color={isJ ? '#22c55e' : color} />,
+            <StatCard key="instock"  label="In Stock"         value={String(inStock)} sub={`${inPct}% available`} color="#22c55e" />,
+            <StatCard key="oos"      label="Out of Stock"     value={String(outStock)} sub={`${limited} limited`} color={outStock > 0 ? '#ef4444' : 'var(--fg-4)'} />,
+            <StatCard key="opps"     label="Stockout Opps"    value={String(stockouts.length)} sub="competitor gaps" color={stockouts.length > 0 ? '#fb923c' : 'var(--fg-4)'} />,
+            <StatCard key="price"    label="Avg Price"        value={avgPrice > 0 ? `$${Math.round(avgPrice)}` : '—'} sub="tracked SKUs" color="#F5E625" />,
+            <StatCard key="demand"   label="Demand 30d"       value={totalDemand > 0 ? fmt(totalDemand) : '—'} sub="mention signals" color="#818cf8" />,
+          ].map((card, i) => (
+            <div key={i} className="ov-kpi" style={{ '--ov-d': `${160 + i * 75}ms` } as React.CSSProperties}>
+              {card}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* ── Product Catalog ── */}
       {products.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Product catalog · stock status</h2>
@@ -226,7 +237,7 @@ export default function SalesIntelBrandPage() {
       )}
 
       {/* ── Two-col: Stockout Opps + Price Pressure ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: stockouts.length > 0 && pressure.length > 0 ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 32 }}>
+      <div ref={sec2.ref} className={revealCls(sec2.vis)} style={{ display: 'grid', gridTemplateColumns: stockouts.length > 0 && pressure.length > 0 ? '1fr 1fr' : '1fr', gap: 16, marginBottom: 32 }}>
 
         {/* Stockout Opportunities */}
         {stockouts.length > 0 && (
@@ -290,7 +301,7 @@ export default function SalesIntelBrandPage() {
 
       {/* ── Restock Cadence ── */}
       {cadence.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec3.ref} className={revealCls(sec3.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head">
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Restock cadence</h2>
             <div className="sub">{cadence.length} products with restock history</div>

@@ -8,6 +8,7 @@ import {
   type V2Brand, type V2TikTokRow, type V2TikTokVideo,
   type V2TikTokCommentStats, type V2TikTokPaddleMention,
 } from '@/lib/v2/data'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import { fmt, LineChart } from '@/components/v2/charts'
 import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
@@ -75,6 +76,10 @@ export default function TikTokBrandPage() {
     })
   }, [brandSlug])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
 
   const brandName = pgName(brandSlug, brands)
@@ -103,7 +108,7 @@ export default function TikTokBrandPage() {
   const maxPaddle = paddleMentions.length > 0 ? Math.max(...paddleMentions.map(p => p.mentions)) : 1
 
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div className="ov-page-enter" style={{ minHeight: '100vh' }}>
       {/* Hero */}
       <div style={{ background: `linear-gradient(135deg, ${color}22 0%, transparent 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
         <div style={{ marginBottom: 20 }}>
@@ -119,8 +124,8 @@ export default function TikTokBrandPage() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-2.47 12 12 0 00-11.64 0A4.83 4.83 0 01.41 6.69 49.11 49.11 0 000 12a49.11 49.11 0 00.41 5.31 4.83 4.83 0 003.77 2.47 12 12 0 0011.64 0 4.83 4.83 0 003.77-2.47A49.11 49.11 0 0024 12a49.11 49.11 0 00-.41-5.31zM9.75 15.02V8.98l6 3.02z"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
-              {handle && <div style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>@{handle} · TikTok</div>}
+              <div className="ov-title" style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
+              {handle && <div className="ov-eyebrow" style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>@{handle} · TikTok</div>}
             </div>
           </div>
           {handle && (
@@ -132,18 +137,24 @@ export default function TikTokBrandPage() {
           )}
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <StatCard label="Followers" value={ttRow?.followers ? fmt(ttRow.followers) : '—'} sub="current snapshot" color={isJ ? '#22c55e' : color} />
-          <StatCard label="Flw Growth (wk)" value={ttRow?.delta != null ? (ttRow.delta >= 0 ? '+' : '') + fmt(ttRow.delta) : '—'} color={ttRow?.delta != null ? (ttRow.delta >= 0 ? '#22c55e' : '#ef4444') : undefined} />
-          <StatCard label="Total Videos" value={ttRow?.videos ? String(ttRow.videos) : '—'} sub="all uploads" />
-          <StatCard label="Total Hearts" value={ttRow?.totalHearts ? fmt(ttRow.totalHearts) : '—'} color="#f97316" />
-          <StatCard label="Avg Views/Video" value={ttRow?.avgViews ? fmt(ttRow.avgViews) : '—'} color="#F5E625" />
-          <StatCard label="Videos Tracked" value={String(videos.length)} sub="in window" />
+          {[
+            <StatCard key="followers" label="Followers" value={ttRow?.followers ? fmt(ttRow.followers) : '—'} sub="current snapshot" color={isJ ? '#22c55e' : color} />,
+            <StatCard key="growth" label="Flw Growth (wk)" value={ttRow?.delta != null ? (ttRow.delta >= 0 ? '+' : '') + fmt(ttRow.delta) : '—'} color={ttRow?.delta != null ? (ttRow.delta >= 0 ? '#22c55e' : '#ef4444') : undefined} />,
+            <StatCard key="videos" label="Total Videos" value={ttRow?.videos ? String(ttRow.videos) : '—'} sub="all uploads" />,
+            <StatCard key="hearts" label="Total Hearts" value={ttRow?.totalHearts ? fmt(ttRow.totalHearts) : '—'} color="#f97316" />,
+            <StatCard key="avg" label="Avg Views/Video" value={ttRow?.avgViews ? fmt(ttRow.avgViews) : '—'} color="#F5E625" />,
+            <StatCard key="tracked" label="Videos Tracked" value={String(videos.length)} sub="in window" />,
+          ].map((card, i) => (
+            <div key={i} className="ov-kpi" style={{ '--ov-d': `${160 + i * 75}ms` } as React.CSSProperties}>
+              {card}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Trend */}
       {trendSeries.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Follower growth trend</h2><div className="sub">{trend.length} weekly snapshots</div></div>
           <div className="card"><div className="card-pad"><LineChart series={trendSeries} xLabels={trendLabels} h={180} /></div></div>
         </section>
@@ -174,7 +185,7 @@ export default function TikTokBrandPage() {
 
       {/* Sentiment + Paddle mentions */}
       {(commentStats || paddleMentions.length > 0) && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 32 }}>
           <div style={{ display: 'grid', gridTemplateColumns: paddleMentions.length > 0 ? '1fr 1fr' : '1fr', gap: 16 }}>
             {commentStats && totalComments > 0 && (
               <div className="card"><div className="card-pad">
@@ -213,7 +224,7 @@ export default function TikTokBrandPage() {
       )}
 
       {/* Video grid */}
-      <section>
+      <section ref={sec3.ref} className={revealCls(sec3.vis)}>
         <div className="section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Videos · {videos.length} tracked</h2>

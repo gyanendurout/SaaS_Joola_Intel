@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import { useRouter } from 'next/navigation'
 import {
   PageHead, MiniKpi, SortTh, ColumnFilter, LoadingPage, SectionInfo,
@@ -344,6 +345,10 @@ export default function InfluencerIntelPage() {
       .filter(p => p.reach > 0 && p.er > 0)
   }, [data, filteredBrands, isFiltered])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
   if (error || !data) {
     return (
@@ -390,7 +395,7 @@ export default function InfluencerIntelPage() {
       <FilterBanner />
 
       {/* ── Sticky section nav ── */}
-      <nav style={{
+      <nav className="ov-page-enter" style={{
         position: 'sticky', top: 0, zIndex: 40,
         background: 'var(--bg)', backdropFilter: 'blur(8px)',
         borderBottom: '1px solid rgba(255,255,255,0.07)',
@@ -432,14 +437,14 @@ export default function InfluencerIntelPage() {
             background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.20)',
             fontSize: 12, color: 'var(--fg-2)',
           }}>
-            <SummaryStat label="Sponsored players" value={summary.sponsoredPlayers} accent="#22c55e" />
-            <SummaryStat label="Brands" value={summary.activeBrands} />
-            <SummaryStat label="Platforms with data" value={summary.platformsWithData} />
-            <SummaryStat label="Player signals" value={fmt(summary.playerSignals)} />
-            <SummaryStat label="JOOLA players" value={summary.joolaPlayers} accent="#22c55e" />
-            <SummaryStat label="Top player" value={summary.topPlayer || '—'} sub={summary.topPlayer ? `${fmt(summary.topPlayerSignals)} signals` : ''} />
-            <SummaryStat label="JOOLA rank" value={(() => { const r = filteredBrandStats.findIndex(b => b.brandSlug === 'joola'); return r >= 0 ? `#${r + 1} of ${filteredBrandStats.length}` : '—' })()} accent="#22c55e" sub="by athlete engagement" />
-            <SummaryStat label="Avg ER" value={summary.avgER.toFixed(2) + '%'} />
+            <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}><SummaryStat label="Sponsored players" value={summary.sponsoredPlayers} accent="#22c55e" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}><SummaryStat label="Brands" value={summary.activeBrands} /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}><SummaryStat label="Platforms with data" value={summary.platformsWithData} /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}><SummaryStat label="Player signals" value={fmt(summary.playerSignals)} /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '460ms' } as React.CSSProperties}><SummaryStat label="JOOLA players" value={summary.joolaPlayers} accent="#22c55e" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '535ms' } as React.CSSProperties}><SummaryStat label="Top player" value={summary.topPlayer || '—'} sub={summary.topPlayer ? `${fmt(summary.topPlayerSignals)} signals` : ''} /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '610ms' } as React.CSSProperties}><SummaryStat label="JOOLA rank" value={(() => { const r = filteredBrandStats.findIndex(b => b.brandSlug === 'joola'); return r >= 0 ? `#${r + 1} of ${filteredBrandStats.length}` : '—' })()} accent="#22c55e" sub="by athlete engagement" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '685ms' } as React.CSSProperties}><SummaryStat label="Avg ER" value={summary.avgER.toFixed(2) + '%'} /></div>
           </div>
         </section>
       )}
@@ -528,7 +533,7 @@ export default function InfluencerIntelPage() {
         source="influencers + influencer_posts + mention_facts"
         sub="Hover any bubble to see details · Stars = protect · Micro = best ROI · Celebrity = reconsider"
       >
-        <div className="card" style={{ padding: '20px 24px', overflow: 'visible' }}>
+        <div ref={sec1.ref} className={`card ${revealCls(sec1.vis)}`} style={{ padding: '20px 24px', overflow: 'visible' }}>
           <ImpactBubbleMap bubbles={bubblePool} brands={brands} />
         </div>
       </Section>
@@ -692,7 +697,7 @@ export default function InfluencerIntelPage() {
           const maxEng = sorted[0]?.totalEngagement || 1
           const maxReach = Math.max(1, ...sorted.map(r => r.totalReach))
           return (
-            <div className="card" style={{ marginBottom: 16 }}>
+            <div ref={sec2.ref} className={`card ${revealCls(sec2.vis)}`} style={{ marginBottom: 16 }}>
               <div className="card-pad">
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
                   Brand athlete engagement vs reach
@@ -1082,7 +1087,7 @@ export default function InfluencerIntelPage() {
         info="What's currently flowing into Influencer Intel. Items marked No are not bugs — they tell you which pipeline pieces to wire up next."
         source="Derived from fetched data"
       >
-        <div className="card"><div className="card-pad-lg" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+        <div ref={sec3.ref} className={`card ${revealCls(sec3.vis)}`}><div className="card-pad-lg" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
           <CoveragePill label="IG players"           value={data.dataCoverage.igRoster ? 'Yes' : 'No'}     ok={data.dataCoverage.igRoster}           tip="We have scraped Instagram profiles for the sponsored athletes. Green = at least one athlete's IG account is tracked." />
           <CoveragePill label="IG posts"            value={String(data.dataCoverage.igPosts)}             ok={data.dataCoverage.igPosts > 0}        tip={`Number of Instagram posts collected from sponsored athletes. ${data.dataCoverage.igPosts > 0 ? 'Data is flowing.' : 'No posts collected yet — run the scraper.'}`} />
           <CoveragePill label="YT mentions"         value={String(data.dataCoverage.ytMentions)}          ok={data.dataCoverage.ytMentions > 0}     tip={`YouTube comments or videos that mention a tracked athlete. ${data.dataCoverage.ytMentions > 0 ? 'Data available.' : 'Pending — YouTube athlete extraction not yet running.'}`} />

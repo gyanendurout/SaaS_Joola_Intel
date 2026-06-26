@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import { useRouter } from 'next/navigation'
 import {
   fetchBrands, fetchX, fetchTopXPosts,
@@ -76,6 +77,10 @@ export default function TwitterPage() {
       setLoading(false)
     })
   }, [setAllBrands])
+
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
 
   if (loading) return <LoadingPage />
   if (error) return (
@@ -204,7 +209,7 @@ export default function TwitterPage() {
   })
 
   return (
-    <>
+    <div className="ov-page-enter">
       <PageHead title="X / TWITTER" />
       <FilterBanner />
 
@@ -216,7 +221,7 @@ export default function TwitterPage() {
       />
 
       {/* ── Brand-wise Overview Table ── */}
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>Brand-wise overview <SectionInfo title="X / Twitter Channel Overview" description="One row per brand — followers, growth, tweet count, engagement rate, and best-performing post. Click any row for full brand X activity." source="x_profiles_weekly · x_posts · latest snapshot" /></h2>
@@ -298,7 +303,7 @@ export default function TwitterPage() {
         </div>
       </section>
 
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>
@@ -344,7 +349,7 @@ export default function TwitterPage() {
         </div></div>
       </section>
 
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec3.ref} className={revealCls(sec3.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>
@@ -723,6 +728,6 @@ export default function TwitterPage() {
           </div>
         </div>
       </section>
-    </>
+    </div>
   )
 }

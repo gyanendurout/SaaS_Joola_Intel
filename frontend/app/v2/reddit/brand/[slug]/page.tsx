@@ -10,6 +10,7 @@ import {
 } from '@/lib/v2/data'
 import { fmt, LineChart } from '@/components/v2/charts'
 import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
 import { StatCard } from '@/components/v2/StatCard'
@@ -69,6 +70,10 @@ export default function RedditBrandPage() {
     })
   }, [brandSlug])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
 
   const brandName = pgName(brandSlug, brands)
@@ -98,7 +103,7 @@ export default function RedditBrandPage() {
   const maxCrisis = crisisClusters.length > 0 ? Math.max(...crisisClusters.map(c => c.mentions)) : 1
 
   return (
-    <div style={{ minHeight: '100vh' }}>
+    <div className="ov-page-enter" style={{ minHeight: '100vh' }}>
       {/* Hero */}
       <div style={{ background: `linear-gradient(135deg, ${color}22 0%, transparent 60%), linear-gradient(180deg, ${color}18 0%, var(--sticky-bg) 100%)`, borderBottom: `1px solid ${color}33`, padding: '28px 0 32px', marginBottom: 32 }}>
         <div style={{ marginBottom: 20 }}>
@@ -114,8 +119,8 @@ export default function RedditBrandPage() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff"><path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
-              <div style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>Reddit · Community Intelligence</div>
+              <div className="ov-title" style={{ fontSize: 28, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1.1 }}>{brandName}</div>
+              <div className="ov-eyebrow" style={{ fontSize: 13, color: 'var(--fg-4)', marginTop: 4 }}>Reddit · Community Intelligence</div>
             </div>
           </div>
           <a href={`https://www.reddit.com/search/?q=${encodeURIComponent(brandName)}&sort=top`} target="_blank" rel="noopener noreferrer"
@@ -124,18 +129,24 @@ export default function RedditBrandPage() {
           </a>
         </div>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <StatCard label="Total Mentions" value={redditRow ? String(redditRow.mentions) : '—'} sub="in tracked window" color={isJ ? '#22c55e' : color} />
-          <StatCard label="Δ Mentions" value={redditRow?.delta != null ? (redditRow.delta >= 0 ? '+' : '') + String(redditRow.delta) : '—'} color={redditRow?.delta != null ? (redditRow.delta >= 0 ? '#22c55e' : '#ef4444') : undefined} />
-          <StatCard label="Positive" value={redditRow?.mentions ? `${posPct}%` : '—'} color="#22c55e" sub={`${redditRow?.positive ?? 0} posts`} />
-          <StatCard label="Neutral" value={redditRow?.mentions ? `${neuPct}%` : '—'} color="#94a3b8" sub={`${redditRow?.neutral ?? 0} posts`} />
-          <StatCard label="Negative" value={redditRow?.mentions ? `${negPct}%` : '—'} color="#ef4444" sub={`${redditRow?.negative ?? 0} posts`} />
-          <StatCard label="Posts Tracked" value={String(mentions.length)} sub="in window" />
+          {[
+            <StatCard key="mentions" label="Total Mentions" value={redditRow ? String(redditRow.mentions) : '—'} sub="in tracked window" color={isJ ? '#22c55e' : color} />,
+            <StatCard key="delta" label="Δ Mentions" value={redditRow?.delta != null ? (redditRow.delta >= 0 ? '+' : '') + String(redditRow.delta) : '—'} color={redditRow?.delta != null ? (redditRow.delta >= 0 ? '#22c55e' : '#ef4444') : undefined} />,
+            <StatCard key="pos" label="Positive" value={redditRow?.mentions ? `${posPct}%` : '—'} color="#22c55e" sub={`${redditRow?.positive ?? 0} posts`} />,
+            <StatCard key="neu" label="Neutral" value={redditRow?.mentions ? `${neuPct}%` : '—'} color="#94a3b8" sub={`${redditRow?.neutral ?? 0} posts`} />,
+            <StatCard key="neg" label="Negative" value={redditRow?.mentions ? `${negPct}%` : '—'} color="#ef4444" sub={`${redditRow?.negative ?? 0} posts`} />,
+            <StatCard key="tracked" label="Posts Tracked" value={String(mentions.length)} sub="in window" />,
+          ].map((card, i) => (
+            <div key={i} className="ov-kpi" style={{ '--ov-d': `${160 + i * 75}ms` } as React.CSSProperties}>
+              {card}
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Trend */}
       {trendSeries.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Mention trend</h2><div className="sub">{trend.length} weekly snapshots</div></div>
           <div className="card"><div className="card-pad"><LineChart series={trendSeries} xLabels={trendLabels} h={180} /></div></div>
         </section>
@@ -170,7 +181,7 @@ export default function RedditBrandPage() {
 
       {/* Subreddits + Crisis clusters two-col */}
       {(topSubreddits.length > 0 || crisisClusters.length > 0) && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 32 }}>
           <div style={{ display: 'grid', gridTemplateColumns: crisisClusters.length > 0 ? '1fr 1fr' : '1fr', gap: 16 }}>
             {topSubreddits.length > 0 && (
               <div className="card"><div className="card-pad">
@@ -210,7 +221,7 @@ export default function RedditBrandPage() {
 
       {/* Viral posts */}
       {viral.length > 0 && (
-        <section style={{ marginBottom: 32 }}>
+        <section ref={sec3.ref} className={revealCls(sec3.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Viral posts · last 30 days</h2><div className="sub">{viral.length} high-velocity posts</div></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {viral.slice(0, 5).map((v, i) => (
