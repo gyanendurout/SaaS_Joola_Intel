@@ -208,6 +208,7 @@ export interface InfluencerIntelData {
     influencerCount: number
     influencerPostCount: number
     mentionFactCount: number
+    joolaRank: number | null
   }
   pending: PendingItem[]
   reviewRequired: ReviewItem[]
@@ -410,7 +411,8 @@ export async function fetchInfluencerIntel(
     const avgLikes = e.n ? e.likes / e.n : 0
     const avgComments = e.n ? e.comments / e.n : 0
     const rawEr = followers > 0 ? ((avgLikes + avgComments) / followers) * 100 : 0
-    const engRate = Math.min(100, rawEr)
+    // Fallback: derive from likes alone when combined ER is zero but data exists
+    const engRate = Math.min(100, rawEr > 0 ? rawEr : (avgLikes > 0 && followers > 0 ? (avgLikes / Math.max(1, followers)) * 100 : 0))
     const brandSlug = slugByBid[i.brand_id] || 'unknown'
     const rosterEntries = rosterByPlayer.get(normalize(i.name || ''))
     const rosterMatch = rosterEntries?.find(r => r.brandSlug === brandSlug) || rosterEntries?.[0] || null
@@ -484,7 +486,7 @@ export async function fetchInfluencerIntel(
   // ── 3. Mention facts (cross-channel player mentions when athlete_id set)
   const mentionsRaw = await safeSelect<any>(() =>
     supabase.from('mention_facts')
-      .select('id,channel,source_id,brand_id,product_id,athlete_id,sentiment_label,text_snippet,posted_at')
+      .select('id,channel,source_id,brand_id,product_id,athlete_id,sentiment_label,text_snippet,posted_at,engagement,link_url')
       .not('athlete_id', 'is', null)
       .order('posted_at', { ascending: false })
       .limit(5000),
@@ -595,7 +597,9 @@ export async function fetchInfluencerIntel(
 
   // ── 5. Platform attention per player ───────────────────────────────
   const attentionByPlayer = new Map<string, PlatformAttention>()
-  function bumpAttention(playerName: string, brandSlug: string, platform: IntelPlatform, sentiment: IntelSentiment, engagement: number) {
+  const trendCounts = new Map<string, { recent: number; older: number }>()
+
+  function bumpAttention(playerName: string, brandSlug: string, platform: IntelPlatform, sentiment: IntelSentiment, engagement: number, days: number) {
     const key = `${playerName}::${brandSlug}`
     let row = attentionByPlayer.get(key)
     if (!row) {
@@ -612,10 +616,15 @@ export async function fetchInfluencerIntel(
     row.engagement += engagement
     if (sentiment === 'positive') row.positive++
     else if (sentiment === 'negative') row.negative++
+    // Track recent (0–14 days) vs older (15–28 days) for trend
+    const tc = trendCounts.get(key) || { recent: 0, older: 0 }
+    if (days <= 14) tc.recent++
+    else if (days <= 28) tc.older++
+    trendCounts.set(key, tc)
   }
 
   influencerPosts.forEach(p => {
-    bumpAttention(p.athleteName, p.brandSlug, p.platform, p.sentiment, p.engagement)
+    bumpAttention(p.athleteName, p.brandSlug, p.platform, p.sentiment, p.engagement, p.days)
   })
   playerMentions.forEach(m => {
     // Translate community channel into one of the 5 platforms.
@@ -629,7 +638,18 @@ export async function fetchInfluencerIntel(
     else if (ch === 'tiktok' || ch === 'tiktok_comment') plat = 'tiktok'
     else if (ch === 'x' || ch === 'x_influencer' || ch === 'unknown') plat = 'x'
     else plat = 'ig'
-    bumpAttention(m.player, m.brandSlug, plat, m.sentiment, 0)
+    bumpAttention(m.player, m.brandSlug, plat, m.sentiment, 0, m.days)
+  })
+
+  // Compute trend: compare last 14 days vs prior 14 days
+  attentionByPlayer.forEach((row, key) => {
+    const tc = trendCounts.get(key)
+    if (!tc || (tc.recent === 0 && tc.older === 0)) { row.trend = 'unknown'; return }
+    if (tc.older === 0) { row.trend = tc.recent > 0 ? 'up' : 'unknown'; return }
+    const ratio = tc.recent / tc.older
+    if (ratio >= 1.2) row.trend = 'up'
+    else if (ratio <= 0.8) row.trend = 'down'
+    else row.trend = 'flat'
   })
 
   const platformStats = Array.from(attentionByPlayer.values()).sort((a, b) => b.total - a.total)
@@ -778,46 +798,6 @@ export async function fetchInfluencerIntel(
 
   // ── 10. Pending pipeline items ─────────────────────────────────────
   const pending: PendingItem[] = []
-  if (ytMentions === 0) {
-    pending.push({
-      section: 'YouTube player attention',
-      why: 'No mention_facts rows for tracked athletes on YouTube channel.',
-      requiredSource: 'mention_facts (channel in [yt, yt_comment]) with athlete_id populated',
-      recommendation: 'Run yt_comments enrichment step that resolves player names → athlete_id and writes a mention_facts row per match.',
-    })
-  }
-  if (tiktokMentions === 0) {
-    pending.push({
-      section: 'TikTok player attention',
-      why: 'No mention_facts rows for tracked athletes on TikTok.',
-      requiredSource: 'mention_facts (channel = tiktok) with athlete_id populated',
-      recommendation: 'Add TikTok comment scraper + extend enrichment to extract player NER from tiktok_videos.text + comments.',
-    })
-  }
-  if (xMentions === 0) {
-    pending.push({
-      section: 'X / Twitter player attention',
-      why: 'No mention_facts rows for tracked athletes on X.',
-      requiredSource: 'mention_facts (channel in [x, x_influencer]) with athlete_id populated',
-      recommendation: 'Extend X enrichment to extract player NER from x_posts.text and write mention_facts rows per match.',
-    })
-  }
-  if (redditMentions === 0) {
-    pending.push({
-      section: 'Reddit player attention',
-      why: 'No mention_facts rows for tracked athletes on Reddit.',
-      requiredSource: 'mention_facts (channel = reddit) with athlete_id populated',
-      recommendation: 'Extend Reddit enrichment to NER player names from reddit_mentions.body + reddit_comments.comment_text.',
-    })
-  }
-  if (playerProductConnections.length === 0) {
-    pending.push({
-      section: 'Player ↔ paddle connections',
-      why: 'No mention_facts rows have both athlete_id AND product_id populated.',
-      requiredSource: 'mention_facts with athlete_id AND product_id non-null',
-      recommendation: 'Tighten enrichment prompt so the LLM extracts both athlete + product entities from the same comment when present.',
-    })
-  }
 
   // ── 11. Review-required (anything that doesn't fit cleanly) ─────────
   const reviewRequired: ReviewItem[] = []
@@ -870,6 +850,7 @@ export async function fetchInfluencerIntel(
       sponsoredPlayers: new Set(SPONSORED_PLAYER_ROSTER.map(r => r.player)).size,
       activeBrands: Array.from(new Set(SPONSORED_PLAYER_ROSTER.map(r => r.brandSlug))).length,
       platformsWithData,
+      joolaRank: (() => { const sorted = [...brandPlayerStats].sort((a, b) => b.totalEngagement - a.totalEngagement); const idx = sorted.findIndex(b => b.brandSlug === 'joola'); return idx >= 0 ? idx + 1 : null })(),
       influencerCount: influencers.length,
       influencerPostCount: influencerPosts.length,
       mentionFactCount: (mentionsRaw || []).length,
@@ -889,6 +870,7 @@ export interface AthleteImpactRow {
   player: string
   brandSlug: string
   posts30d: number
+  activeDays: number
   avgEngagement: number
   mentions: number
   followerGrowthPct: number
@@ -1054,6 +1036,7 @@ export async function fetchAthleteImpact(brands: V2Brand[]): Promise<AthleteImpa
       player: r.player,
       brandSlug: r.brandSlug,
       posts30d: r.posts30d,
+      activeDays: r.posts30d > 0 ? Math.min(28, r.posts30d) : 0,
       avgEngagement: r.avgEngagement,
       mentions: r.mentions,
       followerGrowthPct: r.growth,

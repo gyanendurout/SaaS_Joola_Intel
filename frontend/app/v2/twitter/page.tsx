@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useReveal, revealCls } from '@/lib/v2/animations'
+import { useRouter } from 'next/navigation'
 import {
   fetchBrands, fetchX, fetchTopXPosts,
   type V2Brand, type V2XRow, type V2XPost,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter, exportCSV } from '@/components/v2/PageShell'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { twitterPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
@@ -31,6 +33,7 @@ const X_HANDLES: Record<string, string> = {
 }
 
 export default function TwitterPage() {
+  const router = useRouter()
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [xData, setXData] = useState<V2XRow[]>([])
   const [posts, setPosts] = useState<V2XPost[]>([])
@@ -45,10 +48,18 @@ export default function TwitterPage() {
   const [erSortKey, setErSortKey] = useState<string | null>(null)
   const [erSortDir, setErSortDir] = useState<'asc' | 'desc'>('desc')
   const [erBrandFilter, setErBrandFilter] = useState('')
+  const [bwSortKey, setBwSortKey] = useState<string>('followers')
+  const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
+  const [selectedDot, setSelectedDot] = useState<V2XRow | null>(null)
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, effectiveFrom, effectiveTo } = useDateRange()
 
   useEffect(() => { document.title = 'JOOLA INTEL — X / Twitter' }, [])
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedDot(null) }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
@@ -67,11 +78,15 @@ export default function TwitterPage() {
     })
   }, [setAllBrands])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
   if (error) return (
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-      <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+      <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
     </div>
   )
 
@@ -167,8 +182,34 @@ export default function TwitterPage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredPosts
 
+  // ─── Brand-wise overview ─────────────────────────────────────────────
+  function toggleBwSort(col: string) {
+    if (bwSortKey === col) setBwSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setBwSortKey(col); setBwSortDir('desc') }
+  }
+  const topPostByBrand: Record<string, V2XPost> = {}
+  displayPosts.forEach(p => {
+    if (!topPostByBrand[p.brand] || p.likes > topPostByBrand[p.brand].likes)
+      topPostByBrand[p.brand] = p
+  })
+  const sortedBrandOverview = [...displayX].sort((a, b) => {
+    if (a.brand === 'joola') return -1
+    if (b.brand === 'joola') return 1
+    const getV = (x: typeof a): number | string => {
+      if (bwSortKey === 'brand') return name(x.brand)
+      if (bwSortKey === 'tweets') return x.tweets
+      if (bwSortKey === 'engRate') return x.engRate
+      if (bwSortKey === 'delta') return x.delta ?? -9999
+      return x.followers
+    }
+    const av = getV(a), bv = getV(b)
+    if (typeof av === 'number' && typeof bv === 'number')
+      return bwSortDir === 'asc' ? av - bv : bv - av
+    return bwSortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+  })
+
   return (
-    <>
+    <div className="ov-page-enter">
       <PageHead title="X / TWITTER" />
       <FilterBanner />
 
@@ -179,7 +220,90 @@ export default function TwitterPage() {
         brands={brands}
       />
 
-      <section style={{ marginBottom: 28 }}>
+      {/* ── Brand-wise Overview Table ── */}
+      <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>Brand-wise overview <SectionInfo title="X / Twitter Channel Overview" description="One row per brand — followers, growth, tweet count, engagement rate, and best-performing post. Click any row for full brand X activity." source="x_profiles_weekly · x_posts · latest snapshot" /></h2>
+            <div className="sub">{sortedBrandOverview.length} brands · click a row to view full details</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="table-wrap">
+            <table className="data" style={{ width: '100%' }}>
+              <thead><tr>
+                <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
+                <SortTh col="brand"    label="Brand"       sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
+                <SortTh col="followers" label="Followers"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
+                <SortTh col="delta"    label="Flw Δ (wk)"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
+                <SortTh col="tweets"   label="Tweets"      sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} />
+                <SortTh col="engRate"  label="Eng Rate"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
+                <th style={{ minWidth: 180 }}>Top Post</th>
+                <th style={{ width: 70, textAlign: 'center' }}>Profile</th>
+              </tr></thead>
+              <tbody>
+                {sortedBrandOverview.map((d, i) => {
+                  const isJ = d.brand === 'joola'
+                  const color = pgColor(d.brand)
+                  const tp = topPostByBrand[d.brand]
+                  return (
+                    <tr key={d.brand} className={isJ ? 'joola' : ''}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/twitter/brand/${encodeURIComponent(d.brand)}`)}
+                      title={`View ${name(d.brand)} X / Twitter details`}>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{i + 1}</td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                            <span style={{ fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{name(d.brand)}</span>
+                          </span>
+                          {X_HANDLES[d.brand] && <span style={{ paddingLeft: 15, fontSize: 10, color: 'var(--fg-4)' }}>@{X_HANDLES[d.brand]}</span>}
+                        </div>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'JetBrains Mono', color: isJ ? '#22c55e' : 'var(--fg)' }}>
+                        {d.followers > 0 ? fmt(d.followers) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {d.delta != null && d.delta !== 0 ? (
+                          <span style={{ fontWeight: 700, fontSize: 11, fontFamily: 'JetBrains Mono', color: d.delta >= 0 ? '#22c55e' : '#ef4444' }}>
+                            {d.delta >= 0 ? '+' : ''}{fmt(d.delta)}
+                          </span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: 'var(--fg-3)' }}>{d.tweets > 0 ? d.tweets : '—'}</td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {d.engRate > 0 ? (
+                          <span style={{ fontWeight: 700, fontFamily: 'JetBrains Mono', color: d.engRate > 3 ? '#22c55e' : d.engRate > 1 ? '#F5E625' : '#ef4444' }}>
+                            {d.engRate.toFixed(2)}%
+                          </span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td style={{ maxWidth: 200 }}>
+                        {tp ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontSize: 11, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }} title={tp.text}>
+                              {tp.text.slice(0, 60)}{tp.text.length > 60 ? '…' : ''}
+                            </span>
+                            <span style={{ fontSize: 10, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>♥ {fmt(tp.likes)} · 🔁 {fmt(tp.retweets)}</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No post data</span>}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        {X_HANDLES[d.brand] ? (
+                          <a href={`https://x.com/${X_HANDLES[d.brand]}`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}>View ↗</a>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>
@@ -225,7 +349,7 @@ export default function TwitterPage() {
         </div></div>
       </section>
 
-      <section style={{ marginBottom: 28 }}>
+      <section ref={sec3.ref} className={revealCls(sec3.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>
@@ -250,26 +374,118 @@ export default function TwitterPage() {
             const y = (f: number) => H - padB - (f / maxF) * (H - padT - padB)
             return (
               <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
-                <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
-                <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="rgba(255,255,255,0.1)" />
+                <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="var(--wb-10)" />
+                <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="var(--wb-10)" />
                 <text x={W / 2} y={H - 6} fill="#8a93a4" fontSize="10" textAnchor="middle">Tweets sampled</text>
                 <text x={12} y={H / 2} fill="#8a93a4" fontSize="10" textAnchor="middle" transform={`rotate(-90 12 ${H / 2})`}>Followers</text>
-                {data.map(d => (
-                  <g key={d.brand}>
-                    <circle cx={x(d.tweets)} cy={y(d.followers)} r={d.brand === 'joola' ? 8 : 6}
-                      fill={pgColor(d.brand)} fillOpacity={0.75}
-                      stroke={d.brand === 'joola' ? '#22c55e' : 'transparent'} strokeWidth={2}>
-                      <title>{name(d.brand)} · {d.tweets} tweets · {fmt(d.followers)} followers</title>
-                    </circle>
-                    <text x={x(d.tweets)} y={y(d.followers) - 10} textAnchor="middle" fill={d.brand === 'joola' ? '#22c55e' : '#cbd1dc'} fontSize="10" fontWeight={d.brand === 'joola' ? 800 : 500}>
-                      {name(d.brand)}
-                    </text>
-                  </g>
-                ))}
+                {data.map(d => {
+                  const isJ = d.brand === 'joola'
+                  const cx = x(d.tweets), cy = y(d.followers)
+                  const r = isJ ? 8 : 6
+                  return (
+                    <g key={d.brand} style={{ cursor: 'pointer' }} onClick={() => setSelectedDot(d)}>
+                      <circle cx={cx} cy={cy} r={r + 10} fill="transparent" />
+                      <circle cx={cx} cy={cy} r={r}
+                        fill={pgColor(d.brand)} fillOpacity={0.85}
+                        stroke={isJ ? '#22c55e' : 'rgba(255,255,255,0.25)'} strokeWidth={isJ ? 2 : 1}>
+                        <title>{name(d.brand)} · {d.tweets} tweets · {fmt(d.followers)} followers · click for details</title>
+                      </circle>
+                      <text x={cx} y={cy - r - 6} textAnchor="middle"
+                        fill={isJ ? '#22c55e' : '#cbd1dc'} fontSize="10" fontWeight={isJ ? 800 : 500}>
+                        {name(d.brand)}
+                      </text>
+                    </g>
+                  )
+                })}
               </svg>
             )
           })()}
         </div></div>
+
+        {/* ── Brand detail modal ── */}
+        {selectedDot && (() => {
+          const d = selectedDot
+          const bColor = pgColor(d.brand)
+          const isJ = d.brand === 'joola'
+          const handle = X_HANDLES[d.brand] || d.handle
+          const topPost = displayPosts.filter(p => p.brand === d.brand).sort((a, b) => b.likes - a.likes)[0]
+          return (
+            <div onClick={() => setSelectedDot(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+              <div onClick={e => e.stopPropagation()}
+                style={{ background: 'var(--bg)', border: `1px solid ${bColor}55`, borderRadius: 16, width: '100%', maxWidth: 520, overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px ${bColor}22` }}>
+
+                {/* Header */}
+                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, transparent 70%)`, padding: '20px 22px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: bColor, boxShadow: `0 0 18px ${bColor}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.26 5.632 5.903-5.632z"/></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: isJ ? '#22c55e' : '#fff' }}>{name(d.brand)}</div>
+                      {handle && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>@{handle}</div>}
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedDot(null)}
+                    style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
+                </div>
+
+                {/* Stats grid */}
+                <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Followers',   value: fmt(d.followers),  color: isJ ? '#22c55e' : bColor },
+                      { label: 'Following',   value: fmt(d.following),  color: 'var(--fg-2)' },
+                      { label: 'Tweets',      value: String(d.tweets),  color: 'var(--fg-2)' },
+                      { label: 'Eng Rate',    value: d.engRate > 0 ? d.engRate.toFixed(2) + '%' : '—', color: d.engRate > 3 ? '#22c55e' : d.engRate > 1 ? '#F5E625' : '#ef4444' },
+                      { label: 'Flw Growth',  value: d.delta != null ? (d.delta >= 0 ? '+' : '') + fmt(d.delta) : '—', color: d.delta != null ? (d.delta >= 0 ? '#22c55e' : '#ef4444') : 'var(--fg-4)' },
+                      { label: 'Flw Growth %', value: d.deltaPct != null ? (d.deltaPct >= 0 ? '+' : '') + d.deltaPct.toFixed(2) + '%' : '—', color: d.deltaPct != null ? (d.deltaPct >= 0 ? '#22c55e' : '#ef4444') : 'var(--fg-4)' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} style={{ background: 'var(--line-2)', border: `1px solid var(--line)`, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color, fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Top post preview */}
+                  {topPost && (
+                    <div style={{ padding: '12px 14px', background: 'var(--wb-3)', borderRadius: 10, borderLeft: `3px solid ${bColor}` }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: bColor, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 7 }}>Top post</div>
+                      <p style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.55, margin: 0, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{topPost.text}</p>
+                      <div style={{ display: 'flex', gap: 14, marginTop: 8 }}>
+                        <span style={{ fontSize: 11, color: '#f97316', fontFamily: 'JetBrains Mono', fontWeight: 700 }}>♥ {fmt(topPost.likes)}</span>
+                        <span style={{ fontSize: 11, color: '#22c55e', fontFamily: 'JetBrains Mono' }}>🔁 {fmt(topPost.retweets)}</span>
+                        <span style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'JetBrains Mono' }}>💬 {fmt(topPost.replies)}</span>
+                        {topPost.views > 0 && <span style={{ fontSize: 11, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>👁 {fmt(topPost.views)}</span>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* CTAs */}
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {handle && (
+                      <a href={`https://x.com/${handle}`} target="_blank" rel="noopener noreferrer"
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#000', border: '1px solid var(--wb-14)', borderRadius: 10, padding: '10px 0', color: '#fff', fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.26 5.632 5.903-5.632z"/></svg>
+                        View Profile ↗
+                      </a>
+                    )}
+                    <button onClick={() => { setSelectedDot(null); router.push(`/v2/twitter/brand/${encodeURIComponent(d.brand)}`) }}
+                      style={{ flex: 1, background: bColor, border: 'none', borderRadius: 10, padding: '10px 0', color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                      Full Detail →
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ padding: '8px 22px', borderTop: '1px solid var(--wb-6)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>X / Twitter Intelligence · {name(d.brand)}</span>
+                  <span>Esc or click outside to close</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </section>
 
       <section>
@@ -392,25 +608,37 @@ export default function TwitterPage() {
       </section>
 
       <section id="twitter-posts-table">
-        <div className="section-head"><div>
-          <h2>
-            Top {sortedPosts.length} posts · by likes
-            <SectionInfo
-              title="Top X Posts"
-              description="Up to the 200 highest-engagement posts across the tracked X accounts, ranked by like count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Product launches, pro player news, and community posts tend to dominate."
-              source="x_posts · scraped via apidojo/twitter-scraper-lite. Click column headers to sort."
-            />
-          </h2>
-          <div className="sub">
-            Showing <strong style={{ color: 'var(--fg)' }}>{sortedPosts.length}</strong> of up to 200 ·
-            {' '}sorted by likes · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+        <div className="section-head">
+          <div>
+            <h2>
+              Top {sortedPosts.length} posts · by likes
+              <SectionInfo
+                title="Top X Posts"
+                description="Up to the 200 highest-engagement posts across the tracked X accounts, ranked by like count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Product launches, pro player news, and community posts tend to dominate."
+                source="x_posts · scraped via apidojo/twitter-scraper-lite. Click column headers to sort."
+              />
+            </h2>
+            <div className="sub">
+              Showing <strong style={{ color: 'var(--fg)' }}>{sortedPosts.length}</strong> of up to 200 ·
+              {' '}sorted by likes · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+            </div>
           </div>
-        </div></div>
+          <div className="actions">
+            <button
+              onClick={() => exportCSV('joola-x-posts.csv', sortedPosts as unknown as Record<string, unknown>[])}
+              className="btn btn-ghost"
+              aria-label="Export table as CSV"
+              style={{ fontSize: 11 }}
+            >
+              ↓ CSV
+            </button>
+          </div>
+        </div>
         <div className="card">
           {sortedPosts.length > 0 ? (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data">
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
                     <SortTh col="text" label="Post" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />
@@ -480,34 +708,26 @@ export default function TwitterPage() {
         </div>
       </section>
 
-      {/* ─── Pending: X / Twitter mention intelligence ─────────────────── */}
+      {/* ─── Paddle & player mentions — coming soon ────────────────────── */}
       <section>
         <div className="section-head"><div>
-          <h2>
-            Paddle and player mentions on X · pending
-            <SectionInfo
-              title="X Mention Intelligence — Pending"
-              description="Cross-channel mention extraction (paddle SKU mentions, athlete tags, sentiment scoring per mention) is implemented for Reddit, Instagram, and YouTube via the mention_facts table. The X enrichment branch of the pipeline has not been wired up — no rows with channel='x' or 'x_posts' exist yet."
-              source="mention_facts · (no X channel rows yet — see TODO_SESSION.md)"
-            />
-          </h2>
-          <div className="sub">Awaiting enrichment pipeline coverage for X posts.</div>
+          <h2>Paddle &amp; player mentions · X / Twitter</h2>
+          <div className="sub">Cross-channel mention intelligence for X — coming in a future update.</div>
         </div></div>
-        <div className="card"><div className="card-pad" style={{ padding: 24, color: 'var(--fg-4)', fontSize: 12, lineHeight: 1.6 }}>
-          <p style={{ marginTop: 0 }}>
-            <strong style={{ color: 'var(--fg)' }}>Why this is empty:</strong> the AI enrichment step
-            that writes paddle/player mentions to <code>mention_facts</code> is wired to
-            <code> ig_comments</code>, <code>yt_comments</code>, <code>reddit_mentions</code>, and
-            <code> reddit_comments</code>. It does not yet read from <code>x_posts</code>, so no
-            X-channel mention rows are produced even though the raw posts are scraped.
-          </p>
-          <p>
-            <strong style={{ color: 'var(--fg)' }}>What ships when it&apos;s wired:</strong>
-            {' '}top mentioned paddles by tweet count, top mentioned athletes, sentiment per brand
-            on X, and crisis flags surfaced on the existing Crisis page with channel = <code>x</code>.
-          </p>
-        </div></div>
+        <div className="card">
+          <div style={{ padding: '36px 32px', display: 'flex', alignItems: 'center', gap: 20 }}>
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--wb-5)', border: '1px solid var(--wb-8)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-3)', marginBottom: 4 }}>Mention intelligence not yet available for X</div>
+              <div style={{ fontSize: 12, color: 'var(--fg-4)', lineHeight: 1.6, maxWidth: 520 }}>
+                Paddle SKU mentions, athlete tags, and per-brand sentiment on X will appear here once the enrichment pipeline is extended to cover X posts. Instagram, YouTube, and Reddit are already covered.
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
-    </>
+    </div>
   )
 }

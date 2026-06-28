@@ -260,6 +260,10 @@
   position: relative;
   overflow: hidden;
 }
+.v2-root .card h6 {
+  font-family: var(--font-sans); font-weight: 800; font-size: 13px;
+  margin: 0 0 12px; color: var(--fg); letter-spacing: 0.01em;
+}
 .v2-root .card-pad { padding: 18px; }
 .v2-root .card-pad-lg { padding: 22px; }
 .v2-root .card-head {
@@ -483,38 +487,94 @@
 .v2-root .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.7); background-clip: padding-box; border: 2px solid transparent; }
 
 /* Date-range dropdown (global, top-right next to brand filter) */
-.v2-root .drd-wrap { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; }
-.v2-root .drd-ic { color: var(--fg-3); flex-shrink: 0; }
-.v2-root .drd-select {
-  background: rgba(0,0,0,0.4); color: var(--fg);
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
-  padding: 6px 28px 6px 10px; font-size: 12px; font-weight: 600;
-  cursor: pointer; appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a93a4' stroke-width='2.5'><polyline points='6 9 12 15 18 9'/></svg>");
-  background-repeat: no-repeat; background-position: right 8px center;
+/* ── Date Range Picker — unified pill design ──────────────────────── */
+.v2-root .drd-wrap {
+  display: inline-flex; align-items: center;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px;
+  padding: 0;
+  margin-right: 8px;
+  overflow: hidden;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
 }
-.v2-root .drd-select:hover { border-color: rgba(255,255,255,0.25); color: var(--fg); }
-.v2-root .drd-select.is-filtered { color: var(--yellow); border-color: rgba(245,230,37,0.45); background-color: rgba(245,230,37,0.08); }
-.v2-root .drd-select:focus { outline: 2px solid var(--yellow); outline-offset: 1px; }
-/* From → To calendar date picker (replaces single preset dropdown). */
+.v2-root .drd-wrap:hover {
+  border-color: rgba(255,255,255,0.20);
+}
+.v2-root .drd-wrap:focus-within {
+  border-color: rgba(245,230,37,0.5);
+  box-shadow: 0 0 0 2px rgba(245,230,37,0.10);
+}
+.v2-root .drd-ic { display: none; }
+/* Each date segment */
+.v2-root .drd-segment {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  position: relative;
+}
+.v2-root .drd-segment + .drd-segment {
+  border-left: 1px solid rgba(255,255,255,0.08);
+}
 .v2-root .drd-label-inline {
-  font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  font-size: 9px; font-weight: 800; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--fg-4);
-  user-select: none;
+  user-select: none; flex-shrink: 0;
 }
 .v2-root .drd-date {
-  padding: 6px 8px; min-width: 130px;
-  background-image: none;
-  font-family: inherit;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'JetBrains Mono', monospace;
+  cursor: pointer;
+  min-width: 96px;
+  padding: 0;
   color-scheme: dark;
+  letter-spacing: 0.02em;
+  position: relative;
 }
+.v2-root .drd-date::-webkit-calendar-picker-indicator {
+  opacity: 0.01;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+}
+/* Divider arrow between segments */
 .v2-root .drd-arrow {
-  color: var(--fg-4); font-size: 12px; opacity: 0.7; padding: 0 2px;
+  color: var(--fg-4); font-size: 11px; padding: 0 4px;
+  display: flex; align-items: center; flex-shrink: 0;
+  background: rgba(255,255,255,0.03);
+  align-self: stretch;
 }
+/* Active / filtered state */
+.v2-root .drd-wrap.is-filtered {
+  border-color: rgba(245,230,37,0.4);
+  background: rgba(245,230,37,0.05);
+}
+.v2-root .drd-wrap.is-filtered .drd-label-inline {
+  color: rgba(245,230,37,0.7);
+}
+.v2-root .drd-wrap.is-filtered .drd-date {
+  color: #F5E625;
+}
+/* Light theme */
+html.theme-light .v2-root .drd-wrap {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.12);
+}
+html.theme-light .v2-root .drd-wrap:hover { border-color: rgba(0,0,0,0.22); }
+html.theme-light .v2-root .drd-date { color: var(--fg); color-scheme: light; }
+html.theme-light .v2-root .drd-arrow { background: rgba(0,0,0,0.03); }
+html.theme-light .v2-root .drd-segment + .drd-segment { border-color: rgba(0,0,0,0.08); }
 @media (max-width: 768px) {
   .v2-root .drd-label-inline { display: none; }
-  .v2-root .drd-arrow { display: none; }
-  .v2-root .drd-date { min-width: 110px; }
+  .v2-root .drd-date { min-width: 80px; }
 }
 .v2-root .topbar { display: inline-flex; align-items: center; gap: 8px; }
 .v2-root table.data {
@@ -525,8 +585,9 @@
   font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--fg-3);
   border-bottom: 1px solid var(--line);
-  background: rgba(255,255,255,0.015);
+  background: var(--surface);
   white-space: nowrap;
+  position: sticky; top: 0; z-index: 2;
 }
 .v2-root table.data tbody td {
   padding: 12px 14px; border-bottom: 1px solid var(--line-2);
@@ -707,18 +768,27 @@
   cursor: pointer;
 }
 
+@keyframes tooltip-appear {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
 /* Tooltips (simple) */
 .v2-root .tip {
   position: fixed; pointer-events: none;
-  background: #000; border: 1px solid var(--yellow-edge);
-  padding: 8px 10px; border-radius: 4px;
+  background: rgba(13,17,23,0.97);
+  border: 1px solid rgba(255,255,255,0.12);
+  padding: 8px 12px; border-radius: 8px;
   font-size: 11px; color: var(--fg);
   font-family: var(--font-mono);
   white-space: nowrap;
   z-index: 9999;
   transform: translate(-50%, calc(-100% - 8px));
+  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  animation: tooltip-appear 0.1s ease 0s both;
 }
-.v2-root .tip .t-name { font-family: var(--font-sans); font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--yellow); font-size: 10px; margin-bottom: 2px; }
+.v2-root .tip .t-name { font-family: var(--font-sans); font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--yellow); font-size: 10px; margin-bottom: 3px; }
 
 /* Trend keyword rows — VIZ-03/19: explicit mtrack column so mini-bar renders */
 .v2-root .trend-row {
@@ -890,7 +960,6 @@ html { scroll-behavior: smooth; }
 .v2-root .si-popup {
   display: none;
   position: fixed;
-  transform: translateX(-50%);
   background: rgba(7,9,14,0.98);
   border: 1px solid rgba(245,230,37,0.28);
   border-radius: 10px;
@@ -900,11 +969,10 @@ html { scroll-behavior: smooth; }
   box-shadow: 0 16px 48px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.03);
   backdrop-filter: blur(16px);
   text-align: left;
-  pointer-events: none;
+  pointer-events: auto;
   font-style: normal;
+  animation: tooltip-appear 0.1s ease 0s both;
 }
-.v2-root .section-info:hover .si-popup,
-.v2-root .section-info.is-pinned .si-popup { display: block; pointer-events: auto; }
 .v2-root .section-info.is-pinned {
   background: var(--yellow-dim);
   border-color: var(--yellow-edge);
@@ -916,9 +984,9 @@ html { scroll-behavior: smooth; }
   top: -5px; left: 50%;
   transform: translateX(-50%) rotate(45deg);
   width: 8px; height: 8px;
-  background: rgba(7,9,14,0.98);
-  border-left: 1px solid rgba(245,230,37,0.28);
-  border-top: 1px solid rgba(245,230,37,0.28);
+  background: #0d1117;
+  border-left: 1px solid rgba(255,255,255,0.14);
+  border-top: 1px solid rgba(255,255,255,0.14);
 }
 .v2-root .si-title {
   font-family: var(--font-display); font-size: 10px;
@@ -1354,14 +1422,14 @@ html { scroll-behavior: smooth; }
     width: 40px;
     height: 40px;
     border-radius: 8px;
-    background: rgba(10,13,18,0.92);
+    background: var(--surface);
     backdrop-filter: blur(12px);
     border: 1px solid var(--line);
     color: var(--fg);
     cursor: pointer;
-    transition: border-color 140ms;
+    transition: border-color 140ms, background 140ms;
   }
-  .v2-root .mobile-menu-btn:hover { border-color: rgba(255,255,255,0.2); }
+  .v2-root .mobile-menu-btn:hover { border-color: var(--fg-3); background: var(--surface-2); }
 
   .v2-root .sidebar-overlay {
     position: fixed;
@@ -1459,6 +1527,7 @@ html { scroll-behavior: smooth; }
 .v2-root .page-head h1 em { white-space: nowrap; }
 @media (min-width: 600px) {
   .v2-root .page-head h1 { white-space: nowrap; }
+  .v2-root .page-head h1.wrap { white-space: normal; word-break: break-word; font-size: clamp(20px, 3vw, 36px); }
 }
 .v2-root .foot { color: var(--fg-3) !important; }
 .v2-root .foot strong { color: var(--fg-2) !important; }
@@ -1737,11 +1806,12 @@ html { scroll-behavior: smooth; }
   top: calc(100% + 8px);
   right: 0;
   width: 280px;
-  background: rgba(14,17,24,0.98);
+  background: #0d1117 !important;
+  color: #e2e8f0 !important;
   backdrop-filter: blur(16px);
-  border: 1px solid var(--line);
+  border: 1px solid rgba(255,255,255,0.14) !important;
   border-radius: 10px;
-  box-shadow: 0 16px 48px rgba(0,0,0,0.55);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.7);
   padding: 10px;
   z-index: 9999;
   animation: bfd-fade 140ms ease-out;
@@ -1890,18 +1960,19 @@ html { scroll-behavior: smooth; }
    11. Column filter input (under sortable table headers)
    ---------------------------------------------------------- */
 .v2-root .col-filter-row th {
-  background: rgba(255,255,255,0.015) !important;
+  background: var(--surface) !important;
   padding: 4px 8px !important;
   border-bottom: 1px solid var(--line);
+  position: sticky; top: 37px; z-index: 2;
 }
 .v2-root .col-filter-input {
   width: 100%;
   background: rgba(0,0,0,0.55);
   border: 1px solid var(--line);
   border-radius: 4px;
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff;
-  caret-color: #ffffff;
+  color: var(--fg);
+  -webkit-text-fill-color: var(--fg);
+  caret-color: var(--fg);
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 500;
@@ -1909,7 +1980,7 @@ html { scroll-behavior: smooth; }
   outline: none;
   transition: border-color 140ms, background 140ms;
 }
-.v2-root .col-filter-input::placeholder { color: #9aa2b0; opacity: 0.85; }
+.v2-root .col-filter-input::placeholder { color: var(--fg-4); opacity: 0.85; }
 .v2-root .col-filter-input:focus {
   border-color: var(--yellow-edge);
   background: rgba(0,0,0,0.7);
@@ -2006,4 +2077,894 @@ html { scroll-behavior: smooth; }
   padding: 8px 10px;
   font-size: 12px;
   vertical-align: middle;
+}
+
+/* ─── Light theme ──────────────────────────────────────────────────────
+   Applied by toggling <html class="theme-light">. Sidebar stays dark.
+   ─────────────────────────────────────────────────────────────────── */
+html.theme-light .v2-root {
+  --bg:       #f0f2f8;
+  --bg-2:     #e6e9f2;
+  --surface:  #ffffff;
+  --surface-2:#f2f4f9;
+  --line:     rgba(0,0,0,0.09);
+  --line-2:   rgba(0,0,0,0.05);
+  --fg:       #0d1117;
+  --fg-2:     #1e2533;
+  --fg-3:     #374151;
+  --fg-4:     #6b7280;
+  --muted:    #8a93a2;
+  background: var(--bg);
+  color: var(--fg);
+}
+/* Main content area */
+html.theme-light .v2-root .main { background: var(--bg); }
+
+/* Sidebar stays dark */
+html.theme-light .v2-root .sidebar {
+  background: #ffffff;
+  border-right-color: rgba(0,0,0,0.08);
+  box-shadow: 2px 0 12px rgba(0,0,0,0.06);
+}
+html.theme-light .v2-root .sidebar .nav-group-label { color: #9aa2b0; }
+html.theme-light .v2-root .sidebar .nav-item { color: #374151; }
+html.theme-light .v2-root .sidebar .nav-item:hover { background: rgba(0,0,0,0.04); color: #0d1117; }
+html.theme-light .v2-root .sidebar .nav-item.active { background: rgba(34,197,94,0.10); color: #16a34a; }
+html.theme-light .v2-root .sidebar .collapse-btn { color: #6b7280; border-color: rgba(0,0,0,0.10); }
+html.theme-light .v2-root .sidebar .collapse-btn:hover { color: #0d1117; border-color: rgba(0,0,0,0.20); }
+html.theme-light .v2-root .sidebar .brand-text .a { color: #0d1117; }
+html.theme-light .v2-root .sidebar .brand-text .s { color: #6b7280; }
+
+/* Cards */
+html.theme-light .v2-root .card {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.09);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+}
+html.theme-light .v2-root .card-pad,
+html.theme-light .v2-root .card-pad-lg { background: transparent; }
+
+/* KPI cards */
+html.theme-light .v2-root .kpi,
+html.theme-light .v2-root .brief-card,
+html.theme-light .v2-root .opp-card {
+  background: #ffffff;
+  border-color: rgba(0,0,0,0.09);
+}
+
+/* Section head */
+html.theme-light .v2-root .section-head { border-color: rgba(0,0,0,0.08); }
+
+/* Tables */
+html.theme-light .v2-root table.data thead tr {
+  background: #f2f4f9;
+  border-bottom-color: rgba(0,0,0,0.09);
+}
+html.theme-light .v2-root table.data thead th { color: var(--fg-4); }
+html.theme-light .v2-root table.data tbody tr { border-bottom-color: rgba(0,0,0,0.05); }
+html.theme-light .v2-root table.data tbody tr:hover {
+  background: rgba(0,0,0,0.03);
+  box-shadow: none;
+  transform: none;
+}
+html.theme-light .v2-root .table-wrap { background: transparent; }
+
+/* Bar rows */
+html.theme-light .v2-root .bar-row { border-color: rgba(0,0,0,0.06); }
+html.theme-light .v2-root .bar-row:hover { background: rgba(0,0,0,0.03); }
+html.theme-light .v2-root .bar-row .track { background: rgba(0,0,0,0.07); }
+
+/* Buttons + selects */
+html.theme-light .v2-root .btn,
+html.theme-light .v2-root .select {
+  border-color: rgba(0,0,0,0.14);
+  color: var(--fg-2);
+  background: transparent;
+}
+html.theme-light .v2-root .btn:hover,
+html.theme-light .v2-root .select:hover {
+  border-color: rgba(0,0,0,0.24);
+  color: var(--fg);
+}
+html.theme-light .v2-root .btn-ghost {
+  border-color: rgba(0,0,0,0.14);
+  color: var(--fg-3);
+}
+
+/* Scatter / chart tooltips stay dark */
+html.theme-light .v2-root .tip {
+  background: #1a2033;
+  color: #fff;
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* Scatter grid lines */
+html.theme-light .v2-root .scatter-axis { fill: #6b7280; }
+html.theme-light .v2-root .scatter-grid line { stroke: rgba(0,0,0,0.07); }
+html.theme-light .v2-root .scatter-quadrant { fill: rgba(0,0,0,0.25); }
+
+/* Pills */
+html.theme-light .v2-root .pill-ghost { background: rgba(0,0,0,0.06); color: var(--fg-3); border-color: rgba(0,0,0,0.1); }
+
+/* Filter banner */
+html.theme-light .v2-root .filter-banner { background: rgba(245,230,37,0.15); border-color: rgba(245,230,37,0.4); }
+
+/* Section info popup */
+html.theme-light .v2-root .si-popup {
+  background: #1a2033;
+  color: #e2e6ed;
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* Theme toggle button itself (inside sidebar — always dark context) */
+.theme-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 16px);
+  margin: 0 8px 6px;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  color: #9aa2b0;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  transition: background 0.15s, color 0.15s;
+}
+.theme-toggle-btn:hover { background: rgba(255,255,255,0.10); color: #fff; }
+.theme-toggle-btn.collapsed-mode {
+  width: calc(100% - 16px);
+  justify-content: center;
+  padding: 9px 0;
+}
+
+/* ─── Sticky section heads ─────────────────────────────────────────── */
+.v2-root .section-head {
+  position: sticky;
+  top: 48px;
+  z-index: 9;
+  background: var(--bg);
+  padding-top: 4px;
+  padding-bottom: 4px;
+  margin-bottom: 12px;
+}
+/* Light theme override */
+html.theme-light .v2-root .section-head {
+  background: var(--bg);
+}
+
+/* ─── Skeleton / pulse loader ──────────────────────────────────────── */
+@keyframes skeleton-pulse {
+  0%   { opacity: 0.45; }
+  50%  { opacity: 0.9; }
+  100% { opacity: 0.45; }
+}
+.skeleton {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.07);
+}
+html.theme-light .skeleton {
+  background: rgba(0,0,0,0.09);
+}
+.skeleton-text  { height: 12px; border-radius: 4px; }
+.skeleton-title { height: 22px; border-radius: 4px; }
+.skeleton-card  { border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); padding: 20px; }
+html.theme-light .skeleton-card { background: #fff; border-color: rgba(0,0,0,0.08); }
+
+/* ─── Table density toggle ─────────────────────────────────────────── */
+/* default = comfortable (existing styles unchanged) */
+/* compact mode — toggled by adding class to .v2-root */
+html.density-compact .v2-root table.data td,
+html.density-compact .v2-root table.data th {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+html.density-compact .v2-root .bar-row {
+  padding: 5px 0;
+  min-height: 28px;
+}
+html.density-compact .v2-root .kpi-grid {
+  gap: 8px;
+}
+html.density-compact .v2-root .card-pad,
+html.density-compact .v2-root .card-pad-lg {
+  padding: 12px 16px;
+}
+
+/* ─── Mobile: detail page grids ───────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Hero stat cards → 2-column */
+  .v2-root .main [style*="gridTemplateColumns: repeat(4"] {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  /* Two-col layouts → single col */
+  .v2-root .two-col,
+  .v2-root .two-col-even {
+    grid-template-columns: 1fr !important;
+  }
+  /* Flex stat rows → wrap */
+  .v2-root .main > div > div[style*="display: flex"] {
+    flex-wrap: wrap;
+  }
+  /* Section head sticky offset = 0 on mobile (topbar collapses) */
+  .v2-root .section-head {
+    top: 0;
+  }
+  /* Table horizontal scroll */
+  .v2-root .table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Hero flex → column on mobile */
+  .v2-root .main [style*="display: flex"][style*="justifyContent: space-between"] {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+  /* Page head actions wrap */
+  .v2-root .page-head .actions {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .v2-root .main {
+    padding: 16px 14px 48px;
+  }
+  .v2-root .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ─── Color-scheme: tells browser which native UI (scrollbars, inputs) to render ── */
+html:not(.theme-light) { color-scheme: dark; }
+html.theme-light        { color-scheme: light; }
+
+/* ─── Light theme — comprehensive pass ─────────────────────────────── */
+
+/* Ambient background gradient — tone down for light mode */
+html.theme-light .v2-root .app-bg {
+  background:
+    radial-gradient(900px 600px at 12% -10%, rgba(245,230,37,0.06), transparent 60%),
+    radial-gradient(800px 600px at 95% 8%,  rgba(129,140,248,0.05), transparent 60%),
+    radial-gradient(700px 500px at 60% 95%, rgba(34,197,94,0.04),  transparent 60%);
+}
+
+/* Dot grid: light dots on light bg = invisible — switch to dark dots */
+html.theme-light .v2-root .dot-grid {
+  background-image: radial-gradient(rgba(0,0,0,0.06) 1px, transparent 1px);
+}
+
+/* Topbar backdrop */
+html.theme-light .v2-root .topbar { background: transparent; }
+
+/* Date pickers */
+html.theme-light .v2-root .drd-select {
+  background: #fff;
+  border-color: rgba(0,0,0,0.15);
+  color: var(--fg);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234b5563' stroke-width='2.5'><polyline points='6 9 12 15 18 9'/></svg>");
+}
+html.theme-light .v2-root .drd-select:hover { border-color: rgba(0,0,0,0.28); }
+html.theme-light .v2-root .drd-label-inline { color: var(--fg-4); }
+html.theme-light .v2-root .drd-ic { color: var(--fg-4); }
+html.theme-light .v2-root .drd-arrow { color: var(--fg-4); }
+
+/* Section sticky nav */
+html.theme-light .v2-root .section-nav {
+  background: rgba(240,242,248,0.95);
+  border-bottom-color: rgba(0,0,0,0.09);
+}
+html.theme-light .v2-root .snav-item { color: var(--fg-4); }
+html.theme-light .v2-root .snav-item:hover {
+  color: var(--fg);
+  background: rgba(0,0,0,0.05);
+}
+
+/* Column filter inputs */
+html.theme-light .v2-root .col-filter-input {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.12);
+  color: var(--fg);
+  -webkit-text-fill-color: var(--fg);
+  caret-color: var(--fg);
+}
+html.theme-light .v2-root .col-filter-input::placeholder { color: var(--fg-4); opacity: 0.7; }
+html.theme-light .v2-root .col-filter-input:focus { background: rgba(0,0,0,0.06); }
+
+/* Scrollbar */
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-track { background: rgba(0,0,0,0.04); }
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); }
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.35); }
+
+/* Chip filter buttons */
+html.theme-light .v2-root .chip {
+  background: #fff;
+  border-color: rgba(0,0,0,0.12);
+  color: var(--fg-3);
+}
+html.theme-light .v2-root .chip:hover { color: var(--fg); background: #f4f5fa; }
+html.theme-light .v2-root .chip-divider { background: rgba(0,0,0,0.1); }
+
+/* Sidebar badge */
+html.theme-light .v2-root .nav-item .badge {
+  background: rgba(0,0,0,0.09);
+  color: var(--fg-4);
+}
+
+/* Signal rows */
+html.theme-light .v2-root .signal {
+  border-color: rgba(0,0,0,0.06);
+}
+html.theme-light .v2-root .signal:hover {
+  background: rgba(0,0,0,0.03);
+  border-left-color: var(--yellow);
+}
+
+/* Trend track (mini bars in trend-row) */
+html.theme-light .v2-root .mtrack { background: rgba(0,0,0,0.06); }
+
+/* Brand filter dropdown popover */
+html.theme-light .v2-root .bfd-trigger {
+  background: #fff;
+  border-color: rgba(0,0,0,0.14);
+  color: var(--fg-3);
+}
+html.theme-light .v2-root .bfd-trigger:hover { border-color: rgba(0,0,0,0.24); color: var(--fg); }
+html.theme-light .v2-root .bfd-trigger.is-filtered { border-color: rgba(245,230,37,0.6); }
+html.theme-light .v2-root .bfd-popover {
+  background: #fff;
+  border-color: rgba(0,0,0,0.12);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+}
+html.theme-light .v2-root .bfd-head { border-bottom-color: rgba(0,0,0,0.08); }
+html.theme-light .v2-root .bfd-title { color: var(--fg-4); }
+html.theme-light .v2-root .bfd-item { border-color: rgba(0,0,0,0.05); color: var(--fg-2); }
+html.theme-light .v2-root .bfd-item:hover { background: rgba(0,0,0,0.03); }
+html.theme-light .v2-root .bfd-only {
+  color: var(--fg-4);
+  border-color: rgba(0,0,0,0.12);
+}
+html.theme-light .v2-root .bfd-only:hover { color: var(--fg); background: rgba(0,0,0,0.05); }
+html.theme-light .v2-root .bfd-clear {
+  color: var(--fg-3);
+  border-color: rgba(0,0,0,0.12);
+}
+
+/* Page head */
+html.theme-light .v2-root .page-head {
+  border-bottom-color: rgba(0,0,0,0.08);
+}
+html.theme-light .v2-root .page-head .eyebrow { color: var(--fg-4); }
+
+/* KPI mini cards */
+html.theme-light .v2-root .kpi { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+html.theme-light .v2-root .kpi .src { color: var(--fg-4); }
+
+/* Bar-row fills stay readable — just lighten the track */
+html.theme-light .v2-root .bar-row .val { color: var(--fg); }
+
+/* Inline code */
+html.theme-light .v2-root code {
+  background: rgba(0,0,0,0.07);
+  color: var(--fg-3);
+}
+
+/* Section info (?) button */
+html.theme-light .v2-root .si-btn { color: var(--fg-4); }
+html.theme-light .v2-root .si-btn:hover { color: var(--fg-2); }
+
+/* Footer */
+html.theme-light .v2-root .foot {
+  border-top-color: rgba(0,0,0,0.08);
+  color: var(--fg-4);
+}
+
+/* Sort-th hover */
+html.theme-light .v2-root th.sortable:hover { background: rgba(0,0,0,0.03); }
+html.theme-light .v2-root .col-filter-row th { background: #f2f4f9; }
+
+/* ─── Theme-aware inline-style variables ──────────────────────────────
+   These switch automatically so inline style={{ background: 'var(--wb-3)' }}
+   works in both dark and light mode without any per-component logic.
+   ─────────────────────────────────────────────────────────────────── */
+:root {
+  --wb-3:      rgba(255,255,255,0.03);
+  --wb-5:      rgba(255,255,255,0.05);
+  --wb-6:      rgba(255,255,255,0.06);
+  --wb-8:      rgba(255,255,255,0.08);
+  --wb-10:     rgba(255,255,255,0.10);
+  --wb-12:     rgba(255,255,255,0.12);
+  --wb-14:     rgba(255,255,255,0.14);
+  --wb-stroke: rgba(255,255,255,0.10);
+  --sticky-bg: rgba(13,17,23,0.95);
+}
+html.theme-light {
+  --wb-3:      rgba(0,0,0,0.025);
+  --wb-5:      rgba(0,0,0,0.04);
+  --wb-6:      rgba(0,0,0,0.05);
+  --wb-8:      rgba(0,0,0,0.07);
+  --wb-10:     rgba(0,0,0,0.09);
+  --wb-12:     rgba(0,0,0,0.10);
+  --wb-14:     rgba(0,0,0,0.12);
+  --wb-stroke: rgba(0,0,0,0.09);
+  --sticky-bg: rgba(240,242,248,0.95);
+  --line-2:    rgba(0,0,0,0.04);
+  --line:      rgba(0,0,0,0.08);
+}
+
+/* ─── Accent text: yellow in dark, dark-amber in light ─────────────── */
+:root { --text-accent: #F5E625; --text-accent-muted: rgba(245,230,37,0.75); }
+html.theme-light { --text-accent: #7c5200; --text-accent-muted: #a06c00; }
+
+/* Catch any remaining hardcoded #F5E625 text in cards/sections for light mode */
+html.theme-light .v2-root .card *[style*="F5E625"],
+html.theme-light .v2-root .section-head *[style*="F5E625"],
+html.theme-light .v2-root .card-pad *[style*="F5E625"],
+html.theme-light .v2-root .card-pad-lg *[style*="F5E625"] {
+  color: var(--text-accent) !important;
+}
+/* Badge/pill backgrounds using yellow alpha stay subtle but keep border visible */
+html.theme-light .v2-root *[style*="245,230,37"] {
+  border-color: rgba(140,90,0,0.4) !important;
+  background: rgba(140,90,0,0.10) !important;
+}
+
+:root {
+  --text-accent-bg:     rgba(245,230,37,0.12);
+  --text-accent-border: rgba(245,230,37,0.3);
+}
+html.theme-light {
+  --text-accent-bg:     rgba(140,90,0,0.10);
+  --text-accent-border: rgba(140,90,0,0.35);
+}
+
+/* ── Print / PDF export ─────────────────────────────────────────── */
+@media print {
+  .v2-root .sidebar,
+  .v2-root .topbar,
+  .v2-root .collapse-btn,
+  .v2-root .theme-toggle-btn,
+  .v2-root .foot,
+  .v2-root .filter-banner { display: none !important; }
+  .v2-root .main { margin-left: 0 !important; }
+  .v2-root .card { break-inside: avoid; border: 1px solid #ccc !important; background: #fff !important; }
+  body { background: #fff !important; color: #000 !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ANIMATIONS
+   All transforms/opacity only — no layout thrash. Each has a
+   prefers-reduced-motion fallback at the bottom.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Keyframes ──────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94) translateY(-8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes popIn {
+  0%   { opacity: 0; transform: scale(0.88); }
+  70%  { transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmerSlide {
+  from { background-position: -400px 0; }
+  to   { background-position:  400px 0; }
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes numberPop {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+@keyframes badgeBounce {
+  0%   { transform: scale(0); }
+  60%  { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* ── Page content entrance ──────────────────────────────────────── */
+/* PageHead fades up */
+.v2-root .page-head {
+  animation: fadeInUp 0.35s ease both;
+}
+/* Filter banner slides down */
+.v2-root .filter-banner {
+  animation: slideDown 0.22s ease both;
+}
+
+/* ── KPI grid — staggered pop-in ────────────────────────────────── */
+.v2-root .kpi-grid .kpi { animation: popIn 0.3s ease both; }
+.v2-root .kpi-grid .kpi:nth-child(1) { animation-delay: 0ms; }
+.v2-root .kpi-grid .kpi:nth-child(2) { animation-delay: 55ms; }
+.v2-root .kpi-grid .kpi:nth-child(3) { animation-delay: 110ms; }
+.v2-root .kpi-grid .kpi:nth-child(4) { animation-delay: 165ms; }
+.v2-root .kpi-grid .kpi:nth-child(5) { animation-delay: 220ms; }
+.v2-root .kpi-grid .kpi:nth-child(6) { animation-delay: 275ms; }
+
+/* ── Cards — staggered fade up ──────────────────────────────────── */
+.v2-root section > .card,
+.v2-root section > div > .card {
+  animation: fadeInUp 0.38s ease both;
+}
+.v2-root section:nth-child(1) .card { animation-delay: 60ms; }
+.v2-root section:nth-child(2) .card { animation-delay: 100ms; }
+.v2-root section:nth-child(3) .card { animation-delay: 140ms; }
+.v2-root section:nth-child(4) .card { animation-delay: 180ms; }
+.v2-root section:nth-child(5) .card { animation-delay: 220ms; }
+
+/* ── Table rows — stagger on load ───────────────────────────────── */
+.v2-root table.data tbody tr {
+  animation: fadeIn 0.2s ease both;
+}
+.v2-root table.data tbody tr:nth-child(1)  { animation-delay: 20ms; }
+.v2-root table.data tbody tr:nth-child(2)  { animation-delay: 40ms; }
+.v2-root table.data tbody tr:nth-child(3)  { animation-delay: 60ms; }
+.v2-root table.data tbody tr:nth-child(4)  { animation-delay: 80ms; }
+.v2-root table.data tbody tr:nth-child(5)  { animation-delay: 100ms; }
+.v2-root table.data tbody tr:nth-child(6)  { animation-delay: 120ms; }
+.v2-root table.data tbody tr:nth-child(7)  { animation-delay: 140ms; }
+.v2-root table.data tbody tr:nth-child(8)  { animation-delay: 160ms; }
+.v2-root table.data tbody tr:nth-child(n+9){ animation-delay: 180ms; }
+
+/* ── Nav items — smooth active state ───────────────────────────── */
+.v2-root .nav-item {
+  transition: background 180ms ease, color 180ms ease, padding-left 180ms ease;
+}
+.v2-root .nav-item.active {
+  animation: fadeIn 0.2s ease both;
+}
+
+/* ── Bar rows — entrance ────────────────────────────────────────── */
+.v2-root .bar-row {
+  animation: fadeIn 0.25s ease both;
+}
+
+/* ── Bar fill width animations ──────────────────────────────────── */
+.v2-root .bar-row .fill {
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── MiniKpi value — pop when updated ──────────────────────────── */
+.v2-root .kpi .val {
+  transition: color 0.3s ease;
+}
+.v2-root .kpi .val:hover {
+  animation: numberPop 0.3s ease;
+}
+
+/* ── Buttons — press feedback ───────────────────────────────────── */
+.v2-root .btn:active,
+.v2-root button:not(:disabled):active {
+  transform: scale(0.96);
+  transition: transform 80ms ease;
+}
+
+/* ── Sidebar brand mark — subtle pulse on load ──────────────────── */
+.v2-root .brand-mark {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.v2-root .brand-mark:hover {
+  transform: scale(1.08);
+  box-shadow: 0 0 16px rgba(245,230,37,0.5);
+}
+
+/* ── Sidebar collapse toggle ────────────────────────────────────── */
+.v2-root .collapse-btn {
+  transition: background 180ms, color 180ms, border-color 180ms;
+}
+
+/* ── Crisis badge — bounce in ───────────────────────────────────── */
+.v2-root .crisis-badge {
+  animation: badgeBounce 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+/* ── Command palette dialog ─────────────────────────────────────── */
+.v2-root .cmd-dialog {
+  animation: scaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Brand filter popover ───────────────────────────────────────── */
+.v2-root .bfd-popover {
+  animation: slideDown 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Detail page hero fade up ───────────────────────────────────── */
+.v2-root .main [style*="gradient"] {
+  animation: fadeIn 0.4s ease both;
+}
+
+/* ── Scatter/bubble chart dots ──────────────────────────────────── */
+.v2-root .scatter-dot {
+  transition: r 200ms ease, filter 200ms ease, opacity 200ms ease;
+}
+
+/* ── Line chart paths ───────────────────────────────────────────── */
+.v2-root .scatter-wrap path {
+  transition: stroke-width 200ms ease, opacity 200ms ease, filter 200ms ease;
+}
+
+/* ── Pill / badge pop ───────────────────────────────────────────── */
+.v2-root .pill {
+  transition: background 200ms ease, color 200ms ease, border-color 200ms ease;
+}
+
+/* ── Back to top button ─────────────────────────────────────────── */
+.v2-root .back-to-top-btn {
+  animation: slideUp 0.2s ease both;
+  transition: background 150ms, transform 150ms;
+}
+
+/* ── Pagination buttons ─────────────────────────────────────────── */
+.v2-root .pagination-btn {
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms ease;
+}
+.v2-root .pagination-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+.v2-root .pagination-btn:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+/* ── Modal overlays — fade + scale ─────────────────────────────── */
+/* Targets the fixed overlay divs used in TikTok, Twitter, Instagram modals */
+.v2-root [style*="position: fixed"][style*="z-index: 200"] > div,
+.v2-root [style*="position: fixed"][style*="zIndex: 200"] > div {
+  animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Section info popup ─────────────────────────────────────────── */
+.v2-root .si-popup {
+  animation: scaleIn 0.15s ease both;
+  transform-origin: top left;
+}
+
+/* ── Breadcrumb ─────────────────────────────────────────────────── */
+.v2-root nav[aria-label="Breadcrumb"] {
+  animation: fadeIn 0.3s ease both;
+}
+
+/* ── Heatmap cells hover scale (already defined — add transition) ── */
+.v2-root .cadence-cell {
+  transition: background 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+
+/* ── Section head sticky — smooth background ────────────────────── */
+.v2-root .section-head {
+  transition: background 200ms ease;
+}
+
+/* ══ prefers-reduced-motion — strip everything to instant ══════════ */
+@media (prefers-reduced-motion: reduce) {
+  .v2-root *,
+  .v2-root *::before,
+  .v2-root *::after {
+    animation-duration:   0.01ms !important;
+    animation-delay:      0ms    !important;
+    transition-duration:  0.01ms !important;
+    scroll-behavior:      auto   !important;
+  }
+}
+
+/* ── Skeleton shimmer loading ──────────────────────────────────────── */
+@keyframes shimmer { 0%,100% { opacity:0.6 } 50% { opacity:1 } }
+@keyframes shimmerSlide { 0% { transform:translateX(-100%) } 100% { transform:translateX(100%) } }
+.skeleton { background:rgba(255,255,255,0.04); border-radius:6px; animation:shimmer 1.5s ease-in-out infinite; }
+.skeleton-text { height:12px; border-radius:3px; background:rgba(255,255,255,0.06); animation:shimmer 1.5s ease-in-out infinite; }
+.skeleton-chart { height:200px; border-radius:8px; position:relative; overflow:hidden; background:rgba(255,255,255,0.03); }
+.skeleton-chart::after { content:''; position:absolute; inset:0; background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.05) 50%,transparent 100%); animation:shimmerSlide 1.8s ease-in-out infinite; }
+
+/* ── Empty states ──────────────────────────────────────────────────── */
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:48px 24px; gap:12px; text-align:center; }
+.empty-state-icon { font-size:40px; opacity:0.35; }
+.empty-state-title { font-size:14px; font-weight:700; color:var(--fg-3); }
+.empty-state-sub { font-size:12px; color:var(--fg-4); max-width:280px; line-height:1.5; }
+
+/* ── Keyboard shortcut hints ───────────────────────────────────────── */
+kbd.shortcut-hint { display:inline-block; font-size:10px; padding:1px 5px; border-radius:3px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.14); color:var(--fg-4); font-family:ui-monospace,monospace; line-height:1.4; }
+
+/* ── Light mode: fix any remaining elements that still look dark ──── */
+
+/* Brand hero gradient sections on detail pages */
+html.theme-light .v2-root [style*="linear-gradient"] { color: var(--fg); }
+
+/* Sticky table header — catch remaining inline bg  */
+html.theme-light .v2-root table thead tr { background: var(--surface) !important; }
+html.theme-light .v2-root table thead th { background: var(--surface); }
+
+/* Modal / overlay panels */
+html.theme-light .v2-root [class*="modal"],
+html.theme-light .v2-root [class*="dialog"] { background: var(--surface); border-color: var(--line); }
+
+/* Topbar date-picker area */
+html.theme-light .v2-root .topbar { background: rgba(240,242,248,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(0,0,0,0.07); }
+
+/* Sidebar links / nav items in light */
+html.theme-light .v2-root .nav-item { color: var(--fg-3); }
+html.theme-light .v2-root .nav-item:hover { background: rgba(0,0,0,0.04); color: var(--fg); }
+html.theme-light .v2-root .nav-item.active { background: rgba(34,197,94,0.10); color: var(--joola); }
+
+/* Footer */
+html.theme-light .v2-root .foot { border-top-color: rgba(0,0,0,0.08); color: var(--fg-4); }
+
+/* CmdK palette in light mode */
+html.theme-light .v2-root ~ * [style*="#141821"],
+html.theme-light [style*="background: 'var(--surface)'"] { background: #ffffff; }
+
+/* Text that was white on dark — ensure it reads on light */
+html.theme-light .v2-root h1,
+html.theme-light .v2-root h2,
+html.theme-light .v2-root h3,
+html.theme-light .v2-root h4,
+html.theme-light .v2-root h5,
+html.theme-light .v2-root h6 { color: var(--fg); }
+
+/* Pills / badges that were semi-transparent white */
+html.theme-light .v2-root .pill-ghost { background: rgba(0,0,0,0.06); color: var(--fg-3); border-color: rgba(0,0,0,0.10); }
+html.theme-light .v2-root kbd.shortcut-hint { background: rgba(0,0,0,0.06); border-color: rgba(0,0,0,0.12); }
+
+/* Skeleton in light */
+html.theme-light .skeleton { background: rgba(0,0,0,0.05); }
+html.theme-light .skeleton-text { background: rgba(0,0,0,0.07); }
+html.theme-light .skeleton-chart { background: rgba(0,0,0,0.03); }
+
+/* ── Light mode: all inputs, textareas, selects project-wide ─────── */
+html.theme-light .v2-root input,
+html.theme-light .v2-root input[type="text"],
+html.theme-light .v2-root input[type="search"],
+html.theme-light .v2-root input[type="date"],
+html.theme-light .v2-root input[type="number"],
+html.theme-light .v2-root textarea,
+html.theme-light .v2-root select {
+  color: var(--fg) !important;
+  -webkit-text-fill-color: var(--fg) !important;
+  caret-color: var(--fg);
+  background-color: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.14);
+}
+html.theme-light .v2-root input::placeholder,
+html.theme-light .v2-root textarea::placeholder { color: var(--fg-4) !important; opacity: 0.75; }
+html.theme-light .v2-root input:focus,
+html.theme-light .v2-root textarea:focus,
+html.theme-light .v2-root select:focus { background-color: rgba(0,0,0,0.06); outline: none; }
+
+/* Search / filter inputs that have a dark semi-transparent bg in dark mode */
+html.theme-light .v2-root .table-search input,
+html.theme-light .v2-root .cmd-input { background: rgba(0,0,0,0.04) !important; }
+
+/* ── Light mode: fix remaining rgba-white CSS rules ──────────────── */
+
+/* Button hover border */
+html.theme-light .v2-root .btn:hover,
+html.theme-light .v2-root .select:hover { border-color: rgba(0,0,0,0.22); }
+
+/* Scrollbar thumbs */
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.18); }
+html.theme-light .v2-root .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.32); }
+html.theme-light .v2-root *::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+html.theme-light .v2-root { scrollbar-color: rgba(0,0,0,0.2) transparent; }
+
+/* Date picker focus ring */
+html.theme-light .v2-root .drd-wrap:focus-within { border-color: rgba(0,0,0,0.28); }
+
+/* Topbar border/separator */
+html.theme-light .v2-root .topbar { border-bottom: 1px solid rgba(0,0,0,0.08); }
+
+/* Dropdown items */
+html.theme-light .v2-root .cmd-results::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); }
+
+/* Tables: row borders that use rgba-white */
+html.theme-light .v2-root .data tbody tr { border-bottom-color: rgba(0,0,0,0.05); }
+html.theme-light .v2-root .section-nav { border-color: rgba(0,0,0,0.08); }
+
+/* Section nav active item */
+html.theme-light .v2-root .section-nav a { color: var(--fg-4); }
+html.theme-light .v2-root .section-nav a:hover { color: var(--fg); background: rgba(0,0,0,0.04); }
+html.theme-light .v2-root .section-nav a.active { color: var(--joola); background: rgba(34,197,94,0.08); }
+
+/* BrandFilterDropdown */
+html.theme-light .v2-root .bf-wrap { background: #fff; border-color: rgba(0,0,0,0.09); }
+html.theme-light .v2-root .bf-list { background: #fff; }
+
+/* MiniKpi delta colors remain readable */
+html.theme-light .v2-root .delta.up { color: #16a34a; }
+html.theme-light .v2-root .delta.down { color: #dc2626; }
+
+/* Pill ghost in light */
+html.theme-light .v2-root .pill { border-color: rgba(0,0,0,0.10); }
+
+/* ─── Overview page animations ───────────────────────────────────────────── */
+
+@keyframes ov-fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ov-scale-pop {
+  from { opacity: 0; transform: scale(0.93) translateY(14px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes ov-slide-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ov-num-glow {
+  0%   { filter: brightness(1); }
+  40%  { filter: brightness(1.55) drop-shadow(0 0 10px currentColor); }
+  100% { filter: brightness(1); }
+}
+
+/* Hero eyebrow + title entrance */
+.ov-eyebrow {
+  opacity: 0;
+  animation: ov-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) 0ms forwards;
+}
+.ov-title {
+  opacity: 0;
+  animation: ov-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) 80ms forwards;
+}
+
+/* KPI card staggered pop */
+.ov-kpi {
+  opacity: 0;
+  animation: ov-scale-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--ov-d, 0ms);
+}
+
+/* KPI number glow when count-up finishes */
+.ov-num-done {
+  animation: ov-num-glow 0.75s ease forwards;
+}
+
+/* Scroll-reveal wrapper — invisible until .is-vis added via IntersectionObserver */
+.ov-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity  0.55s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--ov-d, 0ms);
+}
+.ov-reveal.is-vis {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Quick-nav button stagger */
+.ov-nav-btn {
+  opacity: 0;
+  animation: ov-scale-pop 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: var(--ov-d, 0ms);
+}
+
+/* Section title slide-in */
+.ov-section-label {
+  opacity: 0;
+  animation: ov-slide-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) 60ms forwards;
 }

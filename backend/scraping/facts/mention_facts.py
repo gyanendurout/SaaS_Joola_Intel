@@ -28,67 +28,78 @@ PURCHASE_INTENT_THRESHOLD = 0.6
 
 
 # (channel, table, select_cols, ts_col, country_col, snippet_fn)
+# Each tuple: (channel, table, select_cols, ts_col, country_col, snippet_fn, engagement_col, link_col)
+# engagement_col: column name for likes/upvotes/score (or None)
+# link_col:       column name for the direct post/comment URL (or None)
 SOURCES: list[tuple] = [
     ("reddit", "reddit_mentions",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
      "competitor_switch_from,competitor_switch_to,country_code,post_title,"
-     "content_text,posted_at,enriched_at",
+     "content_text,upvotes,post_url,posted_at,enriched_at",
      "posted_at", "country_code",
-     lambda r: ((r.get("post_title") or "") + " — " + (r.get("content_text") or ""))[:280]),
+     lambda r: ((r.get("post_title") or "") + " — " + (r.get("content_text") or ""))[:280],
+     "upvotes", "post_url"),
 
     ("reddit_comment", "reddit_comments",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "competitor_switch_from,competitor_switch_to,comment_text,posted_at,enriched_at",
+     "competitor_switch_from,competitor_switch_to,comment_text,upvotes,posted_at,enriched_at",
      "posted_at", None,
-     lambda r: (r.get("comment_text") or "")[:280]),
+     lambda r: (r.get("comment_text") or "")[:280],
+     "upvotes", None),
 
     ("ig_comment", "ig_comments",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "comment_text,posted_at,enriched_at",
+     "comment_text,comment_likes,post_url,posted_at,enriched_at",
      "posted_at", None,
-     lambda r: (r.get("comment_text") or "")[:280]),
+     lambda r: (r.get("comment_text") or "")[:280],
+     "comment_likes", "post_url"),
 
     ("yt_comment", "yt_comments",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "comment_text,posted_at,enriched_at",
+     "comment_text,like_count,video_url,posted_at,enriched_at",
      "posted_at", None,
-     lambda r: (r.get("comment_text") or "")[:280]),
+     lambda r: (r.get("comment_text") or "")[:280],
+     "like_count", "video_url"),
 
     ("x", "x_posts",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "text,posted_at,enriched_at",
+     "text,like_count,post_url,posted_at,enriched_at",
      "posted_at", None,
-     lambda r: (r.get("text") or "")[:280]),
+     lambda r: (r.get("text") or "")[:280],
+     "like_count", "post_url"),
 
     # tiktok_videos stores the caption in `text` (not `description`) — see
     # backend/scraping/sources/tiktok/scrape_videos.py
     ("tiktok", "tiktok_videos",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "text,posted_at,enriched_at",
+     "text,play_count,video_url,posted_at,enriched_at",
      "posted_at", None,
-     lambda r: (r.get("text") or "")[:280]),
+     lambda r: (r.get("text") or "")[:280],
+     "play_count", "video_url"),
 
     # tiktok_comments table added by migration 014; mirrors ig_comments/yt_comments
     # shape so the existing enrichment pipeline ingests it without schema work.
     ("tiktok_comment", "tiktok_comments",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "comment_text,posted_at,enriched_at",
+     "comment_text,like_count,posted_at,enriched_at",
      "posted_at", None,
-     lambda r: (r.get("comment_text") or "")[:280]),
+     lambda r: (r.get("comment_text") or "")[:280],
+     "like_count", None),
 
     ("x_influencer", "influencer_x_posts",
      "id,brand_id,influencer_id,sentiment_score,sentiment_label,is_crisis,"
      "is_opportunity,purchase_intent_score,brands_mentioned,products_mentioned,"
-     "text,posted_at,enriched_at",
+     "text,like_count,post_url,posted_at,enriched_at",
      "posted_at", None,
-     lambda r: (r.get("text") or "")[:280]),
+     lambda r: (r.get("text") or "")[:280],
+     "like_count", "post_url"),
 
     # product_reviews — added by migration 016. Unlike other channels, the
     # product_id is already known at scrape time (we know which product the
@@ -98,9 +109,10 @@ SOURCES: list[tuple] = [
     ("product_review", "product_reviews",
      "id,brand_id,product_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "review_text,review_title,posted_at,enriched_at",
+     "review_text,review_title,review_url,posted_at,enriched_at",
      "posted_at", None,
-     lambda r: ((r.get("review_title") or "") + " — " + (r.get("review_text") or ""))[:280]),
+     lambda r: ((r.get("review_title") or "") + " — " + (r.get("review_text") or ""))[:280],
+     None, "review_url"),
 ]
 
 
@@ -160,6 +172,8 @@ def _build_for_channel(
     snippet_fn: Callable[[dict], str],
     brand_map: dict[str, str], product_map: dict[str, str], athlete_map: dict[str, str],
     brand_filter_ids: set[str] | None,
+    engagement_col: str | None = None,
+    link_col: str | None = None,
 ) -> tuple[int, int]:
     _clear_channel_facts(channel)
     rows = _fetch_enriched(table, select)
@@ -217,6 +231,9 @@ def _build_for_channel(
             channel == "reddit" and (r.get("competitor_switch_from") or r.get("competitor_switch_to"))
         )
 
+        engagement = int(r.get(engagement_col) or 0) if engagement_col else 0
+        link_url   = (r.get(link_col) or "") if link_col else ""
+
         for bid in brand_ids:
             for pid in product_ids:
                 facts.append({
@@ -235,6 +252,8 @@ def _build_for_channel(
                     "country_code":         country,
                     "text_snippet":         snippet_fn(r),
                     "posted_at":            r.get(ts_col),
+                    "engagement":           engagement,
+                    "link_url":             link_url or None,
                 })
 
         if channel == "reddit":
@@ -297,11 +316,12 @@ def run(ctx: dict[str, Any]) -> int:
         return 0
 
     total_facts = total_switches = 0
-    for channel, table, select, ts_col, country_col, snippet_fn in SOURCES:
+    for channel, table, select, ts_col, country_col, snippet_fn, engagement_col, link_col in SOURCES:
         try:
             f, s = _build_for_channel(
                 channel, table, select, ts_col, country_col, snippet_fn,
                 brand_map, product_map, athlete_map, brand_filter_ids,
+                engagement_col, link_col,
             )
             log.info("[%s] %d facts, %d switch_events", channel, f, s)
             total_facts += f

@@ -7,10 +7,15 @@ import { BrandFilterDropdown } from '@/components/v2/BrandFilterDropdown'
 import { DateRangeProvider } from '@/lib/v2/DateRangeContext'
 import { DateRangePicker } from '@/components/v2/DateRangePicker'
 import { AgentationFeedback } from '@/components/v2/AgentationFeedback'
+import { CommandPalette } from '@/components/v2/CommandPalette'
+import { BackToTop } from '@/components/v2/BackToTop'
+import { LayoutClientExtras } from '@/components/v2/LayoutClientExtras'
+import { ThemeToggle } from '@/components/v2/ThemeToggle'
+import { DensityToggle } from '@/components/v2/DensityToggle'
 
 export const metadata: Metadata = {
-  title: 'JOOLA INTEL — Executive Briefing',
-  description: 'Pickleball competitive intelligence — Executive design',
+  title: 'JOOLA INTEL — Competitive Intelligence',
+  description: 'Pickleball competitive intelligence dashboard — track 11 brands across social, ads, products and community signals.',
 }
 
 export default function V2Layout({ children }: { children: React.ReactNode }) {
@@ -21,9 +26,13 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
       <BrandFilterProvider>
        <DateRangeProvider>
         <div className="topbar">
+          <ThemeToggle />
+          <DensityToggle />
           <DateRangePicker />
           <BrandFilterDropdown />
+          <LayoutClientExtras />
         </div>
+        <CommandPalette />
         <div className="shell">
           <V2Sidebar />
           <main className="main">
@@ -31,13 +40,14 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
               {children}
               <footer className="foot">
                 <div>
-                  <strong style={{ color: 'var(--fg-2)' }}>JOOLA INTEL</strong> · live · 17 tables ·
-                  refreshed Mondays 7:00 AM IST
+                  <strong style={{ color: 'var(--fg-2)' }}>JOOLA INTEL</strong> · live data ·
+                  <span title="Data is scraped and enriched every Monday at 07:00 IST"> refreshed Mondays 07:00 IST</span>
                 </div>
                 <FooterLinks />
               </footer>
             </div>
           </main>
+          <BackToTop />
         </div>
        </DateRangeProvider>
       </BrandFilterProvider>

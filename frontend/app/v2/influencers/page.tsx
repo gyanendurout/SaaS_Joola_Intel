@@ -25,6 +25,8 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useReveal, revealCls } from '@/lib/v2/animations'
+import { useRouter } from 'next/navigation'
 import {
   PageHead, MiniKpi, SortTh, ColumnFilter, LoadingPage, SectionInfo,
   FilterBanner, pgColor, pgName,
@@ -33,6 +35,8 @@ import { fmt } from '@/components/v2/charts'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL, type DateRangeKey } from '@/lib/v2/DateRangeContext'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
+import { ScrollTable } from '@/components/v2/ScrollTable'
+import { BrandCell } from '@/components/v2/BrandCell'
 import {
   fetchInfluencerIntel,
   fetchAthleteImpact,
@@ -100,6 +104,19 @@ const STATUS_LABEL: Record<RosterRow['status'], string> = {
   'roster-not-confirmed': 'Roster not confirmed',
 }
 
+const STATUS_DESC: Record<RosterRow['status'], string> = {
+  'business-mapping': 'We know this player is sponsored by this brand based on our records, but we haven\'t yet seen it confirmed on their social media posts or official athlete pages.',
+  'confirmed-from-data': 'This sponsorship has been confirmed — the player has publicly posted or been listed as a sponsored athlete for this brand on social media.',
+  'needs-verification': 'This player may be linked to more than one brand, or there\'s conflicting information. Someone should manually check which brand actually sponsors them.',
+  'roster-not-confirmed': 'This player is in our records as a sponsored athlete, but we couldn\'t find them on the brand\'s public influencer or athlete pages. The deal may have ended, or their profile name may have changed.',
+}
+
+const VERIFICATION_DESC: Record<string, string> = {
+  'verified': 'We found this player\'s social media account and it matches our records exactly. You can trust the profile links shown here.',
+  'matched': 'We found a social media account that looks like this player, but the name was slightly different. The links are probably correct — worth a quick check.',
+  'unmatched': 'We couldn\'t find a confirmed social media account for this player. The profile links shown (if any) are our best guess and may not be accurate.',
+}
+
 function tierFromFollowers(n: number): { label: string; color: string } {
   if (n >= 500_000) return { label: 'MEGA', color: '#F5E625' }
   if (n >= 100_000) return { label: 'MACRO', color: '#22c55e' }
@@ -133,6 +150,7 @@ export default function InfluencerIntelPage() {
   const [competitorThreats, setCompetitorThreats] = useState<CompetitorThreatRow[]>([])
   const [pullJoolaOnly, setPullJoolaOnly] = useState(false)
 
+  const router = useRouter()
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, setRange, mode, customFrom, customTo, setCustomFrom, setCustomTo, effectiveFrom, effectiveTo } = useDateRange()
 
@@ -145,6 +163,10 @@ export default function InfluencerIntelPage() {
   // ── Sort state per table ───────────────────────────────────────────
   const [rosterSort, setRosterSort] = useState<{ key: keyof RosterRow | null; dir: 'asc' | 'desc' }>({ key: 'brandSlug', dir: 'asc' })
   const [rosterColFilter, setRosterColFilter] = useState<Record<string, string>>({})
+  const [drillRoster, setDrillRoster] = useState<RosterRow | null>(null)
+  const [drillContent, setDrillContent] = useState<InfluencerPostRow | null>(null)
+  const [drillImpact, setDrillImpact] = useState<AthleteImpactRow | null>(null)
+  const [drillRosterPosts, setDrillRosterPosts] = useState<{ player: string; posts: InfluencerPostRow[] } | null>(null)
   const [attentionSort, setAttentionSort] = useState<{ key: keyof PlatformAttention | null; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' })
   const [attentionColFilter, setAttentionColFilter] = useState<Record<string, string>>({})
   const [perfSort, setPerfSort] = useState<{ key: keyof InfluencerRow | null; dir: 'asc' | 'desc' }>({ key: 'engRate', dir: 'desc' })
@@ -323,87 +345,170 @@ export default function InfluencerIntelPage() {
       .filter(p => p.reach > 0 && p.er > 0)
   }, [data, filteredBrands, isFiltered])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
   if (error || !data) {
     return (
       <div style={{ padding: '80px 32px', textAlign: 'center' }}>
         <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error || 'No data'}</div>
-        <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+        <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
       </div>
     )
   }
 
   return (
     <>
+      {drillRosterPosts && (
+        <PlayerPostsDialog
+          player={drillRosterPosts.player}
+          posts={drillRosterPosts.posts}
+          onPostClick={(p) => { setDrillRosterPosts(null); setDrillContent(p) }}
+          onClose={() => setDrillRosterPosts(null)}
+        />
+      )}
+      {drillRoster && (() => {
+        const allPosts = filteredContent.filter(p => p.athleteName === drillRoster.player).sort((a, b) => b.engagement - a.engagement)
+        return (
+          <RosterDetailDialog
+            row={drillRoster}
+            brands={brands}
+            attention={filteredAttention.find(a => a.player === drillRoster.player && a.brandSlug === drillRoster.brandSlug) || null}
+            influencer={filteredInfluencers.find(i => i.name === drillRoster.player && i.brandSlug === drillRoster.brandSlug) || null}
+            topPosts={allPosts.slice(0, 3)}
+            totalPosts={allPosts.length}
+            onViewAllPosts={() => { setDrillRoster(null); setDrillRosterPosts({ player: drillRoster.player, posts: allPosts }) }}
+            onPostClick={(p) => { setDrillRoster(null); setDrillContent(p) }}
+            onClose={() => setDrillRoster(null)}
+          />
+        )
+      })()}
+      {drillContent && (
+        <ContentDetailDialog post={drillContent} brands={brands} onClose={() => setDrillContent(null)} />
+      )}
+      {drillImpact && (
+        <ImpactDetailDialog row={drillImpact} brands={brands} onClose={() => setDrillImpact(null)} />
+      )}
       <PageHead title="INFLUENCER INTEL" />
       <FilterBanner />
+
+      {/* ── Sticky section nav ── */}
+      <nav className="ov-page-enter" style={{
+        position: 'sticky', top: 0, zIndex: 40,
+        background: 'var(--bg)', backdropFilter: 'blur(8px)',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        overflowX: 'auto', whiteSpace: 'nowrap',
+        padding: '0 4px', marginBottom: 20,
+        scrollbarWidth: 'none',
+      }}>
+        <div style={{ display: 'inline-flex', gap: 2, padding: '4px 0' }}>
+          {[
+            ['#roster', 'Roster'],
+            ['#impact-map', 'Impact Map'],
+            ['#attention', 'Attention'],
+            ['#performance', 'Performance'],
+            ['#brand-strength', 'Brand Strength'],
+            ['#top-content', 'Top Content'],
+            ['#community-mentions', 'Community'],
+            ['#joola-focus', 'JOOLA Focus'],
+            ['#player-paddle', 'Player↔Paddle'],
+            ['#coverage', 'Coverage'],
+            ['#athlete-impact', 'Impact Score'],
+            ['#sponsored-vs-organic', 'Sponsored vs Organic'],
+          ].map(([href, label]) => (
+            <a key={href} href={href}
+              style={{ fontSize: 11, fontWeight: 600, padding: '6px 12px', borderRadius: 6, color: 'var(--fg-4)', textDecoration: 'none', transition: 'color 0.15s, background 0.15s', whiteSpace: 'nowrap' }}
+              onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.color = 'var(--fg)'; el.style.background = 'rgba(255,255,255,0.06)' }}
+              onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.color = 'var(--fg-4)'; el.style.background = '' }}>
+              {label}
+            </a>
+          ))}
+        </div>
+      </nav>
 
       {/* ── Section 1 — Summary strip ─────────────────────────── */}
       {summary && (
         <section style={{ marginBottom: 16 }}>
           <div style={{
-            display: 'flex', flexWrap: 'wrap', gap: 22, alignItems: 'center',
+            display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-evenly',
             padding: '12px 16px', borderRadius: 10,
             background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.20)',
             fontSize: 12, color: 'var(--fg-2)',
           }}>
-            <SummaryStat label="Sponsored players" value={summary.sponsoredPlayers} accent="#22c55e" />
-            <SummaryStat label="Brands" value={summary.activeBrands} />
-            <SummaryStat label="Platforms with data" value={summary.platformsWithData} />
-            <SummaryStat label="Player signals" value={fmt(summary.playerSignals)} />
-            <SummaryStat label="JOOLA players" value={summary.joolaPlayers} accent="#22c55e" />
-            <SummaryStat label="Top player" value={summary.topPlayer || '—'} sub={summary.topPlayer ? `${fmt(summary.topPlayerSignals)} signals` : ''} />
-            <SummaryStat label="Avg ER" value={summary.avgER.toFixed(2) + '%'} />
+            <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}><SummaryStat label="Sponsored players" value={summary.sponsoredPlayers} accent="#22c55e" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}><SummaryStat label="Brands" value={summary.activeBrands} /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}><SummaryStat label="Platforms with data" value={summary.platformsWithData} /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}><SummaryStat label="Player signals" value={fmt(summary.playerSignals)} /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '460ms' } as React.CSSProperties}><SummaryStat label="JOOLA players" value={summary.joolaPlayers} accent="#22c55e" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '535ms' } as React.CSSProperties}><SummaryStat label="Top player" value={summary.topPlayer || '—'} sub={summary.topPlayer ? `${fmt(summary.topPlayerSignals)} signals` : ''} /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '610ms' } as React.CSSProperties}><SummaryStat label="JOOLA rank" value={(() => { const r = filteredBrandStats.findIndex(b => b.brandSlug === 'joola'); return r >= 0 ? `#${r + 1} of ${filteredBrandStats.length}` : '—' })()} accent="#22c55e" sub="by athlete engagement" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '685ms' } as React.CSSProperties}><SummaryStat label="Avg ER" value={summary.avgER.toFixed(2) + '%'} /></div>
           </div>
         </section>
       )}
 
-      {/* ── Section 2 — Sponsored player roster by brand ──────── */}
+      {/* ── Section 2 — Sponsored athletes by brand ──────── */}
       <Section id="roster"
-        title="Sponsored player roster by brand"
-        info="Single source of truth for which player is sponsored by which brand. Verification status reflects whether the scraped influencer roster confirms the business mapping. Players appearing under multiple brands are flagged Needs verification."
+        title="Sponsored players by brand"
+        info="A complete list of every player sponsored by each pickleball brand. The verification status shows whether we have confirmed their sponsorship from their own social media posts. Players appearing under more than one brand are flagged for review."
         source="lib/v2/playerRoster.ts (business mapping) + influencers (scraped)"
         sub={`${filteredRoster.length} rows · ${data.dataStatus.activeBrands} brands`}
       >
-        <ScrollTable>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 10, fontSize: 11, color: 'var(--fg-3)' }}>
+          {[
+            { color: STATUS_COLOR['business-mapping'],    label: 'Business mapping',     desc: 'Known from our records, not yet confirmed on social media' },
+            { color: STATUS_COLOR['confirmed-from-data'], label: 'Confirmed from data',  desc: 'Confirmed by their social media posts' },
+            { color: STATUS_COLOR['needs-verification'],  label: 'Needs verification',   desc: 'Appears under multiple brands — needs review' },
+            { color: STATUS_COLOR['roster-not-confirmed'],label: 'Roster not confirmed', desc: 'Not found on the brand\'s public athlete pages' },
+          ].map(s => (
+            <span key={s.label} title={s.desc} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, cursor: 'help' }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+              {s.label}
+            </span>
+          ))}
+          <span style={{ marginLeft: 'auto', color: 'var(--fg-4)' }}>Hover Status or Verification cells for details · Click any row to open player details</span>
+        </div>
+        <ScrollTable maxHeight={580}>
           <table className="data">
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--surface)' }}>
               <tr>
                 <SortTh col="brandSlug" label="Brand" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <SortTh col="player" label="Player" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <SortTh col="status" label="Status" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <th>IG</th>
-                <th>YT</th>
-                <th>TikTok</th>
                 <th>X</th>
-                <th>Reddit</th>
                 <SortTh col="verification" label="Verification" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <SortTh col="lastSeenDays" label="Last seen" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
               </tr>
               <tr className="col-filter-row">
                 <th><ColumnFilter col="brandSlug" value={rosterColFilter.brandSlug} onChange={v => setRosterColFilter(p => ({ ...p, brandSlug: v }))} /></th>
                 <th><ColumnFilter col="player" value={rosterColFilter.player} onChange={v => setRosterColFilter(p => ({ ...p, player: v }))} /></th>
-                <th colSpan={8} />
+                <th colSpan={6} />
               </tr>
             </thead>
             <tbody>
               {sortBy(filteredRoster, rosterSort.key, rosterSort.dir).map((r, i) => (
-                <tr key={`${r.brandSlug}-${r.player}-${i}`} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                <tr
+                    key={`${r.brandSlug}-${r.player}-${i}`}
+                    className={r.brandSlug === 'joola' ? 'joola' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; router.push(`/v2/influencers/player/${encodeURIComponent(r.brandSlug + '--' + r.player)}`) }}
+                  >
                   <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
                   <td style={{ fontWeight: 700 }}>{r.player}</td>
-                  <td>
-                    <span className="pill" style={{ background: STATUS_COLOR[r.status] + '22', color: STATUS_COLOR[r.status], border: `1px solid ${STATUS_COLOR[r.status]}55`, fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}>
+                  <td title={STATUS_DESC[r.status]}>
+                    <span className="pill" style={{ background: STATUS_COLOR[r.status] + '22', color: STATUS_COLOR[r.status], border: `1px solid ${STATUS_COLOR[r.status]}55`, fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700, cursor: 'pointer' }}>
                       {STATUS_LABEL[r.status]}
                     </span>
                   </td>
-                  <td>{r.igHandle ? <a className="ext-link" href={`https://instagram.com/${r.igHandle}`} target="_blank" rel="noreferrer">@{r.igHandle}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
-                  <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
-                  <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
+                  <td>{r.igHandle ? <a className="ext-link" href={`https://www.instagram.com/${r.igHandle.replace(/^@/, '')}/`} target="_blank" rel="noopener noreferrer">@{r.igHandle.replace(/^@/, '')}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                   <td>{r.xHandle ? <a className="ext-link" href={`https://x.com/${r.xHandle}`} target="_blank" rel="noreferrer">@{r.xHandle}</a> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
-                  <td><span style={{ color: 'var(--fg-4)' }}>—</span></td>
-                  <td>
+                  <td title={VERIFICATION_DESC[r.verification] ?? `Verification status: ${r.verification}`}>
                     <span style={{
-                      fontSize: 10, fontWeight: 700, color: r.verification === 'verified' ? '#22c55e' : r.verification === 'matched' ? '#F5E625' : '#94a3b8',
+                      fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                      color: r.verification === 'verified' ? '#22c55e' : r.verification === 'matched' ? '#F5E625' : '#94a3b8',
                     }}>{r.verification}</span>
                   </td>
                   <td className="cell-num" style={{ textAlign: 'right' }}>
@@ -414,7 +519,7 @@ export default function InfluencerIntelPage() {
                 </tr>
               ))}
               {filteredRoster.length === 0 && (
-                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No roster rows match current filters.</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No sponsored players match current filters.</td></tr>
               )}
             </tbody>
           </table>
@@ -426,33 +531,33 @@ export default function InfluencerIntelPage() {
         title="Player impact map"
         info="Each bubble is one athlete. X-axis: reach (Instagram followers). Y-axis: engagement rate. Bubble size: total signals (posts + mentions). JOOLA athletes outlined in white. Athletes with no engagement data are omitted."
         source="influencers + influencer_posts + mention_facts"
-        sub="X = reach, Y = engagement rate, size = signals"
+        sub="Hover any bubble to see details · Stars = protect · Micro = best ROI · Celebrity = reconsider"
       >
-        <div className="card"><div className="card-pad-lg">
+        <div ref={sec1.ref} className={`card ${revealCls(sec1.vis)}`} style={{ padding: '20px 24px', overflow: 'visible' }}>
           <ImpactBubbleMap bubbles={bubblePool} brands={brands} />
-        </div></div>
+        </div>
       </Section>
 
       {/* ── Section 4 — Cross-platform player attention ───────── */}
       <Section id="attention"
         title="Cross-platform player attention"
-        info="Ranked roll-up of every player by total signals across all five platforms. Empty platforms display as N/A and are never invented. Sort by any column to find leaders per platform."
-        source="influencer_posts + mention_facts"
-        sub={`${filteredAttention.length} players · sorted by total`}
+        info="See which players are getting the most fan attention. Total = their posts + fan mentions across all platforms. Click any column to sort and compare."
+        source="Instagram posts · YouTube · TikTok · X · Reddit"
+        sub={`${filteredAttention.length > 200 ? `top 200 of ${filteredAttention.length}` : filteredAttention.length} players · sorted by total`}
       >
         <ScrollTable maxHeight={520}>
           <table className="data">
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>#</th>
                 <SortTh col="player" label="Player" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <SortTh col="brandSlug" label="Brand" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                 <SortTh col="total" label="Total" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="ig" label="IG" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="yt" label="YT" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="tiktok" label="TikTok" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="x" label="X" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="reddit" label="Reddit" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="ig" label="IG" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="Instagram posts and mentions" />
+                <SortTh col="yt" label="YT" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="YouTube — data collection pending for most athletes" />
+                <SortTh col="tiktok" label="TikTok" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="TikTok — data collection pending for most athletes" />
+                <SortTh col="x" label="X" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="X (Twitter) — data collection pending for most athletes" />
+                <SortTh col="reddit" label="Reddit" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="Reddit — data collection pending for most athletes" />
                 <SortTh col="engagement" label="Engagement" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
                 <th>Sentiment</th>
                 <th>Trend</th>
@@ -466,21 +571,28 @@ export default function InfluencerIntelPage() {
             </thead>
             <tbody>
               {sortBy(filteredAttention, attentionSort.key, attentionSort.dir).slice(0, 200).map((r, i) => (
-                <tr key={`${r.player}-${r.brandSlug}`} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                <tr key={`${r.player}-${r.brandSlug}`} className={r.brandSlug === 'joola' ? 'joola' : ''}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; router.push(`/v2/influencers/player/${encodeURIComponent(r.brandSlug + '--' + r.player)}`) }}>
                   <td className="cell-num">{i + 1}</td>
                   <td style={{ fontWeight: 700 }}>{r.player}</td>
                   <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
                   <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625', fontWeight: 700 }}>{fmt(r.total)}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.ig > 0 ? fmt(r.ig) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.yt > 0 ? fmt(r.yt) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.tiktok > 0 ? fmt(r.tiktok) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.x > 0 ? fmt(r.x) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.reddit > 0 ? fmt(r.reddit) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.ig > 0 ? fmt(r.ig) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.yt > 0 ? fmt(r.yt) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.tiktok > 0 ? fmt(r.tiktok) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.x > 0 ? fmt(r.x) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                  <td className="cell-num" style={{ textAlign: 'right' }}>{r.reddit > 0 ? fmt(r.reddit) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                   <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(r.engagement)}</td>
                   <td>
                     <SentimentMix positive={r.positive} negative={r.negative} total={r.total} />
                   </td>
-                  <td><span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span></td>
+                  <td style={{ textAlign: 'center' }}>
+                    {r.trend === 'up'   && <span style={{ color: '#22c55e', fontWeight: 700, fontSize: 13 }} title="Trending up — more signals in the last 14 days vs prior 14 days">▲</span>}
+                    {r.trend === 'down' && <span style={{ color: '#ef4444', fontWeight: 700, fontSize: 13 }} title="Trending down — fewer signals in the last 14 days vs prior 14 days">▼</span>}
+                    {r.trend === 'flat' && <span style={{ color: '#94a3b8', fontWeight: 700, fontSize: 11 }} title="Stable — similar signal volume over the last 28 days">▬</span>}
+                    {r.trend === 'unknown' && <span style={{ color: 'var(--fg-4)', fontSize: 11 }} title="Not enough data to determine trend">—</span>}
+                  </td>
                 </tr>
               ))}
               {filteredAttention.length === 0 && (
@@ -491,16 +603,16 @@ export default function InfluencerIntelPage() {
         </ScrollTable>
       </Section>
 
-      {/* ── Section 5 — Athlete roster performance ────────────── */}
+      {/* ── Section 5 — Athlete performance ──────────────────── */}
       <Section id="performance"
-        title="Athlete roster performance"
+        title="Player performance"
         info="Every scraped athlete with rolled-up post stats. Engagement rate above 8% (highlighted in yellow) is exceptional. Athletes with no posts in the current window are sorted to the bottom."
         source="influencers + influencer_posts"
         sub={`${filteredInfluencers.length} athletes`}
       >
         <ScrollTable maxHeight={520}>
           <table className="data">
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>#</th>
                 <SortTh col="name" label="Athlete" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
@@ -526,7 +638,9 @@ export default function InfluencerIntelPage() {
                 const t = tierFromFollowers(r.followers)
                 const active = r.posts > 0
                 return (
-                  <tr key={r.id} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                  <tr key={r.id} className={r.brandSlug === 'joola' ? 'joola' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; router.push(`/v2/influencers/player/${encodeURIComponent(r.brandSlug + '--' + r.name)}`) }}>
                     <td className="cell-num">{i + 1}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -577,6 +691,52 @@ export default function InfluencerIntelPage() {
         source="playerRoster.ts + influencers + influencer_posts + mention_facts"
         sub={`${filteredBrandStats.length} brands`}
       >
+        {/* Brand strength visual bars */}
+        {(() => {
+          const sorted = [...filteredBrandStats].sort((a, b) => b.totalEngagement - a.totalEngagement)
+          const maxEng = sorted[0]?.totalEngagement || 1
+          const maxReach = Math.max(1, ...sorted.map(r => r.totalReach))
+          return (
+            <div ref={sec2.ref} className={`card ${revealCls(sec2.vis)}`} style={{ marginBottom: 16 }}>
+              <div className="card-pad">
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 14 }}>
+                  Brand athlete engagement vs reach
+                </div>
+                {sorted.map(r => {
+                  const isJ = r.brandSlug === 'joola'
+                  const color = pgColor(r.brandSlug)
+                  const engPct = (r.totalEngagement / maxEng) * 100
+                  const reachPct = (r.totalReach / maxReach) * 100
+                  return (
+                    <div key={r.brandSlug} style={{ marginBottom: 12, cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/influencers/brand/${encodeURIComponent(r.brandSlug)}`)}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, fontWeight: isJ ? 800 : 600, color: isJ ? '#22c55e' : 'var(--fg)' }}>{pgName(r.brandSlug, brands)}</span>
+                          <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{r.playersActive}/{r.playersTracked} active</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 16, fontSize: 11, fontFamily: 'JetBrains Mono' }}>
+                          <span style={{ color: '#F5E625', fontWeight: 700 }}>{fmt(r.totalEngagement)} eng</span>
+                          <span style={{ color: 'var(--fg-4)' }}>{fmt(r.totalReach)} reach</span>
+                        </div>
+                      </div>
+                      <div style={{ height: 6, background: 'rgba(255,255,255,0.04)', borderRadius: 99, overflow: 'hidden', marginBottom: 3 }}>
+                        <div style={{ height: '100%', width: `${engPct}%`, background: isJ ? '#22c55e' : color, borderRadius: 99, transition: 'width 0.5s ease' }} />
+                      </div>
+                      <div style={{ height: 3, background: 'rgba(255,255,255,0.04)', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${reachPct}%`, background: color + '44', borderRadius: 99 }} />
+                      </div>
+                    </div>
+                  )
+                })}
+                <div style={{ display: 'flex', gap: 16, marginTop: 8, fontSize: 10, color: 'var(--fg-4)' }}>
+                  <span>── Engagement</span><span style={{ opacity: 0.5 }}>── Reach</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
         <ScrollTable>
           <table className="data">
             <thead>
@@ -598,7 +758,9 @@ export default function InfluencerIntelPage() {
             </thead>
             <tbody>
               {sortBy(filteredBrandStats, brandStatsSort.key, brandStatsSort.dir).map(r => (
-                <tr key={r.brandSlug} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                <tr key={r.brandSlug} className={r.brandSlug === 'joola' ? 'joola' : ''}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => router.push(`/v2/influencers/brand/${encodeURIComponent(r.brandSlug)}`)}>
                   <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
                   <td className="cell-num" style={{ textAlign: 'right' }}>{r.playersTracked}</td>
                   <td className="cell-num" style={{ textAlign: 'right' }}>{r.playersActive}</td>
@@ -623,15 +785,38 @@ export default function InfluencerIntelPage() {
       </Section>
 
       {/* ── Section 7 — Top performing player content ────────── */}
+      {(() => {
+        const typeFilteredContent = contentTypeFilter === 'all'
+          ? filteredContent
+          : filteredContent.filter(p => {
+              const t = (p.type || '').toLowerCase()
+              if (contentTypeFilter === 'reel') return t.includes('reel')
+              if (contentTypeFilter === 'video') return t.includes('video') || t.includes('reel')
+              if (contentTypeFilter === 'image') return t.includes('image') || t.includes('photo')
+              return true
+            })
+        return (
       <Section id="top-content"
         title="Top performing player content"
         info="Highest-engagement posts from tracked athletes in the selected window. Sourced from influencer_posts; today this is Instagram only. Add platform-specific scrapers and the table fills automatically."
         source="influencer_posts"
-        sub={`${filteredContent.length} posts`}
+        sub={`${typeFilteredContent.length > 200 ? `showing 200 of ${typeFilteredContent.length}` : typeFilteredContent.length} posts`}
       >
+        {/* Format filter tabs */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 12, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 3, width: 'fit-content' }}>
+          {(['all', 'reel', 'video', 'image'] as const).map(ft => (
+            <button key={ft} onClick={() => setContentTypeFilter(ft)} style={{
+              padding: '5px 14px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', border: 'none',
+              background: contentTypeFilter === ft ? pgColor('joola') : 'transparent',
+              color: contentTypeFilter === ft ? '#000' : 'var(--fg-4)',
+            }}>
+              {ft === 'all' ? 'All' : ft === 'reel' ? 'Reels' : ft === 'video' ? 'Video' : 'Image'}
+            </button>
+          ))}
+        </div>
         <ScrollTable maxHeight={520}>
           <table className="data">
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>Platform</th>
                 <SortTh col="athleteName" label="Player" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
@@ -657,8 +842,13 @@ export default function InfluencerIntelPage() {
               </tr>
             </thead>
             <tbody>
-              {sortBy(filteredContent, contentSort.key, contentSort.dir).slice(0, 200).map((p) => (
-                <tr key={p.id} className={p.brandSlug === 'joola' ? 'joola' : ''}>
+              {sortBy(typeFilteredContent, contentSort.key, contentSort.dir).slice(0, 200).map((p) => (
+                <tr
+                    key={p.id}
+                    className={p.brandSlug === 'joola' ? 'joola' : ''}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; setDrillContent(p) }}
+                  >
                   <td><PlatformPill p={p.platform} /></td>
                   <td style={{ fontWeight: 700 }}>{p.athleteName}</td>
                   <td><BrandCell slug={p.brandSlug} brands={brands} /></td>
@@ -677,20 +867,22 @@ export default function InfluencerIntelPage() {
                   <td>{p.url ? <a className="ext-link" href={p.url} target="_blank" rel="noreferrer">View</a> : '—'}</td>
                 </tr>
               ))}
-              {filteredContent.length === 0 && (
+              {typeFilteredContent.length === 0 && (
                 <tr><td colSpan={14} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-4)' }}>No content matches current filters (try widening the date range).</td></tr>
               )}
             </tbody>
           </table>
         </ScrollTable>
       </Section>
+        )
+      })()}
 
       {/* ── Section 8 — Player mentions in community ──────────── */}
       <Section id="community-mentions"
         title="Player mentions in community conversation"
-        info="Cross-channel mention_facts rows where athlete_id is set. Today this is dominated by ig_comments; YouTube / TikTok / X / Reddit player extraction is pending — see Section 12."
+        info="Cross-channel signals where a player is mentioned by fans or community members. Dominated by Instagram comments today — YouTube, TikTok, X, and Reddit player mentions will populate automatically as the pipeline is extended."
         source="mention_facts (athlete_id not null)"
-        sub={`${filteredMentions.length} mentions`}
+        sub={`${filteredMentions.length > 200 ? `showing 200 of ${filteredMentions.length}` : filteredMentions.length} mentions`}
       >
         {filteredMentions.length === 0 ? (
           <div className="card"><div style={{ padding: 32, textAlign: 'center', color: 'var(--fg-4)' }}>
@@ -700,7 +892,7 @@ export default function InfluencerIntelPage() {
         ) : (
           <ScrollTable maxHeight={520}>
             <table className="data">
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
                 <tr>
                   <SortTh col="player" label="Player" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
                   <SortTh col="brandSlug" label="Brand" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
@@ -743,9 +935,9 @@ export default function InfluencerIntelPage() {
       {/* ── Section 9 — JOOLA focus ───────────────────────────── */}
       <Section id="joola-focus"
         title="JOOLA sponsored player focus"
-        info="At-a-glance comparison of the six JOOLA-sponsored players. Reach is current Instagram followers; ER is the engagement-weighted average across tracked posts; Related paddle reflects any product NER hit from mention_facts."
-        source="influencers + influencer_posts + mention_facts + playerRoster.ts"
-        sub="6 athletes"
+        info="A side-by-side view of every JOOLA-sponsored athlete — how many people follow them, how engaged their audience is, their most popular post, and whether any paddle is being mentioned alongside them."
+        source="Instagram · influencer posts · community mentions"
+        sub={`${data.joolaPlayerStats.length} athletes`}
       >
         <div className="card">
           <div className="table-wrap">
@@ -769,14 +961,16 @@ export default function InfluencerIntelPage() {
               </thead>
               <tbody>
                 {data.joolaPlayerStats.map(j => (
-                  <tr key={j.player} className="joola">
+                  <tr key={j.player} className="joola"
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => { if ((e.target as HTMLElement).closest('a')) return; router.push(`/v2/influencers/player/${encodeURIComponent('joola--' + j.player)}`) }}>
                     <td style={{ fontWeight: 700, color: '#22c55e' }}>{j.player}</td>
                     <td className="cell-num" style={{ textAlign: 'right' }}>{j.signals > 0 ? fmt(j.signals) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.ig > 0 ? fmt(j.ig) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.yt > 0 ? fmt(j.yt) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.tiktok > 0 ? fmt(j.tiktok) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.x > 0 ? fmt(j.x) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
-                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.reddit > 0 ? fmt(j.reddit) : <span style={{ color: 'var(--fg-4)' }}>N/A</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.ig > 0 ? fmt(j.ig) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.yt > 0 ? fmt(j.yt) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.tiktok > 0 ? fmt(j.tiktok) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.x > 0 ? fmt(j.x) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                    <td className="cell-num" style={{ textAlign: 'right' }}>{j.reddit > 0 ? fmt(j.reddit) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                     <td className="cell-num" style={{ textAlign: 'right' }}>{j.reach > 0 ? fmt(j.reach) : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                     <td className="cell-num" style={{ textAlign: 'right' }}>{j.engRate > 0 ? j.engRate.toFixed(2) + '%' : '—'}</td>
                     <td title={j.topContent || ''} style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -784,7 +978,15 @@ export default function InfluencerIntelPage() {
                         ? (j.topContentUrl ? <a className="ext-link" href={j.topContentUrl} target="_blank" rel="noreferrer">{j.topContent}</a> : j.topContent)
                         : <span style={{ color: 'var(--fg-4)' }}>—</span>}
                     </td>
-                    <td><span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{j.sentiment}</span></td>
+                    <td>
+                      {j.sentiment === 'no-data'
+                        ? <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span>
+                        : <span
+                            className={'pill ' + (SENT_PILL[j.sentiment as keyof typeof SENT_PILL] || (j.sentiment === 'mixed' ? 'pill-amber' : 'pill-ghost'))}
+                            style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}
+                          >{j.sentiment}</span>
+                      }
+                    </td>
                     <td>{j.relatedPaddle ? <span style={{ fontSize: 11 }}>{j.relatedPaddle}</span> : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
                     <td><span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span></td>
                   </tr>
@@ -793,6 +995,46 @@ export default function InfluencerIntelPage() {
             </table>
           </div>
         </div>
+        {/* Competitor benchmark */}
+        {filteredBrandStats.length > 1 && (() => {
+          const joolaStat = filteredBrandStats.find(b => b.brandSlug === 'joola')
+          const competitors = filteredBrandStats.filter(b => b.brandSlug !== 'joola').sort((a, b) => b.avgEngRate - a.avgEngRate)
+          const topComp = competitors[0]
+          if (!joolaStat || !topComp) return null
+          const jER = joolaStat.avgEngRate
+          const cER = topComp.avgEngRate
+          const diff = jER - cER
+          return (
+            <div className="card" style={{ marginTop: 16 }}>
+              <div className="card-pad">
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+                  JOOLA vs top competitor · athlete engagement rate
+                </div>
+                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--fg-4)', marginBottom: 4 }}>JOOLA avg ER</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: '#22c55e', fontFamily: 'JetBrains Mono' }}>{jER > 0 ? jER.toFixed(2) + '%' : '—'}</div>
+                  </div>
+                  <div style={{ fontSize: 24, color: diff >= 0 ? '#22c55e' : '#ef4444', fontWeight: 800 }}>{diff >= 0 ? '↑' : '↓'}</div>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--fg-4)', marginBottom: 4 }}>{pgName(topComp.brandSlug, brands)} avg ER</div>
+                    <div style={{ fontSize: 28, fontWeight: 800, color: pgColor(topComp.brandSlug), fontFamily: 'JetBrains Mono' }}>{cER > 0 ? cER.toFixed(2) + '%' : '—'}</div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 160 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: diff >= 0 ? '#22c55e' : '#ef4444', marginBottom: 4 }}>
+                      {diff >= 0 ? `+${diff.toFixed(2)}% ahead` : `${diff.toFixed(2)}% behind`}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
+                      {diff >= 0
+                        ? `JOOLA athletes outperform ${pgName(topComp.brandSlug, brands)}'s roster`
+                        : `${pgName(topComp.brandSlug, brands)} athletes outperform JOOLA's roster`}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </Section>
 
       {/* ── Section 10 — Player ↔ paddle connections ──────────── */}
@@ -845,38 +1087,38 @@ export default function InfluencerIntelPage() {
         info="What's currently flowing into Influencer Intel. Items marked No are not bugs — they tell you which pipeline pieces to wire up next."
         source="Derived from fetched data"
       >
-        <div className="card"><div className="card-pad-lg" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-          <CoveragePill label="IG roster"           value={data.dataCoverage.igRoster ? 'Yes' : 'No'}     ok={data.dataCoverage.igRoster} />
-          <CoveragePill label="IG posts"            value={String(data.dataCoverage.igPosts)}             ok={data.dataCoverage.igPosts > 0} />
-          <CoveragePill label="YT mentions"         value={String(data.dataCoverage.ytMentions)}          ok={data.dataCoverage.ytMentions > 0} />
-          <CoveragePill label="TikTok mentions"     value={String(data.dataCoverage.tiktokMentions)}      ok={data.dataCoverage.tiktokMentions > 0} />
-          <CoveragePill label="X mentions"          value={String(data.dataCoverage.xMentions)}           ok={data.dataCoverage.xMentions > 0} />
-          <CoveragePill label="Reddit mentions"     value={String(data.dataCoverage.redditMentions)}      ok={data.dataCoverage.redditMentions > 0} />
-          <CoveragePill label="Comment-level mentions" value={data.dataCoverage.commentLevelMentions ? 'Yes' : 'No'} ok={data.dataCoverage.commentLevelMentions} />
-          <CoveragePill label="Alias matching"      value={data.dataCoverage.aliasMatching ? 'Yes' : 'No'} ok={data.dataCoverage.aliasMatching} />
-          <CoveragePill label="Sponsorship verification" value={data.dataCoverage.sponsorshipVerification ? 'Yes' : 'No'} ok={data.dataCoverage.sponsorshipVerification} />
+        <div ref={sec3.ref} className={`card ${revealCls(sec3.vis)}`}><div className="card-pad-lg" style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+          <CoveragePill label="IG players"           value={data.dataCoverage.igRoster ? 'Yes' : 'No'}     ok={data.dataCoverage.igRoster}           tip="We have scraped Instagram profiles for the sponsored athletes. Green = at least one athlete's IG account is tracked." />
+          <CoveragePill label="IG posts"            value={String(data.dataCoverage.igPosts)}             ok={data.dataCoverage.igPosts > 0}        tip={`Number of Instagram posts collected from sponsored athletes. ${data.dataCoverage.igPosts > 0 ? 'Data is flowing.' : 'No posts collected yet — run the scraper.'}`} />
+          <CoveragePill label="YT mentions"         value={String(data.dataCoverage.ytMentions)}          ok={data.dataCoverage.ytMentions > 0}     tip={`YouTube comments or videos that mention a tracked athlete. ${data.dataCoverage.ytMentions > 0 ? 'Data available.' : 'Pending — YouTube athlete extraction not yet running.'}`} />
+          <CoveragePill label="TikTok mentions"     value={String(data.dataCoverage.tiktokMentions)}      ok={data.dataCoverage.tiktokMentions > 0} tip={`TikTok posts or comments mentioning a tracked athlete. ${data.dataCoverage.tiktokMentions > 0 ? 'Data available.' : 'Pending — TikTok athlete extraction not yet running.'}`} />
+          <CoveragePill label="X mentions"          value={String(data.dataCoverage.xMentions)}           ok={data.dataCoverage.xMentions > 0}      tip={`X (Twitter) posts that mention a tracked athlete. ${data.dataCoverage.xMentions > 0 ? 'Data available.' : 'Pending — X athlete extraction not yet running.'}`} />
+          <CoveragePill label="Reddit mentions"     value={String(data.dataCoverage.redditMentions)}      ok={data.dataCoverage.redditMentions > 0} tip={`Reddit posts or comments mentioning a tracked athlete. ${data.dataCoverage.redditMentions > 0 ? 'Data available.' : 'Pending — Reddit athlete extraction not yet running.'}`} />
+          <CoveragePill label="Comment mentions"    value={data.dataCoverage.commentLevelMentions ? 'Yes' : 'No'} ok={data.dataCoverage.commentLevelMentions} tip="Whether we are extracting athlete mentions from individual comments (not just top-level posts). Enables more granular fan conversation tracking." />
+          <CoveragePill label="Name matching"       value={data.dataCoverage.aliasMatching ? 'Yes' : 'No'} ok={data.dataCoverage.aliasMatching}     tip="Whether the system can match alternative player names (e.g. 'Ben J' → 'Ben Johns'). Improves mention accuracy." />
+          <CoveragePill label="Sponsorship check"   value={data.dataCoverage.sponsorshipVerification ? 'Yes' : 'No'} ok={data.dataCoverage.sponsorshipVerification} tip="Whether we have cross-checked each athlete's sponsorship against their scraped social profiles to confirm the deal is current." />
         </div></div>
       </Section>
 
       {/* ── Section 12 — Pending pipeline work ────────────────── */}
       <Section id="pending"
-        title="Pending / Needs data pipeline"
-        info="Sections that intentionally show empty or partial data because the upstream pipeline does not yet populate the required fields."
-        source="Derived from data coverage"
+        title={data.pending.length === 0 ? 'Pipeline status' : 'Sections waiting for more data'}
+        info="These sections are empty or incomplete because we haven't collected enough data yet. Each card explains what's missing and what needs to happen to fill it in."
+        source="Data coverage check"
       >
         {data.pending.length === 0 ? (
-          <div className="card"><div style={{ padding: 20, color: 'var(--fg-4)' }}>All sections currently have data — nothing pending.</div></div>
+          <div className="card"><div style={{ padding: 20, color: '#22c55e', fontSize: 13 }}>✓ All sections have data — nothing waiting.</div></div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {data.pending.map((p, i) => (
               <div key={i} className="card"><div className="card-pad-lg">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                  <span style={{ fontWeight: 700, color: '#F5E625', fontSize: 13 }}>{p.section}</span>
-                  <span style={{ fontSize: 10, color: 'var(--fg-4)', fontWeight: 700, letterSpacing: '0.08em' }}>PENDING</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text-accent)', fontSize: 13 }}>{p.section}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-accent)', fontWeight: 700, background: 'var(--text-accent-bg, rgba(245,230,37,0.12))', padding: '2px 8px', borderRadius: 99, border: '1px solid var(--text-accent-border, rgba(245,230,37,0.3))' }}>WAITING FOR DATA</span>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 6 }}><strong>Why:</strong> {p.why}</div>
-                <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 6 }}><strong>Required source:</strong> <code style={{ fontSize: 11, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4 }}>{p.requiredSource}</code></div>
-                <div style={{ fontSize: 12, color: 'var(--fg-2)' }}><strong>Recommendation:</strong> {p.recommendation}</div>
+                <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 6 }}><strong>Why it&apos;s empty:</strong> {p.why}</div>
+                <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 6 }}><strong>What&apos;s needed:</strong> {p.requiredSource}</div>
+                <div style={{ fontSize: 12, color: '#60a5fa' }}><strong>Next step:</strong> {p.recommendation}</div>
               </div></div>
             ))}
           </div>
@@ -886,13 +1128,47 @@ export default function InfluencerIntelPage() {
       {/* ── Section E — Athlete Impact Score ──────────────────── */}
       <Section id="athlete-impact"
         title="Athlete impact score"
-        info="Composite ROI-proxy per athlete. Normalized sum of: posts (30d), avg engagement, mentions (mention_facts), follower growth WoW (influencer_x_snapshots), product mentions, positive sentiment %. Not literal spend ROI — we have no spend data."
-        source="influencer_posts + influencer_x_snapshots + mention_facts"
-        sub={`${athleteImpact.length} athletes scored`}
+        info="A single score ranking each athlete by their overall impact — combining how often they post, how engaged their audience is, how many fans mention them, how much their following is growing, and how positive the sentiment is around them. Higher score = greater brand value."
+        source="Instagram posts · community mentions · follower snapshots"
+        sub={`${athleteImpact.length > 100 ? `top 100 of ${athleteImpact.length}` : athleteImpact.length} athletes scored`}
       >
+        {/* Top 3 podium */}
+        {athleteImpact.length >= 3 && (() => {
+          const top3 = athleteImpact.slice(0, 3)
+          const medals = ['🥇', '🥈', '🥉']
+          const heights = ['80px', '60px', '50px']
+          return (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 24, alignItems: 'flex-end' }}>
+              {[top3[1], top3[0], top3[2]].map((r, podiumIdx) => {
+                const rank = podiumIdx === 0 ? 2 : podiumIdx === 1 ? 1 : 3
+                const h = heights[rank - 1]
+                const medal = medals[rank - 1]
+                const color = pgColor(r.brandSlug)
+                const isJ = r.brandSlug === 'joola'
+                return (
+                  <div key={r.athleteId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                    onClick={() => setDrillImpact(r)}>
+                    <div style={{ fontSize: 20 }}>{medal}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: isJ ? '#22c55e' : 'var(--fg)' }}>{r.player}</div>
+                    <div style={{ fontSize: 11, color, fontWeight: 700 }}>{pgName(r.brandSlug, brands)}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>{r.impactScore.toFixed(1)}</div>
+                    <div style={{
+                      width: 80, height: h,
+                      background: `linear-gradient(180deg, ${color}44, ${color}22)`,
+                      border: `1px solid ${color}55`,
+                      borderRadius: '6px 6px 0 0',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 22,
+                    }}>{medal}</div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })()}
         <ScrollTable maxHeight={520}>
           <table className="data">
-            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>#</th>
                 <th>Player</th>
@@ -915,7 +1191,7 @@ export default function InfluencerIntelPage() {
                 const maxScore = athleteImpact[0]?.impactScore || 100
                 const barPct = Math.min(100, (r.impactScore / maxScore) * 100)
                 return (
-                  <tr key={r.athleteId} className={r.brandSlug === 'joola' ? 'joola' : ''}>
+                  <tr key={r.athleteId} className={r.brandSlug === 'joola' ? 'joola' : ''} style={{ cursor: 'pointer' }} onClick={() => setDrillImpact(r)}>
                     <td className="cell-num">{i + 1}</td>
                     <td style={{ fontWeight: 700 }}>{r.player}</td>
                     <td><BrandCell slug={r.brandSlug} brands={brands} /></td>
@@ -930,7 +1206,7 @@ export default function InfluencerIntelPage() {
                     <td className="cell-num" style={{ textAlign: 'right', verticalAlign: 'middle' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                         <span style={{ fontWeight: 800, color: '#F5E625' }}>{r.impactScore.toFixed(1)}</span>
-                        <div style={{ width: 80, height: 5, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ width: 120, height: 6, background: 'var(--wb-5)', borderRadius: 3, overflow: 'hidden' }}>
                           <div style={{ width: `${barPct}%`, height: '100%', background: r.brandSlug === 'joola' ? '#22c55e' : '#F5E625' }} />
                         </div>
                       </div>
@@ -957,7 +1233,7 @@ export default function InfluencerIntelPage() {
         title="Sponsored vs organic performance"
         info="Compares engagement rate on each athlete's sponsored posts vs organic posts (influencer_posts.is_sponsored). ER capped at 100%."
         source="influencer_posts (is_sponsored split)"
-        sub={`${sponsoredOrganic.length} athletes with comparable data`}
+        sub={`${sponsoredOrganic.length > 100 ? `showing 100 of ${sponsoredOrganic.length}` : sponsoredOrganic.length} athletes with comparable data`}
       >
         {sponsoredOrganic.length === 0 ? (
           <div className="card"><div style={{ padding: 24, color: 'var(--fg-4)', textAlign: 'center' }}>
@@ -967,7 +1243,7 @@ export default function InfluencerIntelPage() {
         ) : (
           <ScrollTable maxHeight={520}>
             <table className="data">
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
                 <tr>
                   <th>Player</th>
                   <th>Brand</th>
@@ -1015,11 +1291,13 @@ export default function InfluencerIntelPage() {
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <button
             className={'chip ' + (pullJoolaOnly ? 'on' : '')}
+            aria-label="Filter to JOOLA athletes only"
+            aria-pressed={pullJoolaOnly}
             onClick={() => setPullJoolaOnly(v => !v)}
             style={{
               padding: '6px 12px', borderRadius: 99, fontSize: 11, fontWeight: 700,
-              background: pullJoolaOnly ? 'rgba(34,197,94,0.20)' : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${pullJoolaOnly ? 'rgba(34,197,94,0.45)' : 'rgba(255,255,255,0.10)'}`,
+              background: pullJoolaOnly ? 'rgba(34,197,94,0.20)' : 'var(--wb-5)',
+              border: `1px solid ${pullJoolaOnly ? 'rgba(34,197,94,0.45)' : 'var(--wb-10)'}`,
               color: pullJoolaOnly ? '#22c55e' : 'var(--fg-2)',
               cursor: 'pointer',
             }}
@@ -1035,7 +1313,7 @@ export default function InfluencerIntelPage() {
         ) : (
           <ScrollTable maxHeight={520}>
             <table className="data">
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: '#0d1117' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
                 <tr>
                   <th>Player</th>
                   <th>Brand</th>
@@ -1085,7 +1363,7 @@ export default function InfluencerIntelPage() {
       {/* ── Section H — Competitor Athlete Threats ────────────── */}
       <Section id="competitor-threats"
         title="Competitor athlete threats"
-        info="Top 10 competitor athletes ranked by impact score, with their dominant platform and any product they're tied to. Threat level reflects percentile rank within their own brand's roster."
+        info="Top 10 competitor athletes ranked by impact score, with their dominant platform and any product they're tied to. Threat level reflects percentile rank within their own brand's player pool."
         source="influencers (brand != joola) + impact score + platformStats + product connections"
         sub="Top 10 watch list"
       >
@@ -1152,8 +1430,8 @@ export default function InfluencerIntelPage() {
       {data.reviewRequired.length > 0 && (
         <Section id="review"
           title="Review required"
-          info="Items that need a human verdict — typically because the source data is ambiguous (multi-brand player) or the roster mapping disagrees with scraped data."
-          source="Derived from roster vs. scraped data"
+          info="Items that need a human verdict — typically because the source data is ambiguous (player under multiple brands) or the sponsorship list disagrees with scraped data."
+          source="Derived from sponsored player list vs. scraped data"
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {data.reviewRequired.map((r, i) => (
@@ -1193,16 +1471,6 @@ function Section({ id, title, info, source, sub, children }: {
   )
 }
 
-function ScrollTable({ children, maxHeight }: { children: React.ReactNode; maxHeight?: number }) {
-  return (
-    <div className="card">
-      <div className="table-wrap" style={maxHeight ? { maxHeight, overflowY: 'auto' } : undefined}>
-        {children}
-      </div>
-    </div>
-  )
-}
-
 function SummaryStat({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 100 }}>
@@ -1213,23 +1481,12 @@ function SummaryStat({ label, value, sub, accent }: { label: string; value: stri
   )
 }
 
-function BrandCell({ slug, brands }: { slug: string; brands: V2Brand[] }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-      <span className="brand-dot" style={{ background: pgColor(slug) }} />
-      <span style={{ fontWeight: 700, color: slug === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 12 }}>
-        {pgName(slug, brands)}
-      </span>
-    </span>
-  )
-}
-
 function PlatformPill({ p }: { p: IntelPlatform }) {
   const colorMap: Record<IntelPlatform, { bg: string; bd: string; fg: string }> = {
     ig:     { bg: 'rgba(236,72,153,0.14)', bd: 'rgba(236,72,153,0.35)', fg: '#ec4899' },
     yt:     { bg: 'rgba(239,68,68,0.14)',  bd: 'rgba(239,68,68,0.35)',  fg: '#ef4444' },
-    tiktok: { bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
-    x:      { bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
+    tiktok: { bg: 'var(--wb-6)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
+    x:      { bg: 'var(--wb-6)', bd: 'rgba(255,255,255,0.18)', fg: 'var(--fg-2)' },
     reddit: { bg: 'rgba(251,146,60,0.14)', bd: 'rgba(251,146,60,0.35)', fg: '#fb923c' },
   }
   const c = colorMap[p]
@@ -1247,15 +1504,31 @@ function SentimentMix({ positive, negative, total }: { positive: number; negativ
   if (total === 0) return <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span>
   const pos = (positive / total) * 100
   const neg = (negative / total) * 100
+  const neutral = total - positive - negative
+  const neuPct = Math.round((neutral / total) * 100)
+  const posPct = Math.round(pos)
+  const negPct = Math.round(neg)
+  const tip = [
+    `Sentiment breakdown across ${total} signals`,
+    ``,
+    `✅ Positive  ${positive} signals (${posPct}%)`,
+    `⬜ Neutral   ${neutral} signals (${neuPct}%)`,
+    `🔴 Negative  ${negative} signals (${negPct}%)`,
+    ``,
+    `Net sentiment: ${positive - negative >= 0 ? '+' : ''}${positive - negative}`,
+  ].join('\n')
+  const ariaLabel = `Sentiment: ${posPct}% positive, ${neuPct}% neutral, ${negPct}% negative`
   return (
-    <div style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, minWidth: 70 }}>
-      <div style={{ display: 'flex', height: 6, borderRadius: 99, overflow: 'hidden', background: 'rgba(255,255,255,0.06)' }}>
-        <div style={{ width: pos + '%', background: '#22c55e' }} />
-        <div style={{ width: (100 - pos - neg) + '%', background: '#94a3b8' }} />
-        <div style={{ width: neg + '%', background: '#ef4444' }} />
+    <div title={tip} role="img" aria-label={ariaLabel} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2, minWidth: 70, cursor: 'help' }}>
+      <div style={{ display: 'flex', height: 6, borderRadius: 99, overflow: 'hidden', background: 'var(--wb-6)' }}>
+        <div style={{ width: pos + '%', background: '#22c55e' }} aria-hidden="true" />
+        <div style={{ width: (100 - pos - neg) + '%', background: '#94a3b8' }} aria-hidden="true" />
+        <div style={{ width: neg + '%', background: '#ef4444' }} aria-hidden="true" />
       </div>
-      <div style={{ fontSize: 9, color: 'var(--fg-4)' }}>
-        +{positive} / −{negative}
+      <div style={{ fontSize: 9, display: 'flex', gap: 4 }}>
+        <span style={{ color: '#22c55e' }}>+{positive}</span>
+        <span style={{ color: '#94a3b8' }}>{neutral}</span>
+        <span style={{ color: '#ef4444' }}>−{negative}</span>
       </div>
     </div>
   )
@@ -1272,8 +1545,8 @@ function ImpactCards({
 }) {
   const card: React.CSSProperties = {
     padding: 14,
-    background: 'rgba(255,255,255,0.03)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--wb-3)',
+    border: '1px solid var(--wb-8)',
     borderRadius: 8,
     fontSize: 12,
     color: 'var(--fg-2)',
@@ -1296,13 +1569,13 @@ function ImpactCards({
   )
 }
 
-function CoveragePill({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+function CoveragePill({ label, value, ok, tip }: { label: string; value: string; ok: boolean; tip?: string }) {
   return (
-    <div style={{
+    <div title={tip} style={{
       padding: '10px 14px', borderRadius: 8,
       background: ok ? 'rgba(34,197,94,0.08)' : 'rgba(148,163,184,0.06)',
       border: `1px solid ${ok ? 'rgba(34,197,94,0.30)' : 'rgba(148,163,184,0.20)'}`,
-      minWidth: 140,
+      minWidth: 140, cursor: tip ? 'help' : 'default',
     }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--fg-4)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{label}</div>
       <div style={{ fontSize: 14, fontWeight: 800, color: ok ? '#22c55e' : 'var(--fg-2)' }}>{value}</div>
@@ -1317,6 +1590,7 @@ interface Bubble { name: string; brandSlug: string; reach: number; er: number; t
 function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Brand[] }) {
   const [hov, setHov] = useState<{ b: Bubble; cx: number; cy: number } | null>(null)
   const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
+  const [drillBubble, setDrillBubble] = useState<Bubble | null>(null)
   const w = 760, h = 380
   const padL = 64, padR = 30, padT = 30, padB = 46
   const innerW = w - padL - padR
@@ -1399,6 +1673,14 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
     { x: splitX,          y: splitY,           w: padL + innerW - splitX,   h: padT + innerH - splitY, fill: 'rgba(251, 146, 60, 0.05)',  label: 'Celebrity reach',   desc: 'High reach · low ER · vanity audience', count: counts.vanity, anchor: 'end',    tx: padL + innerW - 8,  ty: padT + innerH - 10 },
   ]
 
+  const hovQuadLabel = hov
+    ? (hov.b.reach >= medianReach && hov.b.er >= medianEr ? 'STAR'
+      : hov.b.reach < medianReach && hov.b.er >= medianEr ? 'MICRO-INFLUENCER'
+      : hov.b.reach >= medianReach && hov.b.er < medianEr ? 'CELEBRITY REACH'
+      : 'NICHE / QUIET')
+    : ''
+  const hovQuadColor = hovQuadLabel === 'STAR' ? '#22c55e' : hovQuadLabel === 'MICRO-INFLUENCER' ? '#bba0ff' : hovQuadLabel === 'CELEBRITY REACH' ? '#fb923c' : '#94a3b8'
+
   return (
     <div className="scatter-wrap" style={{ position: 'relative' }}
       onMouseMove={(e) => setTipPos({ x: e.clientX, y: e.clientY })}
@@ -1411,10 +1693,10 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
         {/* Grid */}
         <g className="scatter-grid">
           {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'gx' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} stroke="rgba(255,255,255,0.04)" />
+            <line key={'gx' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} stroke="var(--line-2)" />
           ))}
           {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'gy' + i} y1={padT + t * innerH} y2={padT + t * innerH} x1={padL} x2={padL + innerW} stroke="rgba(255,255,255,0.04)" />
+            <line key={'gy' + i} y1={padT + t * innerH} y2={padT + t * innerH} x1={padL} x2={padL + innerW} stroke="var(--line-2)" />
           ))}
         </g>
         {/* Quadrant split lines (median reach + median ER) */}
@@ -1446,7 +1728,17 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
           const isJ = p.b.brandSlug === 'joola'
           const isHov = hov?.b === p.b
           return (
-            <g key={i} onMouseEnter={() => setHov({ b: p.b, cx: p.cx, cy: p.cy })} onMouseLeave={() => setHov(null)}>
+            <g key={i} style={{ cursor: 'pointer', outline: 'none' }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${p.b.name} — ${pgName(p.b.brandSlug, brands)} · ${fmt(p.b.reach)} followers · ${p.b.er.toFixed(2)}% engagement rate`}
+              onMouseEnter={() => setHov({ b: p.b, cx: p.cx, cy: p.cy })}
+              onMouseLeave={() => setHov(null)}
+              onClick={() => { setHov(null); setDrillBubble(p.b) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDrillBubble(p.b) } }}
+              onFocus={() => setHov({ b: p.b, cx: p.cx, cy: p.cy })}
+              onBlur={() => setHov(null)}
+            >
               <circle cx={p.cx} cy={p.cy} r={p.r + 5} fill={pgColor(p.b.brandSlug)} opacity={isHov ? 0.25 : 0.08} />
               <circle cx={p.cx} cy={p.cy} r={p.r} fill={pgColor(p.b.brandSlug)}
                 opacity={isJ ? 1 : 0.85}
@@ -1464,23 +1756,502 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
         })}
       </svg>
       {hov && tipPos && (
-        <div className="tip" style={{ left: tipPos.x, top: tipPos.y }}>
+        <div className="tip" style={{ left: tipPos.x, top: tipPos.y, whiteSpace: 'nowrap' }}>
           <div className="t-name">{hov.b.name}</div>
-          {pgName(hov.b.brandSlug, brands)} · {fmt(hov.b.reach)} reach · {hov.b.er.toFixed(2)}% ER · {hov.b.total} signals
-          <div style={{ marginTop: 4, fontSize: 10, color: 'var(--fg-4)' }}>
-            {hov.b.reach >= medianReach && hov.b.er >= medianEr ? 'Quadrant: STAR'
-              : hov.b.reach < medianReach && hov.b.er >= medianEr ? 'Quadrant: MICRO-INFLUENCER'
-              : hov.b.reach >= medianReach && hov.b.er < medianEr ? 'Quadrant: CELEBRITY REACH'
-              : 'Quadrant: NICHE / QUIET'}
+          <div style={{ color: '#94a3b8', fontSize: 10, marginBottom: 6 }}>{pgName(hov.b.brandSlug, brands)}</div>
+          <div style={{ display: 'flex', gap: 10, fontSize: 11, marginBottom: 6 }}>
+            <span>Reach: <b>{fmt(hov.b.reach)}</b></span>
+            <span>ER: <b>{hov.b.er.toFixed(2)}%</b></span>
+            <span>Signals: <b>{hov.b.total}</b></span>
           </div>
+          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: hovQuadColor + '22', color: hovQuadColor, border: `1px solid ${hovQuadColor}44` }}>{hovQuadLabel}</span>
         </div>
       )}
-      {/* Legend below the chart */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, marginTop: 14, fontSize: 11, color: 'var(--fg-2)', justifyContent: 'space-between' }}>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(34, 197, 94, 0.7)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#22c55e' }}>Stars</b> — high reach + high engagement. Brand-defining athletes; protect them.</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(180, 140, 255, 0.6)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#bba0ff' }}>Micro-influencers</b> — small audience but very engaged. Best ROI per dollar.</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(251, 146, 60, 0.7)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#fb923c' }}>Celebrity reach</b> — big follower count, weak engagement. Vanity audience.</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, background: 'rgba(148, 163, 184, 0.5)', borderRadius: 2, marginRight: 6 }} /><b style={{ color: '#94a3b8' }}>Niche / quiet</b> — low on both axes. Deprioritize for paid spend.</span>
+      {drillBubble && (
+        <BubbleDetailDialog
+          bubble={drillBubble}
+          brands={brands}
+          medianReach={medianReach}
+          medianEr={medianEr}
+          onClose={() => setDrillBubble(null)}
+        />
+      )}
+      {/* Legend — 4 insight cards in one row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginTop: 16 }}>
+        {[
+          { label: 'Stars', color: '#22c55e', bg: 'rgba(34,197,94,0.07)', border: 'rgba(34,197,94,0.2)', desc: 'High reach + high engagement', action: 'Protect & invest', count: counts.stars },
+          { label: 'Micro-influencers', color: '#bba0ff', bg: 'rgba(180,140,255,0.07)', border: 'rgba(180,140,255,0.2)', desc: 'Small audience, very engaged', action: 'Best ROI per dollar', count: counts.micro },
+          { label: 'Celebrity reach', color: '#fb923c', bg: 'rgba(251,146,60,0.07)', border: 'rgba(251,146,60,0.2)', desc: 'Big following, weak engagement', action: 'Reconsider spend', count: counts.vanity },
+          { label: 'Niche / quiet', color: '#94a3b8', bg: 'rgba(148,163,184,0.05)', border: 'rgba(148,163,184,0.15)', desc: 'Low reach + low engagement', action: 'Deprioritize', count: counts.niche },
+        ].map(q => (
+          <div key={q.label} style={{ background: q.bg, border: `1px solid ${q.border}`, borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: q.color, flexShrink: 0 }} />
+              <span style={{ fontWeight: 800, color: q.color, fontSize: 12 }}>{q.label}</span>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{q.count}</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{q.desc}</div>
+            <div style={{ fontSize: 11, color: 'var(--fg-2)', fontWeight: 700 }}>→ {q.action}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Roster row detail dialog ─────────────────────────────────────────
+function RosterDetailDialog({ row: r, brands, attention, influencer, topPosts, totalPosts, onViewAllPosts, onPostClick, onClose }: {
+  row: RosterRow; brands: V2Brand[]; attention: PlatformAttention | null; influencer: InfluencerRow | null
+  topPosts: InfluencerPostRow[]; totalPosts: number
+  onViewAllPosts: () => void; onPostClick: (p: InfluencerPostRow) => void; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const brandName = brands.find(b => b.id === r.brandSlug)?.name || r.brandSlug
+  const brandColor = pgColor(r.brandSlug)
+
+  const platforms: { label: string; handle: string | null; url: string }[] = [
+    { label: 'Instagram', handle: r.igHandle, url: r.igHandle ? `https://www.instagram.com/${r.igHandle.replace(/^@/, '')}/` : '' },
+    { label: 'X (Twitter)', handle: r.xHandle, url: r.xHandle ? `https://x.com/${r.xHandle.replace(/^@/, '')}` : '' },
+    { label: 'YouTube', handle: r.ytHandle, url: r.ytHandle ? `https://www.youtube.com/@${r.ytHandle.replace(/^@/, '')}` : '' },
+    { label: 'TikTok', handle: r.tiktokHandle, url: r.tiktokHandle ? `https://www.tiktok.com/@${r.tiktokHandle.replace(/^@/, '')}` : '' },
+    { label: 'Reddit', handle: r.redditHandle, url: r.redditHandle ? `https://www.reddit.com/user/${r.redditHandle.replace(/^u\//, '')}` : '' },
+  ]
+
+  const verColor = r.verification === 'verified' ? '#22c55e' : r.verification === 'matched' ? '#F5E625' : '#94a3b8'
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: brandColor, flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>{r.player}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{brandName}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Status + Verification */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'flex', gap: 24 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Status</div>
+            <span className="pill" style={{ background: STATUS_COLOR[r.status] + '22', color: STATUS_COLOR[r.status], border: `1px solid ${STATUS_COLOR[r.status]}55`, fontSize: 11, padding: '3px 10px', borderRadius: 99, fontWeight: 700 }}>
+              {STATUS_LABEL[r.status]}
+            </span>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8, maxWidth: 220, lineHeight: 1.5 }}>{STATUS_DESC[r.status]}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>Verification</div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: verColor, textTransform: 'capitalize' }}>{r.verification}</span>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8, maxWidth: 220, lineHeight: 1.5 }}>{VERIFICATION_DESC[r.verification]}</div>
+          </div>
+        </div>
+
+        {/* Performance Stats */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Roster Performance</div>
+          {!influencer ? (
+            <div style={{ fontSize: 12, color: '#6b7280' }}>No scraped profile data found for this player.</div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
+                {[
+                  { label: 'Followers', value: fmt(influencer.followers), color: '#60a5fa', tip: 'Current Instagram follower count' },
+                  { label: 'Posts tracked', value: influencer.posts > 0 ? String(influencer.posts) : '—', color: '#94a3b8', tip: 'Number of posts collected in the tracking window' },
+                  { label: 'Avg likes', value: influencer.avgLikes > 0 ? fmt(influencer.avgLikes) : '—', color: '#22c55e', tip: 'Average likes per post' },
+                ].map(m => (
+                  <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px', textAlign: 'center', cursor: 'help' }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{m.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                {[
+                  { label: 'Avg comments', value: influencer.avgComments > 0 ? fmt(influencer.avgComments) : '—', color: '#a78bfa', tip: 'Average comments per post' },
+                  { label: 'Eng. rate', value: influencer.engRate > 0 ? influencer.engRate.toFixed(2) + '%' : '—', color: influencer.engRate > 8 ? '#F5E625' : '#94a3b8', tip: 'Engagement rate = (likes + comments) ÷ followers × 100. Above 8% is exceptional.' },
+                  { label: 'Tier', value: tierFromFollowers(influencer.followers).label, color: tierFromFollowers(influencer.followers).color, tip: 'NANO < 10K · MICRO 10K–100K · MACRO 100K–500K · MEGA 500K+' },
+                ].map(m => (
+                  <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px', textAlign: 'center', cursor: 'help' }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+                    <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{m.label}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Social Handles */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Social Handles</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {platforms.map(p => (
+              <div key={p.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px' }}>
+                <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4 }}>{p.label}</div>
+                {p.handle
+                  ? <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: '#60a5fa', textDecoration: 'none' }}>@{p.handle.replace(/^@/, '')}</a>
+                  : <span style={{ fontSize: 12, color: '#3a4150' }}>—</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Cross-platform attention */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
+          {!attention ? (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Cross-Platform Attention</div>
+              <div style={{ fontSize: 12, color: '#6b7280', padding: '10px 0' }}>No activity data found for this player yet — they may not have been active on tracked platforms in the current window.</div>
+            </div>
+          ) : (
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>Cross-Platform Attention</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 10 }}>
+              {[
+                { label: 'Total', value: fmt(attention.total), color: '#F5E625', tip: 'Total posts + fan mentions across all platforms' },
+                { label: 'Instagram', value: attention.ig > 0 ? fmt(attention.ig) : '—', color: '#e1306c', tip: 'Instagram posts and mentions' },
+                { label: 'X (Twitter)', value: attention.x > 0 ? fmt(attention.x) : '—', color: '#1d9bf0', tip: 'X/Twitter mentions' },
+                { label: 'Reddit', value: attention.reddit > 0 ? fmt(attention.reddit) : '—', color: '#ff4500', tip: 'Reddit mentions' },
+              ].map(m => (
+                <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'help' }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: m.value === '—' ? '#3a4150' : m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{m.label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {[
+                { label: 'Engagement', value: fmt(attention.engagement), color: '#F5E625', tip: 'Total likes + comments + shares' },
+                { label: 'Sentiment', value: `+${attention.positive} / −${attention.negative}`, color: '#22c55e', tip: `${attention.positive} positive · ${attention.negative} negative mentions` },
+                { label: 'Trend', value: attention.trend === 'up' ? '▲ Rising' : attention.trend === 'down' ? '▼ Falling' : attention.trend === 'flat' ? '▬ Stable' : '— Unknown', color: attention.trend === 'up' ? '#22c55e' : attention.trend === 'down' ? '#ef4444' : '#94a3b8', tip: 'Signal volume trend: last 14 days vs prior 14 days' },
+              ].map(m => (
+                <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', cursor: 'help' }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{m.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          )}
+        </div>
+
+        {/* Top Posts */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              Top Performing Posts {totalPosts > 0 && <span style={{ color: '#3a4150' }}>· {totalPosts} total</span>}
+            </span>
+            {totalPosts > 3 && (
+              <button onClick={onViewAllPosts} style={{ background: 'none', border: '1px solid rgba(96,165,250,0.3)', color: '#60a5fa', borderRadius: 6, padding: '3px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                View all {totalPosts} posts →
+              </button>
+            )}
+          </div>
+          {topPosts.length === 0 ? (
+            <div style={{ fontSize: 12, color: '#6b7280' }}>No posts collected for this player in the current window.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {topPosts.map(p => (
+                <div key={p.id} onClick={() => onPostClick(p)} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', transition: 'border-color 150ms' }} onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(96,165,250,0.4)')} onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--line)')}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <PlatformPill p={p.platform} />
+                    <span style={{ fontSize: 10, color: '#6b7280' }}>{p.type}</span>
+                    <span className={'pill ' + SENT_PILL[p.sentiment]} style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>{p.sentiment}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 10, color: '#6b7280', fontFamily: 'JetBrains Mono' }}>{p.postedAt ? formatCalendarDate(p.postedAt) : '—'}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#cbd1dc', marginBottom: 8, lineHeight: 1.5 }}>{p.caption.slice(0, 120)}{p.caption.length > 120 ? '…' : ''}</div>
+                  <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#94a3b8' }}>
+                    <span>♥ <b style={{ color: '#22c55e' }}>{fmt(p.likes)}</b> likes</span>
+                    <span>💬 <b>{fmt(p.comments)}</b> comments</span>
+                    <span>⚡ <b style={{ color: '#F5E625' }}>{fmt(p.engagement)}</b> eng</span>
+                    <span>ER <b style={{ color: p.engRate > 8 ? '#F5E625' : '#94a3b8' }}>{p.engRate.toFixed(2)}%</b></span>
+                    {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', color: '#60a5fa', textDecoration: 'none', fontSize: 11 }}>View →</a>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Last Seen */}
+        <div style={{ padding: '12px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>
+            {r.lastSeenDays !== null
+              ? `Last seen ${r.lastSeenDays} day${r.lastSeenDays !== 1 ? 's' : ''} ago`
+              : 'Last seen: unknown'}
+          </span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Bubble detail dialog ─────────────────────────────────────────────
+function BubbleDetailDialog({ bubble: b, brands, medianReach, medianEr, onClose }: {
+  bubble: Bubble; brands: V2Brand[]; medianReach: number; medianEr: number; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const brandName = pgName(b.brandSlug, brands)
+  const brandColor = pgColor(b.brandSlug)
+  const isJoola = b.brandSlug === 'joola'
+
+  const hiR = b.reach >= medianReach, hiE = b.er >= medianEr
+  const quadrant = hiR && hiE ? 'Star' : !hiR && hiE ? 'Micro-influencer' : hiR && !hiE ? 'Celebrity reach' : 'Niche / quiet'
+  const qColor = quadrant === 'Star' ? '#22c55e' : quadrant === 'Micro-influencer' ? '#bba0ff' : quadrant === 'Celebrity reach' ? '#fb923c' : '#94a3b8'
+  const qDesc: Record<string, string> = {
+    'Star': 'Large audience and high engagement — the ideal combination. Prioritize for campaigns and long-term deals.',
+    'Micro-influencer': 'Smaller audience but highly engaged followers. Best return on sponsorship investment.',
+    'Celebrity reach': 'Very large following but low engagement. Great for visibility, but monitor conversions carefully.',
+    'Niche / quiet': 'Low reach and low engagement currently. Review content quality before investing.',
+  }
+  const metrics = [
+    { label: 'Followers', value: fmt(b.reach), sub: b.reach >= medianReach ? 'Above median' : 'Below median', color: b.reach >= medianReach ? '#22c55e' : '#94a3b8' },
+    { label: 'Engagement rate', value: b.er.toFixed(2) + '%', sub: b.er >= medianEr ? 'Above median' : 'Below median', color: b.er >= medianEr ? '#22c55e' : '#94a3b8' },
+    { label: 'Total signals', value: fmt(b.total), sub: 'Posts + mentions', color: '#60a5fa' },
+  ]
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 12, height: 12, borderRadius: '50%', background: isJoola ? '#22c55e' : brandColor, flexShrink: 0, border: isJoola ? '2px solid #fff' : 'none' }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{b.name}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Sponsored by {brandName}</div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: qColor + '22', color: qColor, border: `1px solid ${qColor}44` }}>{quadrant}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', background: qColor + '08' }}>
+          <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.6 }}>{qDesc[quadrant]}</div>
+        </div>
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          {metrics.map(m => (
+            <div key={m.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+              <div style={{ fontSize: 11, color: '#fff', fontWeight: 600, marginTop: 2 }}>{m.label}</div>
+              <div style={{ fontSize: 10, color: m.color, marginTop: 2 }}>{m.sub}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Player Impact Map</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Content post detail dialog ──────────────────────────────────────
+function ContentDetailDialog({ post: p, brands, onClose }: {
+  post: InfluencerPostRow; brands: V2Brand[]; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const brandName = pgName(p.brandSlug, brands)
+  const isJoola = p.brandSlug === 'joola'
+  const SENT_COLOR: Record<string, string> = { positive: '#22c55e', negative: '#ef4444', neutral: '#94a3b8', unknown: '#6b7280' }
+  const sentColor = SENT_COLOR[p.sentiment] || '#6b7280'
+  const PLAT_COLOR: Record<string, string> = { ig: '#e1306c', yt: '#ff0000', tiktok: '#69c9d0', x: '#1d9bf0', reddit: '#ff4500' }
+  const platColor = PLAT_COLOR[p.platform] || '#6b7280'
+
+  const metrics = [
+    { label: 'Views',      value: p.views > 0 ? fmt(p.views) : '—',      color: '#94a3b8' },
+    { label: 'Likes',      value: fmt(p.likes),                            color: '#22c55e' },
+    { label: 'Comments',   value: fmt(p.comments),                         color: '#60a5fa' },
+    { label: 'Shares',     value: p.shares > 0 ? fmt(p.shares) : '—',     color: '#a78bfa' },
+    { label: 'Engagement', value: fmt(p.engagement),                       color: '#F5E625' },
+    { label: 'Eng. Rate',  value: p.engRate > 0 ? p.engRate.toFixed(2) + '%' : '—', color: p.engRate > 8 ? '#F5E625' : '#94a3b8' },
+  ]
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 580, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: platColor + '22', color: platColor, border: `1px solid ${platColor}44`, textTransform: 'uppercase' }}>{p.platform}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: sentColor + '18', color: sentColor, border: `1px solid ${sentColor}33` }}>{p.sentiment}</span>
+          {p.type && <span style={{ fontSize: 10, color: '#6b7280' }}>{p.type}</span>}
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>{p.postedAt ? formatCalendarDate(p.postedAt) : '—'}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 8 }}>×</button>
+        </div>
+
+        {/* Athlete + Brand */}
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: isJoola ? '#22c55e' : pgColor(p.brandSlug), flexShrink: 0 }} />
+          <span style={{ fontWeight: 800, fontSize: 14, color: isJoola ? '#22c55e' : '#fff' }}>{p.athleteName}</span>
+          <span style={{ color: '#6b7280', fontSize: 12 }}>· {brandName}</span>
+          {p.athleteHandle && <span style={{ fontSize: 11, color: '#60a5fa' }}>@{p.athleteHandle}</span>}
+        </div>
+
+        {/* Caption */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 8 }}>Caption</div>
+          <div style={{ fontSize: 13, color: '#e2e8f0', lineHeight: 1.65, background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+            {p.caption || '(no caption)'}
+          </div>
+        </div>
+
+        {/* Metrics */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {metrics.map(m => (
+            <div key={m.label} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+          {p.url
+            ? <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', textDecoration: 'none', padding: '5px 14px', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 6, background: 'rgba(96,165,250,0.08)' }}>View original post →</a>
+            : <span style={{ fontSize: 11, color: '#3a4150' }}>No source link</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Athlete Impact Score detail dialog ──────────────────────────────
+function ImpactDetailDialog({ row: r, brands, onClose }: {
+  row: AthleteImpactRow; brands: V2Brand[]; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const isJoola = r.brandSlug === 'joola'
+  const clsColor = r.classification === 'rising' ? '#22c55e' : r.classification === 'underperforming' ? '#ef4444' : '#94a3b8'
+  const clsBg = r.classification === 'rising' ? 'rgba(34,197,94,0.10)' : r.classification === 'underperforming' ? 'rgba(239,68,68,0.10)' : 'rgba(148,163,184,0.10)'
+
+  const CLS_DESC: Record<string, string> = {
+    rising: 'This athlete is showing strong and growing momentum — high posts, strong engagement, and increasing mentions. A priority for continued investment.',
+    steady: 'Consistent performer with stable activity and engagement. Not surging but not declining. Good baseline sponsorship value.',
+    underperforming: 'Low activity or declining engagement relative to peers. Consider reviewing the sponsorship terms or activating more campaigns.',
+  }
+
+  const metrics = [
+    { label: 'Posts (30d)',       value: r.posts30d > 0 ? String(r.posts30d) : '—',                    color: '#60a5fa',  tip: 'Sponsored posts published in the last 30 days' },
+    { label: 'Avg engagement',    value: r.avgEngagement > 0 ? fmt(r.avgEngagement) : '—',              color: '#F5E625',  tip: 'Average likes + comments + shares per post' },
+    { label: 'Mentions',          value: r.mentions > 0 ? fmt(r.mentions) : '—',                        color: '#a78bfa',  tip: 'Times mentioned across all community channels' },
+    { label: 'Product mentions',  value: r.productMentions > 0 ? String(r.productMentions) : '—',       color: '#fb923c',  tip: 'Times a specific paddle/product was mentioned alongside this athlete' },
+    { label: 'Positive %',        value: r.positivePct > 0 ? r.positivePct.toFixed(0) + '%' : '—',      color: r.positivePct >= 60 ? '#22c55e' : '#94a3b8', tip: 'Share of signals about this athlete with positive sentiment' },
+    { label: 'Impact score',      value: r.impactScore.toFixed(1),                                      color: clsColor,   tip: 'Composite ROI proxy: weighted sum of posts, engagement, mentions, product pulls, and sentiment' },
+  ]
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 560, boxShadow: '0 32px 80px rgba(0,0,0,0.8)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: pgColor(r.brandSlug), flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: isJoola ? '#22c55e' : '#fff' }}>{r.player}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{pgName(r.brandSlug, brands)}</div>
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 99, background: clsBg, color: clsColor, border: `1px solid ${clsColor}44`, textTransform: 'uppercase' }}>{r.classification}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1, marginLeft: 4 }}>×</button>
+        </div>
+
+        {/* Classification explanation */}
+        <div style={{ padding: '12px 22px', borderBottom: '1px solid var(--line)', background: clsColor + '08' }}>
+          <div style={{ fontSize: 12, color: '#cbd1dc', lineHeight: 1.6 }}>{CLS_DESC[r.classification]}</div>
+        </div>
+
+        {/* Metrics grid */}
+        <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--line)', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {metrics.map(m => (
+            <div key={m.label} title={m.tip} style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 12px', textAlign: 'center', cursor: 'help' }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: m.color, fontFamily: 'JetBrains Mono' }}>{m.value}</div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{m.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '10px 22px', display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Athlete Impact Score</span>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>Press Esc to close</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+// ─── Player all-posts dialog ──────────────────────────────────────────
+function PlayerPostsDialog({ player, posts, onPostClick, onClose }: {
+  player: string; posts: InfluencerPostRow[]; onPostClick: (p: InfluencerPostRow) => void; onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+      <div style={{ background: 'var(--bg)', border: '1px solid var(--wb-10)', borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }} onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15, color: '#fff' }}>{player}</div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>{posts.length} posts · sorted by engagement</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Posts list */}
+        <div style={{ overflowY: 'auto', flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {posts.map(p => (
+            <div key={p.id} onClick={() => onPostClick(p)}
+              style={{ background: 'var(--wb-3)', border: '1px solid var(--line)', borderRadius: 8, padding: '10px 14px', cursor: 'pointer', transition: 'border-color 150ms' }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(96,165,250,0.4)')}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--line)')}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <PlatformPill p={p.platform} />
+                <span className={'pill ' + SENT_PILL[p.sentiment]} style={{ fontSize: 10, padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>{p.sentiment}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: '#6b7280', fontFamily: 'JetBrains Mono' }}>{p.postedAt ? formatCalendarDate(p.postedAt) : '—'}</span>
+              </div>
+              <div style={{ fontSize: 12, color: '#cbd1dc', marginBottom: 6, lineHeight: 1.5 }}>{p.caption.slice(0, 140)}{p.caption.length > 140 ? '…' : ''}</div>
+              <div style={{ display: 'flex', gap: 14, fontSize: 11, color: '#94a3b8' }}>
+                <span>♥ <b style={{ color: '#22c55e' }}>{fmt(p.likes)}</b></span>
+                <span>💬 <b>{fmt(p.comments)}</b></span>
+                <span>⚡ <b style={{ color: '#F5E625' }}>{fmt(p.engagement)}</b></span>
+                <span>ER <b style={{ color: p.engRate > 8 ? '#F5E625' : '#94a3b8' }}>{p.engRate.toFixed(2)}%</b></span>
+                <span style={{ marginLeft: 'auto', color: '#60a5fa', fontSize: 10 }}>Click to view details →</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding: '10px 22px', borderTop: '1px solid var(--line)', fontSize: 11, color: '#6b7280', flexShrink: 0 }}>Press Esc to close</div>
       </div>
     </div>
   )

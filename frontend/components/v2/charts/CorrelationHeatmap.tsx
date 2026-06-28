@@ -154,7 +154,7 @@ export function CorrelationHeatmap({
                   width={cellW}
                   height={cellH}
                   fill="rgba(255,255,255,0.02)"
-                  stroke="rgba(255,255,255,0.04)"
+                  stroke="var(--line-2)"
                 />
               )
             }
@@ -169,7 +169,7 @@ export function CorrelationHeatmap({
                 width={Math.max(0, cellW - 1)}
                 height={Math.max(0, cellH - 1)}
                 fill={corrColor(cell.correlation)}
-                stroke={isSig ? '#F5E625' : 'rgba(255,255,255,0.06)'}
+                stroke={isSig ? '#F5E625' : 'var(--wb-6)'}
                 strokeWidth={isSig ? (isHov ? 2 : 1.4) : isHov ? 1.5 : 0.5}
                 opacity={hov && hov !== cell ? 0.55 : 1}
                 style={{ cursor: 'pointer', transition: 'opacity 140ms, stroke-width 140ms' }}

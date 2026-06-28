@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   fetchBrands, fetchYT, fetchTopYTVideos, fetchYTVideoAnalysis,
   type V2Brand, type V2YTRow, type V2TopYTVideo, type V2YTVideoAnalysis,
 } from '@/lib/v2/data'
 import { fmt } from '@/components/v2/charts'
-import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter } from '@/components/v2/PageShell'
+import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter, exportCSV } from '@/components/v2/PageShell'
+import { Pagination } from '@/components/v2/Pagination'
+import { useReveal, revealCls } from '@/lib/v2/animations'
+import { useBookmarks } from '@/lib/v2/useBookmarks'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { youtubePlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
@@ -38,6 +42,7 @@ const YT_HANDLES: Record<string, string> = {
 }
 
 export default function YouTubePage() {
+  const router = useRouter()
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [yt, setYt] = useState<V2YTRow[]>([])
   const [videos, setVideos] = useState<V2TopYTVideo[]>([])
@@ -53,8 +58,13 @@ export default function YouTubePage() {
   const [vpvSortKey, setVpvSortKey] = useState<string | null>(null)
   const [vpvSortDir, setVpvSortDir] = useState<'asc' | 'desc'>('desc')
   const [vpvBrandFilter, setVpvBrandFilter] = useState('')
+  const [bwSortKey, setBwSortKey] = useState<string>('subs')
+  const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
+  const [ytPage, setYtPage] = useState(1)
+  const YT_PAGE_SIZE = 50
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, effectiveFrom, effectiveTo } = useDateRange()
+  const { toggle: toggleBookmark, isBookmarked } = useBookmarks()
 
   useEffect(() => { document.title = 'JOOLA INTEL — YouTube' }, [])
 
@@ -75,11 +85,17 @@ export default function YouTubePage() {
     })
   }, [setAllBrands])
 
+  useEffect(() => { setYtPage(1) }, [sortKey, sortDir, colFilter])
+
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
   if (error) return (
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-      <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+      <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
     </div>
   )
 
@@ -106,6 +122,41 @@ export default function YouTubePage() {
   const offTopicHidden = displayVideosFilteredByDate.length - displayVideos.length
 
   const name = (s: string) => pgName(s, brands)
+
+  // ─── Brand-wise overview ─────────────────────────────────────────────
+  const topVideoByBrand: Record<string, V2TopYTVideo> = {}
+  displayVideos.forEach(v => {
+    if (!topVideoByBrand[v.brand] || v.views > topVideoByBrand[v.brand].views)
+      topVideoByBrand[v.brand] = v
+  })
+  const brandOverview = displayYt.map(d => ({
+    ...d,
+    avgViews: d.videos > 0 ? Math.round(d.views / d.videos) : 0,
+    topVideo: topVideoByBrand[d.brand] ?? null,
+  }))
+  function toggleBwSort(col: string) {
+    if (bwSortKey === col) setBwSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setBwSortKey(col); setBwSortDir('desc') }
+  }
+  const sortedBrandOverview = [...brandOverview].sort((a, b) => {
+    if (a.brand === 'joola') return -1
+    if (b.brand === 'joola') return 1
+    const getV = (x: typeof a): number | string => {
+      if (bwSortKey === 'brand')    return name(x.brand)
+      if (bwSortKey === 'videos')   return x.videos
+      if (bwSortKey === 'views')    return x.views
+      if (bwSortKey === 'avgViews') return x.avgViews
+      if (bwSortKey === 'delta')    return x.delta ?? -9999
+      return x.subs
+    }
+    const av = getV(a), bv = getV(b)
+    if (typeof av === 'number' && typeof bv === 'number')
+      return bwSortDir === 'asc' ? av - bv : bv - av
+    return bwSortDir === 'asc'
+      ? String(av).localeCompare(String(bv))
+      : String(bv).localeCompare(String(av))
+  })
+
   const topBySubs = [...displayYt].sort((a, b) => b.subs - a.subs)
   const maxSubs = topBySubs[0]?.subs || 1
 
@@ -176,8 +227,10 @@ export default function YouTubePage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredVideos
 
+  const pageVideos = sortedVideos.slice((ytPage - 1) * YT_PAGE_SIZE, ytPage * YT_PAGE_SIZE)
+
   return (
-    <>
+    <div className="ov-page-enter">
       <PageHead title="YOUTUBE" />
       <FilterBanner />
 
@@ -188,7 +241,128 @@ export default function YouTubePage() {
         brands={brands}
       />
 
-      <section style={{ marginBottom: 28 }}>
+      {/* ── Brand-wise Overview Table ── */}
+      <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>
+              Brand-wise overview
+              <SectionInfo
+                title="YouTube Channel Overview"
+                description="One row per brand — subscribers, sub growth, total videos, total views, views-per-video efficiency, and the single best-performing video in the current filter window. JOOLA is always pinned to the top; click any column header to re-sort."
+                source="yt_channel_weekly · yt_videos · latest weekly snapshot"
+              />
+            </h2>
+            <div className="sub">{sortedBrandOverview.length} brands · click headers to sort · click a video title to watch</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="table-wrap">
+            <table className="data" style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
+                  <SortTh col="brand"    label="Brand"         sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
+                  <SortTh col="subs"     label="Subscribers"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
+                  <SortTh col="delta"    label="Sub Δ"         sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} />
+                  <SortTh col="videos"   label="Videos"        sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} />
+                  <SortTh col="views"    label="Total Views"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
+                  <SortTh col="avgViews" label="Avg Views/Vid" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
+                  <th style={{ minWidth: 200 }}>Top Video</th>
+                  <th style={{ width: 72, textAlign: 'center' }}>Channel</th>
+                  <th style={{ width: 36, textAlign: 'center' }}>★</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedBrandOverview.map((d, i) => {
+                  const isJ = d.brand === 'joola'
+                  const color = pgColor(d.brand)
+                  const tv = d.topVideo
+                  const hasSubDelta = d.delta != null && d.delta !== 0
+                  return (
+                    <tr key={d.brand} className={isJ ? 'joola' : ''}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/youtube/brand/${encodeURIComponent(d.brand)}`)}
+                      title={`View ${name(d.brand)} YouTube details`}>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{i + 1}</td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                            <span style={{ fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{name(d.brand)}</span>
+                          </span>
+                          {YT_HANDLES[d.brand] && (
+                            <span style={{ paddingLeft: 15, fontSize: 10, color: 'var(--fg-4)' }}>@{YT_HANDLES[d.brand]}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'JetBrains Mono', color: isJ ? '#22c55e' : 'var(--fg)' }}>
+                        {d.subs > 0 ? fmt(d.subs) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {hasSubDelta ? (
+                          <span style={{ fontWeight: 700, fontSize: 11, fontFamily: 'JetBrains Mono', color: (d.delta ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+                            {(d.delta ?? 0) >= 0 ? '+' : ''}{fmt(d.delta)}
+                          </span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: 'var(--fg-3)' }}>
+                        {d.videos > 0 ? d.videos : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: '#F5E625', fontWeight: 700 }}>
+                        {d.views > 0 ? fmt(d.views) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {d.avgViews > 0 ? (
+                          <span style={{ fontFamily: 'JetBrains Mono', fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg-2)' }}>
+                            {fmt(d.avgViews)}
+                          </span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td style={{ maxWidth: 240 }}>
+                        {tv ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <a
+                              href={tv.url || `https://www.youtube.com/results?search_query=${encodeURIComponent(tv.title || '')}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="ext-link"
+                              style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', maxWidth: 220 }}
+                              title={tv.title}
+                            >
+                              {tv.title?.slice(0, 55) || '—'}{(tv.title?.length ?? 0) > 55 ? '…' : ''}
+                            </a>
+                            <span style={{ fontSize: 10, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>{fmt(tv.views)} views</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No video data</span>}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        {YT_HANDLES[d.brand] ? (
+                          <a
+                            href={`https://www.youtube.com/@${YT_HANDLES[d.brand]}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="btn btn-ghost"
+                            style={{ fontSize: 10, padding: '3px 8px' }}
+                          >
+                            View ↗
+                          </a>
+                        ) : '—'}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => { e.stopPropagation(); toggleBookmark(d.brand) }}>
+                        <span style={{ cursor: 'pointer', fontSize: 14, color: isBookmarked(d.brand) ? '#F5E625' : 'var(--fg-4)' }}
+                          title={isBookmarked(d.brand) ? 'Remove bookmark' : 'Bookmark this brand'}>
+                          {isBookmarked(d.brand) ? '★' : '☆'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 28 }}>
         <div className="section-head">
           <div>
             <h2>
@@ -210,7 +384,7 @@ export default function YouTubePage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th>Brand</th>
                     <th style={{ width: '25%' }}>Video</th>
@@ -249,7 +423,7 @@ export default function YouTubePage() {
         </div>
       </section>
 
-      <section>
+      <section ref={sec3.ref} className={revealCls(sec3.vis)}>
         <div className="two-col">
           <div>
             <div className="section-head"><div>
@@ -370,30 +544,42 @@ export default function YouTubePage() {
       </section>
 
       <section id="youtube-videos-table">
-        <div className="section-head"><div>
-          <h2>
-            Top {sortedVideos.length} videos · by views
-            <SectionInfo
-              title="Top YouTube Videos"
-              description="Up to the 200 most-viewed YouTube videos across the tracked brands, ranked by view count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Long-form coaching content tends to dominate."
-              source="yt_videos · scraped weekly via streamers/youtube-scraper. Click column headers to sort."
-            />
-          </h2>
-          <div className="sub">
-            Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 200 ·
-            {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
-            {offTopicHidden > 0 && (
-              <span style={{ marginLeft: 6, color: 'var(--fg-4)' }}>
-                · {offTopicHidden} off-topic row{offTopicHidden === 1 ? '' : 's'} hidden
-              </span>
-            )}
+        <div className="section-head">
+          <div>
+            <h2>
+              Top {sortedVideos.length} videos · by views
+              <SectionInfo
+                title="Top YouTube Videos"
+                description="Up to the 200 most-viewed YouTube videos across the tracked brands, ranked by view count. Narrow with the brand filter (top right), the date range (top right), or per-column search below. Long-form coaching content tends to dominate."
+                source="yt_videos · scraped weekly via streamers/youtube-scraper. Click column headers to sort."
+              />
+            </h2>
+            <div className="sub">
+              Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 200 ·
+              {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+              {offTopicHidden > 0 && (
+                <span style={{ marginLeft: 6, color: 'var(--fg-4)' }}>
+                  · {offTopicHidden} off-topic row{offTopicHidden === 1 ? '' : 's'} hidden
+                </span>
+              )}
+            </div>
           </div>
-        </div></div>
+          <div className="actions">
+            <button
+              onClick={() => exportCSV('joola-yt-videos.csv', sortedVideos as unknown as Record<string, unknown>[])}
+              className="btn btn-ghost"
+              aria-label="Export table as CSV"
+              style={{ fontSize: 11 }}
+            >
+              ↓ CSV
+            </button>
+          </div>
+        </div>
         <div className="card">
           {sortedVideos.length > 0 ? (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data">
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
                     <SortTh col="title" label="Title" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />
@@ -411,7 +597,7 @@ export default function YouTubePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedVideos.map((v, i) => {
+                  {pageVideos.map((v, i) => {
                     const hasDirectLink = !!v.url
                     const watchHref = hasDirectLink
                       ? v.url
@@ -469,8 +655,9 @@ export default function YouTubePage() {
               </div>
             </div>
           )}
+          <Pagination total={sortedVideos.length} page={ytPage} pageSize={YT_PAGE_SIZE} onChange={setYtPage} />
         </div>
       </section>
-    </>
+    </div>
   )
 }

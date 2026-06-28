@@ -40,8 +40,8 @@ export function PromptChips({ onPick }: { onPick: (prompt: string) => void }) {
                 onClick={() => onPick(it.prompt)}
                 title={it.prompt}
                 style={{
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.08)',
+                  background: 'var(--wb-3)',
+                  border: '1px solid var(--wb-8)',
                   color: 'var(--fg-2)',
                   borderRadius: 3, padding: '5px 9px',
                   fontSize: 11, fontWeight: 500, cursor: 'pointer',
@@ -54,8 +54,8 @@ export function PromptChips({ onPick }: { onPick: (prompt: string) => void }) {
                   e.currentTarget.style.color = '#22c55e'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'
+                  e.currentTarget.style.background = 'var(--wb-3)'
+                  e.currentTarget.style.borderColor = 'var(--wb-8)'
                   e.currentTarget.style.color = 'var(--fg-2)'
                 }}
               >{it.label}</button>

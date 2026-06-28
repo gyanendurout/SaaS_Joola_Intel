@@ -129,7 +129,7 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { 
         onMouseLeave={() => { setHoverIdx(null); setTipPos(null) }}>
         {ticks.map((t, i) => (
           <g key={i}>
-            <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,0.04)" />
+            <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="var(--line-2)" />
             <text x={padL - 8} y={y(t) + 3} textAnchor="end" className="scatter-axis">{fmt(t)}</text>
           </g>
         ))}
@@ -141,6 +141,22 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { 
           <line x1={x(tipIdx)} x2={x(tipIdx)} y1={padT} y2={padT + innerH}
             stroke="rgba(245,230,37,0.35)" strokeDasharray="3 3" strokeWidth="1" />
         )}
+        {/* JOOLA benchmark line */}
+        {(() => {
+          const jSeries = series.find((s: LineSeries) => s.id === 'joola')
+          if (!jSeries || jSeries.data.length === 0) return null
+          const lastVal = jSeries.data[jSeries.data.length - 1]
+          if (!isFinite(lastVal) || lastVal === 0) return null
+          const yJ = y(lastVal)
+          if (!isFinite(yJ)) return null
+          return (
+            <g>
+              <line x1={padL} x2={padL + innerW} y1={yJ} y2={yJ}
+                stroke="#22c55e" strokeDasharray="5 4" strokeWidth={1} strokeOpacity={0.3} />
+              <text x={padL + innerW + 4} y={yJ + 3} fontSize={8} fill="#22c55e" opacity={0.5}>JOOLA</text>
+            </g>
+          )
+        })()}
         {cleanSeries.map((s, si) => {
           const path = s.data.map((v, i) => (i === 0 ? 'M' : 'L') + x(i) + ',' + y(v)).join(' ')
           const isJoola = s.id === 'joola'
@@ -278,7 +294,7 @@ export function StackedArea({ series, weeks = 13, w = 760, h = 240 }: {
         onMouseLeave={() => { setHoverIdx(null); setHoverLayer(null); setTipPos(null) }}>
         {yticks.map((t, i) => (
           <g key={i}>
-            <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,0.04)" />
+            <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="var(--line-2)" />
             <text x={padL - 6} y={y(t) + 3} textAnchor="end" className="scatter-axis">{Math.round(t)}</text>
           </g>
         ))}
@@ -430,225 +446,104 @@ export type EQMatrixDatum = {
   color: string; posts?: number
 }
 
-export function EngagementQualityMatrix({
-  data, w = 760, h = 420,
-}: { data: EQMatrixDatum[]; w?: number; h?: number }) {
-  const padL = 64, padR = 36, padT = 32, padB = 60
+export function EngagementQualityMatrix({ data, w = 760, h = 380, onBubbleClick }: { data: EQMatrixDatum[]; w?: number; h?: number; onBubbleClick?: (d: EQMatrixDatum) => void }) {
+  const padL = 60, padR = 30, padT = 30, padB = 52
   const innerW = w - padL - padR
   const innerH = h - padT - padB
-  const [hover, setHover] = useState<EQMatrixDatum | null>(null)
+  const xMax = Math.max(150000, ...data.map(d => d.followers))
+  const yMax = Math.max(2.5, ...data.map(d => d.engRate))
+  const yMid = yMax / 2
+  const x = (v: number) => padL + Math.sqrt(Math.min(v, xMax) / xMax) * innerW
+  const y = (v: number) => padT + innerH - (Math.min(v, yMax) / yMax) * innerH
+  const r = (v: number) => 5 + Math.min(v, 100) / 12
+  const [hover, setHover] = useState<(EQMatrixDatum & { cx: number; cy: number }) | null>(null)
   const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
 
   if (!data || data.length === 0) {
     return (
-      <div className="scatter-wrap" style={{ height: h }}>
-        <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)', fontSize: 13 }}>
-          No engagement data available.
-        </div>
+      <div style={{ padding: 48, textAlign: "center", color: "var(--fg-4)", fontSize: 13 }}>
+        No engagement data available.
       </div>
     )
   }
 
-  // ── Axis math ─────────────────────────────────────────────────────
-  const followers = data.map(d => d.followers).filter(v => v > 0).sort((a, b) => a - b)
-  const engs = data.map(d => d.engRate).filter(v => isFinite(v)).sort((a, b) => a - b)
-  const fMin = followers[0] || 1
-  const fMax = followers[followers.length - 1] || 1
-  // Log scale when there are >2 brands AND follower range crosses ≥1 order of magnitude
-  const useLog = data.length > 2 && fMin > 0 && fMax / fMin >= 10
-  const fMinScale = useLog ? Math.max(1, fMin / 1.2) : 0
-  const fMaxScale = useLog ? fMax * 1.2 : fMax * 1.05
-
-  const percentile = (arr: number[], p: number) => {
-    if (!arr.length) return 0
-    const idx = (arr.length - 1) * p
-    const lo = Math.floor(idx), hi = Math.ceil(idx), t = idx - lo
-    return arr[lo] + (arr[hi] - arr[lo]) * t
-  }
-  // Y axis: raw min/max (no percentile clipping). Floor 0, ceiling = min(100, max + 20% headroom).
-  const eMaxRaw = engs.length ? engs[engs.length - 1] : 1
-  const eMed = percentile(engs, 0.5)
-  const eMin = 0
-  const eMax = Math.min(100, eMaxRaw + Math.max(0.5, eMaxRaw * 0.2))
-  const fMed = followers.length ? followers[Math.floor(followers.length / 2)] : 0
-
-  const x = (v: number): number => {
-    if (useLog) {
-      const lv = Math.log10(Math.max(1, v))
-      const lo = Math.log10(Math.max(1, fMinScale))
-      const hi = Math.log10(fMaxScale)
-      return padL + ((lv - lo) / (hi - lo)) * innerW
-    }
-    return padL + ((v - fMinScale) / (fMaxScale - fMinScale || 1)) * innerW
-  }
-  const y = (v: number): number => {
-    const t = (v - eMin) / (eMax - eMin || 1)
-    return padT + innerH - Math.min(1, Math.max(0, t)) * innerH
-  }
-
-  // ── X ticks: log-friendly when needed ─────────────────────────────
-  const xTicks: number[] = (() => {
-    if (useLog) {
-      const lo = Math.log10(fMinScale), hi = Math.log10(fMaxScale)
-      const out: number[] = []
-      const step = Math.ceil((hi - lo) / 4)
-      for (let p = Math.ceil(lo); p <= Math.floor(hi); p += step) {
-        out.push(Math.pow(10, p))
-      }
-      return out.length ? out : [fMinScale, fMaxScale]
-    }
-    const step = (fMaxScale - fMinScale) / 4
-    return [fMinScale + step, fMinScale + 2 * step, fMinScale + 3 * step, fMaxScale]
-  })()
-  const yTicks = [eMin + (eMax - eMin) * 0.25, eMin + (eMax - eMin) * 0.5, eMin + (eMax - eMin) * 0.75, eMax]
-
-  // ── Label collision avoidance (iterative repulsion) ───────────────
-  // 60 iterations, 14px minimum gap. JOOLA anchors at its dot; others nudge apart.
-  type LabelPos = { brand: string; name: string; isJ: boolean; cx: number; cy: number; lx: number; ly: number }
-  const labels: LabelPos[] = data.map(d => {
-    const cx = x(d.followers), cy = y(d.engRate)
-    return { brand: d.brand, name: d.name, isJ: d.brand === 'joola', cx, cy, lx: cx, ly: cy - 16 }
-  })
-  const MIN_GAP = 14, ITERS = 60
-  for (let it = 0; it < ITERS; it++) {
-    for (let i = 0; i < labels.length; i++) {
-      for (let j = i + 1; j < labels.length; j++) {
-        const a = labels[i], b = labels[j]
-        const dx = a.lx - b.lx, dy = a.ly - b.ly
-        const dist = Math.hypot(dx, dy) || 0.01
-        if (dist < MIN_GAP) {
-          const push = (MIN_GAP - dist) / 2
-          const ux = dx / dist, uy = dy / dist
-          if (!a.isJ) { a.lx += ux * push; a.ly += uy * push }
-          if (!b.isJ) { b.lx -= ux * push; b.ly -= uy * push }
-        }
-      }
-      // keep labels inside chart bounds
-      const a = labels[i]
-      a.lx = Math.max(padL + 4, Math.min(padL + innerW - 4, a.lx))
-      a.ly = Math.max(padT + 10, Math.min(padT + innerH - 4, a.ly))
-    }
-  }
-
-  // ── Quadrant interpretation for tooltip ───────────────────────────
-  const quadrant = (d: EQMatrixDatum): string => {
-    const right = d.followers >= fMed
-    const top = d.engRate >= eMed
-    if (right && top) return 'Top-right · winning reach and engagement'
-    if (!right && top) return 'Top-left · niche but resonating'
-    if (right && !top) return 'Bottom-right · big audience, low resonance'
-    return 'Bottom-left · low reach, low engagement'
-  }
+  const joola = data.find(d => d.brand === 'joola')
+  const xMidVal = xMax * 0.25
+  const xTickVals = [xMax * 0.0625, xMax * 0.25, xMax * 0.5625, xMax]
+  const yTickVals = [yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax]
 
   return (
     <div className="scatter-wrap" style={{ position: 'relative' }}
       onMouseMove={(e) => setTipPos({ x: e.clientX, y: e.clientY })}
       onMouseLeave={() => { setHover(null); setTipPos(null) }}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
-        {/* Quadrant backgrounds (faint) */}
-        <rect x={padL} y={padT} width={x(fMed) - padL} height={y(eMed) - padT} fill="rgba(129,140,248,0.05)" />
-        <rect x={x(fMed)} y={padT} width={padL + innerW - x(fMed)} height={y(eMed) - padT} fill="rgba(34,197,94,0.06)" />
-        <rect x={padL} y={y(eMed)} width={x(fMed) - padL} height={padT + innerH - y(eMed)} fill="rgba(100,116,139,0.03)" />
-        <rect x={x(fMed)} y={y(eMed)} width={padL + innerW - x(fMed)} height={padT + innerH - y(eMed)} fill="rgba(245,158,11,0.04)" />
-
+        {/* Quadrant background fills */}
+        <rect x={padL} y={padT} width={x(xMidVal) - padL} height={y(yMid) - padT} fill="rgba(129,140,248,0.05)" />
+        <rect x={x(xMidVal)} y={padT} width={padL + innerW - x(xMidVal)} height={y(yMid) - padT} fill="rgba(34,197,94,0.06)" />
+        <rect x={padL} y={y(yMid)} width={x(xMidVal) - padL} height={padT + innerH - y(yMid)} fill="rgba(100,116,139,0.03)" />
+        <rect x={x(xMidVal)} y={y(yMid)} width={padL + innerW - x(xMidVal)} height={padT + innerH - y(yMid)} fill="rgba(245,158,11,0.04)" />
         {/* Grid lines */}
         <g className="scatter-grid">
           {[0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'gx' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} />
+            <line key={'x' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} />
           ))}
           {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'gy' + i} x1={padL} x2={padL + innerW} y1={padT + t * innerH} y2={padT + t * innerH} />
+            <line key={'y' + i} x1={padL} x2={padL + innerW} y1={padT + t * innerH} y2={padT + t * innerH} />
           ))}
         </g>
-
-        {/* Median crosshairs ONLY (subtle gray) — no JOOLA reference crosshairs.
-            JOOLA gets a larger, white-stroked dot below so it still stands out. */}
-        <line x1={x(fMed)} x2={x(fMed)} y1={padT} y2={padT + innerH}
-          stroke="rgba(148,163,184,0.55)" strokeDasharray="4 4" strokeWidth="1" />
-        <line x1={padL} x2={padL + innerW} y1={y(eMed)} y2={y(eMed)}
-          stroke="rgba(148,163,184,0.55)" strokeDasharray="4 4" strokeWidth="1" />
-
-        {/* Quadrant labels — corners with backing rects */}
-        {[
-          { txt: 'LOW REACH · HIGH ENGAGEMENT', cx: padL + 4, cy: padT + 6, anchor: 'start' as const, color: '#a1a1aa' },
-          { txt: 'HIGH REACH · HIGH ENGAGEMENT', cx: padL + innerW - 4, cy: padT + 6, anchor: 'end' as const, color: '#22c55e' },
-          { txt: 'LOW REACH · LOW ENGAGEMENT', cx: padL + 4, cy: padT + innerH - 6, anchor: 'start' as const, color: '#71717a' },
-          { txt: 'HIGH REACH · LOW ENGAGEMENT', cx: padL + innerW - 4, cy: padT + innerH - 6, anchor: 'end' as const, color: '#a1a1aa' },
-        ].map((q, i) => {
-          const textW = q.txt.length * 5.5
-          const rectX = q.anchor === 'start' ? q.cx - 2 : q.cx - textW - 2
-          return (
-            <g key={i}>
-              <rect x={rectX} y={q.cy - 9} width={textW + 4} height={12} fill="rgba(7,9,14,0.78)" rx="2" />
-              <text x={q.cx} y={q.cy} textAnchor={q.anchor} className="scatter-quadrant"
-                style={{ fontSize: 9, fontWeight: 700, fill: q.color, letterSpacing: '0.08em' }}>{q.txt}</text>
-            </g>
-          )
-        })}
-
-        {/* X axis ticks */}
-        {xTicks.map((v, i) => (
-          <text key={'xt' + i} x={x(v)} y={h - 32} textAnchor="middle" className="scatter-axis">
-            {fmt(v)}
-          </text>
+        {/* Median crosshairs */}
+        <line x1={x(xMidVal)} x2={x(xMidVal)} y1={padT} y2={padT + innerH} stroke="rgba(245,230,37,0.4)" strokeDasharray="4 3" strokeWidth="1.5" />
+        <line x1={padL} x2={padL + innerW} y1={y(yMid)} y2={y(yMid)} stroke="rgba(245,230,37,0.4)" strokeDasharray="4 3" strokeWidth="1.5" />
+        {/* Quadrant labels */}
+        <text x={padL + (x(xMidVal) - padL) / 2} y={padT + 16} textAnchor="middle" className="scatter-quadrant" style={{ fontSize: 10, fontWeight: 700 }}>HIGH ENG · SMALL REACH</text>
+        <text x={x(xMidVal) + (padL + innerW - x(xMidVal)) / 2} y={padT + 16} textAnchor="middle" className="scatter-quadrant" style={{ fill: '#22c55e', fontSize: 10, fontWeight: 700 }}>HIGH VALUE</text>
+        <text x={padL + (x(xMidVal) - padL) / 2} y={padT + innerH - 8} textAnchor="middle" className="scatter-quadrant" style={{ fontSize: 10, fontWeight: 700 }}>UNDERPERFORMING</text>
+        <text x={x(xMidVal) + (padL + innerW - x(xMidVal)) / 2} y={padT + innerH - 8} textAnchor="middle" className="scatter-quadrant" style={{ fontSize: 10, fontWeight: 700 }}>BIG REACH · LOW ENG</text>
+        {/* X axis ticks + label */}
+        {xTickVals.map((v, i) => (
+          <text key={i} x={x(v)} y={h - 30} textAnchor="middle" className="scatter-axis">{fmt(v)}</text>
         ))}
-        <text x={padL + innerW / 2} y={h - 14} textAnchor="middle" className="scatter-axis"
-          style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-          {useLog ? 'Followers (log) →' : 'Followers →'}
-        </text>
-
-        {/* Y axis ticks */}
-        {yTicks.map((v, i) => (
-          <text key={'yt' + i} x={padL - 8} y={y(v) + 3} textAnchor="end" className="scatter-axis">
-            {v.toFixed(2)}%
-          </text>
+        <text x={padL + innerW / 2} y={h - 12} textAnchor="middle" className="scatter-axis"
+          style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>FOLLOWERS →</text>
+        {/* Y axis ticks + label */}
+        {yTickVals.map((v, i) => (
+          <text key={i} x={padL - 8} y={y(v) + 3} textAnchor="end" className="scatter-axis">{v.toFixed(1)}%</text>
         ))}
-        <text transform={`translate(16 ${padT + innerH / 2}) rotate(-90)`} textAnchor="middle" className="scatter-axis"
-          style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-          Engagement Rate (%) →
-        </text>
-
-        {/* Dots — JOOLA slightly larger (10px) with thick white stroke since
-            we no longer draw JOOLA crosshairs. */}
+        <text transform={`translate(14 ${padT + innerH / 2}) rotate(-90)`} textAnchor="middle" className="scatter-axis"
+          style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>ENGAGEMENT →</text>
+        {/* JOOLA reference crosshairs */}
+        {joola && (
+          <>
+            <line x1={x(joola.followers)} x2={x(joola.followers)} y1={padT} y2={padT + innerH} stroke="#22c55e" strokeOpacity="0.25" />
+            <line x1={padL} x2={padL + innerW} y1={y(joola.engRate)} y2={y(joola.engRate)} stroke="#22c55e" strokeOpacity="0.25" />
+          </>
+        )}
+        {/* Dots */}
         {data.map((d, i) => {
-          const cx = x(d.followers), cy = y(d.engRate)
+          const cx = x(d.followers)
+          const cy = y(d.engRate)
           const isJ = d.brand === 'joola'
           const isHov = hover?.brand === d.brand
-          const dotR = isJ ? 10 : 7
+          const dotR = r(d.posts || 30)
           return (
             <g key={i} style={{ cursor: 'pointer' }}
-              onMouseEnter={() => setHover(d)}
-              onMouseLeave={() => setHover(null)}>
-              <circle cx={cx} cy={cy} r={dotR + (isHov ? 8 : 4)} fill={d.color}
-                opacity={isHov ? 0.24 : 0.10} />
-              <circle cx={cx} cy={cy} r={isHov ? dotR + 2 : dotR}
-                fill={d.color} opacity={isJ ? 1 : 0.9}
-                stroke={isJ ? '#fff' : isHov ? '#fff' : 'rgba(0,0,0,0.45)'}
-                strokeWidth={isJ ? 3 : isHov ? 2 : 1.2}
-                style={{ filter: isHov || isJ ? `drop-shadow(0 0 8px ${d.color}99)` : 'none' }} />
-            </g>
-          )
-        })}
-
-        {/* Labels — ALL brand labels always visible (iterative repulsion
-            keeps them readable). Hovered label highlights brighter; connector
-            line drawn when label was displaced from its dot. */}
-        {labels.map((lab, i) => {
-          const isHov = hover?.brand === lab.brand
-          const moved = Math.hypot(lab.lx - lab.cx, lab.ly - (lab.cy - 16)) > 4
-          return (
-            <g key={'lb' + i} style={{ pointerEvents: 'none' }}>
-              {moved && (
-                <line x1={lab.cx} y1={lab.cy - 6} x2={lab.lx} y2={lab.ly + 2}
-                  stroke={lab.isJ ? '#22c55e' : 'rgba(255,255,255,0.4)'} strokeWidth="0.8" />
+              onMouseEnter={() => setHover({ ...d, cx, cy })}
+              onMouseLeave={() => setHover(null)}
+              onClick={() => onBubbleClick?.(d)}>
+              <circle cx={cx} cy={cy} r={dotR + (isHov ? 10 : 5)} fill={d.color}
+                opacity={isHov ? 0.22 : 0.10}
+                style={{ transition: 'r 200ms, opacity 200ms' }} />
+              <circle className="scatter-dot" cx={cx} cy={cy} r={isHov ? dotR + 3 : dotR}
+                fill={d.color} opacity={isJ ? 1 : 0.85}
+                stroke={isJ ? '#fff' : isHov ? '#fff' : 'rgba(0,0,0,0.4)'}
+                strokeWidth={isJ ? 2.5 : isHov ? 2 : 1}
+                style={{ filter: isHov ? `drop-shadow(0 0 10px ${d.color}cc)` : 'none', transition: 'r 200ms' }} />
+              {(isJ || isHov) && (
+                <text x={cx} y={cy - dotR - 8} textAnchor="middle" className="scatter-label"
+                  style={{ fontWeight: 800, fill: isJ ? '#22c55e' : '#fff', fontSize: 11, pointerEvents: 'none' }}>
+                  {d.name}
+                </text>
               )}
-              <text x={lab.lx} y={lab.ly} textAnchor="middle" className="scatter-label"
-                style={{
-                  fontWeight: lab.isJ || isHov ? 800 : 600,
-                  fontSize: lab.isJ || isHov ? 11 : 10,
-                  fill: lab.isJ ? '#22c55e' : isHov ? '#fff' : '#cbd1dc',
-                  paintOrder: 'stroke', stroke: 'rgba(7,9,14,0.92)', strokeWidth: 3,
-                }}>{lab.name}</text>
             </g>
           )
         })}
@@ -658,9 +553,9 @@ export function EngagementQualityMatrix({
         <div className="tip" style={{ left: tipPos.x, top: tipPos.y, whiteSpace: 'nowrap' }}>
           <div className="t-name" style={{ color: hover.color }}>{hover.name}</div>
           <div>{fmt(hover.followers)} followers · {hover.engRate.toFixed(2)}% eng</div>
-          <div style={{ fontSize: 10, color: 'var(--fg-4)' }}>
-            {hover.posts ?? 0} posts sampled
-          </div>
+          {hover.posts != null && hover.posts > 0 && (
+            <div style={{ fontSize: 10, color: 'var(--fg-4)' }}>{hover.posts} posts sampled</div>
+          )}
           <div style={{ fontSize: 10, color: 'var(--fg-4)', marginTop: 2 }}>
             {quadrant(hover)}
           </div>
@@ -669,6 +564,7 @@ export function EngagementQualityMatrix({
     </div>
   )
 }
+
 
 // ─── Donut ───────────────────────────────────────────────────────────
 function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number) {
@@ -775,7 +671,7 @@ export function BoxPlot({ data, w = 760, h = 280 }: { data: BoxPlotDatum[]; w?: 
         onMouseLeave={() => { setHov(null); setTipPos(null) }}>
         {xTicks.map((v, i) => (
           <g key={i}>
-            <line x1={x(v)} x2={x(v)} y1={padT} y2={padT + innerH} stroke="rgba(255,255,255,0.04)" />
+            <line x1={x(v)} x2={x(v)} y1={padT} y2={padT + innerH} stroke="var(--line-2)" />
             <text x={x(v)} y={h - 12} textAnchor="middle" className="scatter-axis">${v}</text>
           </g>
         ))}
@@ -841,7 +737,7 @@ export function SentimentBar({ data }: {
             title={`${d.name} · ${d.mentions} mentions · ${posPct}% positive · ${neuPct}% neutral · ${negPct}% negative`}
             style={{ display: 'grid', gridTemplateColumns: '100px 1fr 80px 60px', gap: 10, alignItems: 'center' }}>
             <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 600, color: isJ ? '#22c55e' : '#cbd1dc' }}>{d.name}</div>
-            <div style={{ display: 'flex', height: 20, borderRadius: 3, overflow: 'hidden', background: 'rgba(255,255,255,0.03)' }}>
+            <div style={{ display: 'flex', height: 20, borderRadius: 3, overflow: 'hidden', background: 'var(--wb-3)' }}>
               <div style={{ width: (d.positive / total) * 100 + '%', background: '#22c55e', opacity: 0.9 }} title={`Positive: ${d.positive}`} />
               {/* VIZ-25: use neutral gray for the neutral band so it never collides with the green=positive convention */}
               <div style={{ width: (d.neutral / total) * 100 + '%', background: '#94a3b8', opacity: 0.5 }} title={`Neutral: ${d.neutral}`} />

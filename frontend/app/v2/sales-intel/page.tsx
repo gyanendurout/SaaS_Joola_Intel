@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { PageHead, SectionInfo, LoadingPage, SortTh, ColumnFilter, pgColor } from '@/components/v2/PageShell'
 import { fmt, LineChart, ScatterChart, type ScatterDatum } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 import {
   fetchStockoutOpportunities,
   fetchRestockCadence,
@@ -134,7 +136,7 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 function statusBorderColor(status: string): string {
-  return STATUS_COLORS[status] ?? 'rgba(255,255,255,0.08)'
+  return STATUS_COLORS[status] ?? 'var(--wb-8)'
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -190,6 +192,9 @@ export default function SalesIntelPage() {
   const [revSortKey, setRevSortKey] = useState<string | null>(null)
   const [revSortDir, setRevSortDir] = useState<'asc' | 'desc'>('desc')
   const [revColFilter, setRevColFilter] = useState<Record<string, string>>({})
+  const [ovSortKey, setOvSortKey] = useState<string>('total')
+  const [ovSortDir, setOvSortDir] = useState<'asc' | 'desc'>('desc')
+  const router = useRouter()
 
   function toggleStock(k: string) {
     if (stockSortKey === k) setStockSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -974,6 +979,58 @@ export default function SalesIntelPage() {
   // T view toggle
   const [tView, setTView] = useState<'discount' | 'current' | 'full'>('discount')
 
+  // ─── Brand overview (aggregated per-brand signals) ─────────────────
+  const brandOverview = useMemo(() => {
+    function toggleOvSort(col: string) {
+      if (ovSortKey === col) setOvSortDir(d => d === 'asc' ? 'desc' : 'asc')
+      else { setOvSortKey(col); setOvSortDir('desc') }
+    }
+    return { toggleOvSort }
+  }, [ovSortKey])
+
+  const brandOverviewRows = useMemo(() => {
+    return brandCards.map(card => {
+      const slug = card.brand.slug
+      const stockouts = stockoutRows.filter(r => r.brandSlug === slug).length
+      const prices = priceRows2.filter(r => r.brandSlug === slug)
+      const avgDiscount = prices.length
+        ? prices.reduce((s, r) => s + (r.discountPct ?? 0), 0) / prices.length
+        : null
+      const avgPrice = revenueRows.find(r => r.brand.slug === slug)?.avgPrice ?? null
+      const cadence = cadenceRows.filter(r => r.brandSlug === slug)
+      const demand = cadence.reduce((s, r) => s + r.demand30d, 0)
+      const patterns = cadence.map(r => r.pattern)
+      const topPattern = patterns.length
+        ? (['Frequent', 'Steady', 'Occasional', 'Single restock'] as const)
+            .find(p => patterns.includes(p)) ?? patterns[0]
+        : null
+      return { brand: card.brand, total: card.total, inStock: card.inStock, outStock: card.outStock, limited: card.limited, confidence: card.confidence, stockouts, avgDiscount, avgPrice, demand, topPattern }
+    }).sort((a, b) => {
+      if (a.brand.slug === 'joola') return -1
+      if (b.brand.slug === 'joola') return 1
+      const getV = (x: typeof a): number | string => {
+        if (ovSortKey === 'brand') return x.brand.name
+        if (ovSortKey === 'inStock') return x.inStock
+        if (ovSortKey === 'outStock') return x.outStock
+        if (ovSortKey === 'stockouts') return x.stockouts
+        if (ovSortKey === 'avgPrice') return x.avgPrice ?? -1
+        if (ovSortKey === 'demand') return x.demand
+        return x.total
+      }
+      const av = getV(a), bv = getV(b)
+      if (typeof av === 'number' && typeof bv === 'number') return ovSortDir === 'asc' ? av - bv : bv - av
+      return ovSortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+    })
+  }, [brandCards, stockoutRows, priceRows2, cadenceRows, revenueRows, ovSortKey, ovSortDir])
+
+  // ─── Reveal hooks (must be before early return) ───────────────────
+  const row2 = useReveal()
+  const row3 = useReveal()
+  const row4 = useReveal()
+  const row5 = useReveal()
+  const row6 = useReveal()
+  const row7 = useReveal()
+
   // ─── Render ────────────────────────────────────────────────────────
   if (loading) return <LoadingPage />
 
@@ -981,7 +1038,7 @@ export default function SalesIntelPage() {
     return (
       <div style={{ padding: '80px 32px', textAlign: 'center' }}>
         <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-        <button className="btn btn-yellow" onClick={() => window.location.reload()}>
+        <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">
           Refresh page
         </button>
       </div>
@@ -999,8 +1056,140 @@ export default function SalesIntelPage() {
         sub={`Stock signals and estimated sales velocity across ${brands.length} brands`}
       />
 
-      {/* ─── Section 1: Inventory Status Grid ─────────────────────── */}
+      {/* ─── KPI Bar ───────────────────────────────────────────────── */}
       <section>
+        <div className="kpi-grid">
+          <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Products tracked"
+              src="product_snapshots · latest per product"
+              value={fmt(kpis.totalProducts)}
+              color="#F5E625"
+              customVs={`${products.length} in catalog`}
+              tip="How many distinct paddle SKUs across the 11 brands had a stock snapshot during this window. Each SKU is checked weekly on the brand's own product page (Add-to-cart button visible = in stock; 'Sold out' = out of stock)."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="In stock"
+              src="latest snapshot availability"
+              flavor="joola"
+              value={kpis.inStockPct.toFixed(1) + '%'}
+              color="#22c55e"
+              customVs={`${Math.round((kpis.inStockPct / 100) * kpis.totalProducts)} of ${kpis.totalProducts} SKUs`}
+              tip="Share of tracked paddles currently available to buy. Formula: in_stock_pct = (SKUs in stock at most recent snapshot ÷ total SKUs tracked) × 100. Source: weekly scrape of each brand's own product page."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Out of stock"
+              src="latest snapshot availability"
+              value={kpis.outStockPct.toFixed(1) + '%'}
+              color="#ef4444"
+              customVs={`${Math.round((kpis.outStockPct / 100) * kpis.totalProducts)} SKUs unavailable`}
+              tip="Share of tracked paddles unavailable to buy right now. High out-of-stock % at a competitor = demand-transfer opportunity for JOOLA (their buyers are looking for alternatives). Source: brand product page snapshots."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Brands with data"
+              value={fmt(kpis.brandsWithData)}
+              color="#818cf8"
+              customVs={`of ${brands.length} tracked`}
+              tip="How many of the 11 tracked brands returned at least one stock snapshot this window. If this is low, scraper coverage needs a check before drawing conclusions from the page."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Brand Overview Table ──────────────────────────────────── */}
+      <section ref={row2.ref} className={revealCls(row2.vis)} style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>Brand-wise overview
+              <SectionInfo title="Sales Intel — Brand Overview" description="Per-brand summary: products tracked, stock health, stockout opportunities, avg price, demand signal, and restock cadence. Click any row to see full brand-level detail." source="product_snapshots · inventory_events · price_daily · product_attention_summary" />
+            </h2>
+            <div className="sub">{brandOverviewRows.length} brands · click a row for full sales detail</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="table-wrap">
+            <table className="data" style={{ width: '100%' }}>
+              <thead><tr>
+                <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
+                <SortTh col="brand"    label="Brand"         sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ minWidth: 130 }} />
+                <SortTh col="total"    label="Products"      sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 80 }} />
+                <SortTh col="inStock"  label="In Stock"      sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 80 }} />
+                <SortTh col="outStock" label="Out of Stock"  sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 90 }} />
+                <th style={{ minWidth: 120 }}>Stock Health</th>
+                <SortTh col="stockouts" label="Stockout Opps" sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 100 }} />
+                <SortTh col="avgPrice" label="Avg Price"     sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 85 }} />
+                <SortTh col="demand"   label="Demand 30d"    sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 90 }} />
+                <th style={{ width: 110 }}>Restock Pattern</th>
+                <th style={{ width: 70, textAlign: 'center' }}>Detail</th>
+              </tr></thead>
+              <tbody>
+                {brandOverviewRows.map((row, i) => {
+                  const isJ = row.brand.slug === 'joola'
+                  const color = brandColor(row.brand.slug)
+                  const inPct = row.total > 0 ? Math.round((row.inStock / row.total) * 100) : 0
+                  const patternColor = row.topPattern === 'Frequent' ? '#22c55e' : row.topPattern === 'Steady' ? '#F5E625' : row.topPattern === 'Occasional' ? '#fb923c' : '#6b7280'
+                  return (
+                    <tr key={row.brand.slug} className={isJ ? 'joola' : ''}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/sales-intel/brand/${encodeURIComponent(row.brand.slug)}`)}
+                      title={`View ${row.brand.name} sales detail`}>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{i + 1}</td>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{row.brand.name}</span>
+                        </span>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{row.total || '—'}</td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, color: '#22c55e', fontFamily: 'JetBrains Mono' }}>{row.inStock > 0 ? row.inStock : <span style={{ color: 'var(--fg-4)' }}>—</span>}</td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, color: row.outStock > 0 ? '#ef4444' : 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{row.outStock > 0 ? row.outStock : '—'}</td>
+                      <td>
+                        {row.total > 0 ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ flex: 1, height: 6, background: 'var(--wb-6)', borderRadius: 99, overflow: 'hidden', minWidth: 60 }}>
+                              <div style={{ height: '100%', width: `${inPct}%`, background: inPct > 70 ? '#22c55e' : inPct > 40 ? '#F5E625' : '#ef4444', borderRadius: 99 }} />
+                            </div>
+                            <span style={{ fontSize: 10, fontFamily: 'JetBrains Mono', color: 'var(--fg-3)', minWidth: 30 }}>{inPct}%</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No data</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {row.stockouts > 0 ? (
+                          <span style={{ fontWeight: 700, color: '#fb923c', fontFamily: 'JetBrains Mono', fontSize: 12 }}>{row.stockouts}</span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: 'var(--fg-2)', fontWeight: 600 }}>
+                        {row.avgPrice != null ? `$${Math.round(row.avgPrice)}` : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono', color: '#818cf8', fontWeight: 700 }}>
+                        {row.demand > 0 ? fmt(row.demand) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td>
+                        {row.topPattern ? (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: patternColor + '18', color: patternColor, border: `1px solid ${patternColor}44` }}>{row.topPattern}</span>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>—</span>}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <button onClick={() => router.push(`/v2/sales-intel/brand/${encodeURIComponent(row.brand.slug)}`)}
+                          className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}>Detail →</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Section 1: Inventory Status Grid ─────────────────────── */}
+      <section ref={row3.ref} className={revealCls(row3.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -1112,7 +1301,7 @@ export default function SalesIntelPage() {
                     style={{
                       fontSize: 11,
                       color: '#9ca3af',
-                      borderTop: '1px solid rgba(255,255,255,0.06)',
+                      borderTop: '1px solid var(--wb-6)',
                       paddingTop: 8,
                     }}
                   >
@@ -1127,7 +1316,7 @@ export default function SalesIntelPage() {
       </section>
 
       {/* ─── Section 2: Stock Events Timeline ─────────────────────── */}
-      <section>
+      <section ref={row4.ref} className={revealCls(row4.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -1151,7 +1340,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
               <table className="data">
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="time" label="Time" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} style={{ width: 130 }} />
                     <SortTh col="brandName" label="Brand" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
@@ -1210,7 +1399,7 @@ export default function SalesIntelPage() {
       </section>
 
       {/* ─── Section 3: Price Landscape ───────────────────────────── */}
-      <section>
+      <section ref={row5.ref} className={revealCls(row5.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -1234,7 +1423,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
               <table className="data">
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <SortTh col="productName" label="Product" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} />
                     <SortTh col="brandName" label="Brand" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} style={{ width: 140 }} />
@@ -1263,7 +1452,7 @@ export default function SalesIntelPage() {
                           </span>
                         </td>
                         <td>
-                          <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                          <div style={{ background: 'var(--line-2)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
                             <div style={{ background: `linear-gradient(90deg, ${color}66, ${color}1a)`, borderRadius: 4, height: 8, width: `${Math.max(2, pct)}%` }} />
                           </div>
                         </td>
@@ -1281,7 +1470,7 @@ export default function SalesIntelPage() {
       </section>
 
       {/* ─── Section 4: Revenue Estimate ──────────────────────────── */}
-      <section>
+      <section ref={row6.ref} className={revealCls(row6.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -1322,7 +1511,7 @@ export default function SalesIntelPage() {
             <>
               <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
                 <table className="data">
-                  <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                     <tr>
                       <th style={{ width: 40 }}>#</th>
                       <SortTh col="brand" label="Brand" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} />
@@ -1368,8 +1557,8 @@ export default function SalesIntelPage() {
                   </tbody>
                 </table>
               </div>
-              <div style={{ fontSize: 10, color: '#6b7280', padding: '8px 16px 12px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                Tracking {variants.length} product variants across {Array.from(new Set(latestSnapshots.map(s => s.brand_id))).length} brands.
+              <div style={{ fontSize: 10, color: '#6b7280', padding: '8px 16px 12px', borderTop: '1px solid var(--line-2)' }}>
+                Tracking {variants.length} product variants across {kpis.brandsWithData} brands.
               </div>
             </>
           )}
@@ -1379,7 +1568,7 @@ export default function SalesIntelPage() {
       {/* ─── NEW SECTIONS · Sales Intel Expansion (2026-05-25) ──── */}
 
       {/* ── F. Competitor stockout opportunity ──────────────────── */}
-      <section>
+      <section ref={row7.ref} className={revealCls(row7.vis)}>
         <div className="section-head">
           <div>
             <h2>
@@ -1401,7 +1590,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Brand</th>
                     <th>Product</th>
@@ -1469,7 +1658,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Brand</th>
                     <th>Product</th>
@@ -1537,7 +1726,7 @@ export default function SalesIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Brand</th>
                     <th>Product</th>

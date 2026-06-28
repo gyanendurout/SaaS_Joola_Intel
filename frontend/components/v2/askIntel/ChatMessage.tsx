@@ -33,8 +33,8 @@ export function ChatMessage({
   return (
     <div style={{ marginBottom: 24 }}>
       <div style={{
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.07)',
+        background: 'var(--wb-3)',
+        border: '1px solid var(--line)',
         borderRadius: 4, padding: 16,
       }}>
         {turn.pending ? (
@@ -196,7 +196,7 @@ function FeedbackButtons({
     <div style={{
       marginTop: 12, display: 'flex', alignItems: 'center', gap: 8,
       paddingTop: 10,
-      borderTop: '1px dashed rgba(255,255,255,0.06)',
+      borderTop: '1px dashed var(--wb-6)',
     }}>
       <span style={{
         fontSize: 10, color: 'var(--fg-4)',
@@ -208,7 +208,7 @@ function FeedbackButtons({
         title="Helpful"
         style={{
           background: picked === 'up' ? 'rgba(34,197,94,0.18)' : 'transparent',
-          border: '1px solid ' + (picked === 'up' ? 'rgba(34,197,94,0.5)' : 'rgba(255,255,255,0.12)'),
+          border: '1px solid ' + (picked === 'up' ? 'rgba(34,197,94,0.5)' : 'var(--wb-12)'),
           color: picked === 'up' ? '#22c55e' : 'var(--fg-3)',
           padding: '3px 8px', borderRadius: 3, fontSize: 12, cursor: 'pointer',
         }}
@@ -219,7 +219,7 @@ function FeedbackButtons({
         title="Not helpful"
         style={{
           background: picked === 'down' ? 'rgba(239,68,68,0.18)' : 'transparent',
-          border: '1px solid ' + (picked === 'down' ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.12)'),
+          border: '1px solid ' + (picked === 'down' ? 'rgba(239,68,68,0.5)' : 'var(--wb-12)'),
           color: picked === 'down' ? '#ef4444' : 'var(--fg-3)',
           padding: '3px 8px', borderRadius: 3, fontSize: 12, cursor: 'pointer',
         }}

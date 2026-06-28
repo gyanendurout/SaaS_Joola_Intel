@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useReveal, revealCls } from '@/lib/v2/animations'
+import { useRouter } from 'next/navigation'
 import {
   fetchBrands, fetchReddit, fetchRedditTrend, fetchRedditSubreddits, fetchTopRedditMentions,
   fetchRedditViral, fetchRedditRemoved, fetchRedditCrisisClusters, fetchRedditReplyVsOp,
@@ -8,7 +10,7 @@ import {
   type V2RedditViral, type V2RedditRemoved, type V2RedditCrisisCluster, type V2RedditReplyVsOp,
 } from '@/lib/v2/data'
 import { fmt, LineChart, SentimentBar } from '@/components/v2/charts'
-import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, ColumnFilter, FilterBanner } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, ColumnFilter, FilterBanner, exportCSV } from '@/components/v2/PageShell'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { redditPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
@@ -27,6 +29,7 @@ function weekLabel(weeksAgo: number): string {
 }
 
 export default function RedditPage() {
+  const router = useRouter()
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [reddit, setReddit] = useState<V2RedditRow[]>([])
   const [trend, setTrend] = useState<Record<string, number[]>>({})
@@ -40,6 +43,8 @@ export default function RedditPage() {
   const [error, setError] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<string | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [bwSortKey, setBwSortKey] = useState<string>('mentions')
+  const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
   const [colFilter, setColFilter] = useState<Record<string, string>>({})
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
   const { range, maxDays } = useDateRange()
@@ -76,12 +81,16 @@ export default function RedditPage() {
     })
   }, [setAllBrands])
 
+  const sec1 = useReveal()
+  const sec2 = useReveal()
+  const sec3 = useReveal()
+
   if (loading) return <LoadingPage />
 
   if (error) return (
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <div style={{ color: '#ef4444', fontSize: 14, marginBottom: 16 }}>{error}</div>
-      <button className="btn btn-yellow" onClick={() => window.location.reload()}>Refresh page</button>
+      <button className="btn btn-yellow" onClick={() => window.location.reload()} aria-label="Refresh page">Refresh page</button>
     </div>
   )
 
@@ -150,8 +159,33 @@ export default function RedditPage() {
       : String(bv ?? '').localeCompare(String(av ?? ''))
   }) : filteredMentions
 
+  function toggleBwSort(col: string) {
+    if (bwSortKey === col) setBwSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setBwSortKey(col); setBwSortDir('desc') }
+  }
+  const topMentionByBrand: Record<string, V2RedditMention> = {}
+  displayMentions.forEach(m => {
+    if (!topMentionByBrand[m.brand] || m.score > topMentionByBrand[m.brand].score)
+      topMentionByBrand[m.brand] = m
+  })
+  const sortedBrandOverview = [...displayReddit].sort((a, b) => {
+    if (a.brand === 'joola') return -1
+    if (b.brand === 'joola') return 1
+    const getV = (x: typeof a): number | string => {
+      if (bwSortKey === 'brand') return name(x.brand)
+      if (bwSortKey === 'positive') return x.mentions > 0 ? x.positive / x.mentions : 0
+      if (bwSortKey === 'negative') return x.mentions > 0 ? x.negative / x.mentions : 0
+      if (bwSortKey === 'delta') return x.delta ?? -9999
+      return x.mentions
+    }
+    const av = getV(a), bv = getV(b)
+    if (typeof av === 'number' && typeof bv === 'number')
+      return bwSortDir === 'asc' ? av - bv : bv - av
+    return bwSortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+  })
+
   return (
-    <>
+    <div className="ov-page-enter">
       <PageHead
         eyebrow={`REDDIT · ${totalMentions} MENTIONS · ${subreddits.length} SUBREDDITS`}
         title="Community"
@@ -163,37 +197,131 @@ export default function RedditPage() {
       />
       <FilterBanner />
 
+      {/* ── Brand-wise Overview Table ── */}
+      <section style={{ marginBottom: 28 }}>
+        <div className="section-head">
+          <div>
+            <h2>Brand-wise overview <SectionInfo title="Reddit Brand Overview" description="One row per brand — mention volume, sentiment breakdown, weekly delta, and top post. Click any row to explore full Reddit activity for that brand." source="reddit_mentions · latest data" /></h2>
+            <div className="sub">{sortedBrandOverview.length} brands · click a row for full Reddit detail</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="table-wrap">
+            <table className="data" style={{ width: '100%' }}>
+              <thead><tr>
+                <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
+                <SortTh col="brand"    label="Brand"      sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
+                <SortTh col="mentions" label="Mentions"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
+                <SortTh col="delta"    label="Δ Mentions" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
+                <th style={{ minWidth: 160 }}>Sentiment</th>
+                <SortTh col="positive" label="Pos%" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 60 }} />
+                <SortTh col="negative" label="Neg%" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 60 }} />
+                <th style={{ minWidth: 200 }}>Top Post</th>
+                <th style={{ width: 70, textAlign: 'center' }}>Detail</th>
+              </tr></thead>
+              <tbody>
+                {sortedBrandOverview.map((d, i) => {
+                  const isJ = d.brand === 'joola'
+                  const color = pgColor(d.brand)
+                  const total = d.mentions || 1
+                  const posPct = Math.round((d.positive / total) * 100)
+                  const negPct = Math.round((d.negative / total) * 100)
+                  const neuPct = 100 - posPct - negPct
+                  const tm = topMentionByBrand[d.brand]
+                  return (
+                    <tr key={d.brand} className={isJ ? 'joola' : ''}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => router.push(`/v2/reddit/brand/${encodeURIComponent(d.brand)}`)}
+                      title={`View ${name(d.brand)} Reddit details`}>
+                      <td style={{ textAlign: 'center', fontSize: 11, color: 'var(--fg-4)', fontFamily: 'JetBrains Mono' }}>{i + 1}</td>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <span style={{ fontWeight: 700, color: isJ ? '#22c55e' : 'var(--fg)' }}>{name(d.brand)}</span>
+                        </span>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'JetBrains Mono', color: isJ ? '#22c55e' : 'var(--fg)' }}>{d.mentions}</td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {d.delta != null && d.delta !== 0 ? (
+                          <span style={{ fontWeight: 700, fontSize: 11, fontFamily: 'JetBrains Mono', color: d.delta >= 0 ? '#22c55e' : '#ef4444' }}>
+                            {d.delta >= 0 ? '+' : ''}{d.delta}
+                          </span>
+                        ) : <span style={{ color: 'var(--fg-4)' }}>—</span>}
+                      </td>
+                      <td>
+                        {d.mentions > 0 ? (
+                          <div style={{ height: 8, display: 'flex', borderRadius: 4, overflow: 'hidden', background: 'var(--line-2)', minWidth: 120 }}>
+                            <div style={{ width: `${posPct}%`, background: '#22c55e', opacity: 0.9 }} title={`Positive: ${posPct}%`} />
+                            <div style={{ width: `${neuPct}%`, background: '#94a3b8', opacity: 0.5 }} title={`Neutral: ${neuPct}%`} />
+                            <div style={{ width: `${negPct}%`, background: '#ef4444', opacity: 0.9 }} title={`Negative: ${negPct}%`} />
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No data</span>}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: '#22c55e', fontWeight: 700, fontFamily: 'JetBrains Mono', fontSize: 11 }}>
+                        {d.mentions > 0 ? `${posPct}%` : '—'}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: '#ef4444', fontWeight: 700, fontFamily: 'JetBrains Mono', fontSize: 11 }}>
+                        {d.mentions > 0 ? `${negPct}%` : '—'}
+                      </td>
+                      <td style={{ maxWidth: 200 }}>
+                        {tm ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontSize: 11, color: 'var(--fg-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }} title={tm.title}>{tm.title.slice(0, 55)}{tm.title.length > 55 ? '…' : ''}</span>
+                            <span style={{ fontSize: 10, color: '#F5E625', fontFamily: 'JetBrains Mono' }}>↑ {tm.score} · r/{tm.subreddit}</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--fg-4)', fontSize: 11 }}>No mention data</span>}
+                      </td>
+                      <td style={{ textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <button onClick={e => { e.stopPropagation(); router.push(`/v2/reddit/brand/${encodeURIComponent(d.brand)}`) }} className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }}>Detail ↗</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section>
         <div className="kpi-grid">
-          <MiniKpi
-            label="JOOLA mentions" src="Reddit data" flavor="joola"
-            value={joolaR ? fmt(joolaR.mentions) : '0'}
-            color="#22c55e"
-            spark={displayTrend['joola'] || []}
-            customVs={`#${displayReddit.findIndex((d) => d.brand === 'joola') + 1} of ${displayReddit.length} brands`}
-            tip="How many times 'JOOLA' (brand and product names) appeared in Reddit posts and comments during the selected time window. Source: Reddit scrape via Apify -> mention_facts table. The '#3 of 11' rank means JOOLA is the 3rd most-talked-about paddle brand right now vs the other 10 we track."
-          />
-          <MiniKpi
-            label="JOOLA sentiment" src="net score" flavor="joola"
-            value={allNeutral ? '—' : (parseFloat(netScore) >= 0 ? '+' : '') + netScore}
-            color="#22c55e"
-            customVs={allNeutral ? 'Sentiment classifier still calibrating — bars render 100% neutral until next enrichment pass' : `${joolaPositivePct}% positive · ${joolaNegativePct}% negative`}
-            tip="Overall mood of JOOLA mentions on Reddit. Formula: Net score = % positive − % negative. Each mention is scored by GPT-4o-mini as positive/neutral/negative. Above 0 = more love than hate; below 0 = more complaints than compliments."
-          />
-          <MiniKpi
-            label="Total mentions" src="Reddit data"
-            value={fmt(totalMentions)}
-            color="#F5E625"
-            customVs={`across ${displayReddit.length} brands`}
-            tip="Total paddle-brand mentions across all 11 tracked brands in this window. This is the denominator used to compute share of voice for any individual brand."
-          />
-          <MiniKpi
-            label="Top subreddit" src="distribution"
-            value={topSubreddit ? topSubreddit.name : '—'}
-            color="#818cf8"
-            customVs={topSubreddit ? `${fmt(topSubreddit.mentions)} mentions` : 'No subreddit data'}
-            tip="The Reddit community where paddle conversation is most concentrated right now. Useful for knowing where JOOLA community managers should focus listening and engagement."
-          />
+          <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="JOOLA mentions" src="Reddit data" flavor="joola"
+              value={joolaR ? fmt(joolaR.mentions) : '0'}
+              color="#22c55e"
+              spark={displayTrend['joola'] || []}
+              customVs={`#${displayReddit.findIndex((d) => d.brand === 'joola') + 1} of ${displayReddit.length} brands`}
+              tip="How many times 'JOOLA' (brand and product names) appeared in Reddit posts and comments during the selected time window. Source: Reddit scrape via Apify -> mention_facts table. The '#3 of 11' rank means JOOLA is the 3rd most-talked-about paddle brand right now vs the other 10 we track."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="JOOLA sentiment" src="net score" flavor="joola"
+              value={allNeutral ? '—' : (parseFloat(netScore) >= 0 ? '+' : '') + netScore}
+              color="#22c55e"
+              customVs={allNeutral ? 'Sentiment classifier still calibrating — bars render 100% neutral until next enrichment pass' : `${joolaPositivePct}% positive · ${joolaNegativePct}% negative`}
+              tip="Overall mood of JOOLA mentions on Reddit. Formula: Net score = % positive − % negative. Each mention is scored by GPT-4o-mini as positive/neutral/negative. Above 0 = more love than hate; below 0 = more complaints than compliments."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Total mentions" src="Reddit data"
+              value={fmt(totalMentions)}
+              color="#F5E625"
+              customVs={`across ${displayReddit.length} brands`}
+              tip="Total paddle-brand mentions across all 11 tracked brands in this window. This is the denominator used to compute share of voice for any individual brand."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Top subreddit" src="distribution"
+              value={topSubreddit ? topSubreddit.name : '—'}
+              color="#818cf8"
+              customVs={topSubreddit ? `${fmt(topSubreddit.mentions)} mentions` : 'No subreddit data'}
+              tip="The Reddit community where paddle conversation is most concentrated right now. Useful for knowing where JOOLA community managers should focus listening and engagement."
+            />
+          </div>
         </div>
       </section>
 
@@ -204,7 +332,7 @@ export default function RedditPage() {
             border: '1px solid rgba(245,230,37,0.2)', borderRadius: 6,
             padding: '8px 12px',
           }}>
-            ⚠ Sentiment classifier in calibration — bars currently render as 100% neutral. Mention volume is accurate.
+            ⚠ Sentiment data is still being processed — mention volume is accurate, tone breakdown will populate after the next weekly refresh.
           </div>
         </section>
       )}
@@ -216,14 +344,14 @@ export default function RedditPage() {
               Mention volume
               <SectionInfo
                 title="Brand Mention Volume"
-                description="How many times each brand was mentioned on Reddit across all tracked subreddits. A brand with many mentions has strong community presence — could mean product launches, controversy, or organic discussion. Tone breakdown is still calibrating."
+                description="How many times each brand was mentioned on Reddit across all tracked subreddits. A brand with many mentions has strong community presence — could mean product launches, controversy, or organic discussion."
                 source="Reddit data · scraped via trudax/reddit-scraper-lite from r/pickleball and related subreddits"
               />
             </h2>
-            <div className="sub">Tone breakdown coming soon — sentiment classifier calibrating.</div>
+            <div className="sub">Mention volume across {displayReddit.length} brands · sentiment scores update weekly.</div>
           </div>
         </div>
-        <div className="card"><div className="card-pad">
+        <div ref={sec1.ref} className={`card ${revealCls(sec1.vis)}`}><div className="card-pad">
           <SentimentBar data={sentimentData} />
           <div className="legend" style={{ marginTop: 14 }}>
             <span className="item"><span className="swatch" style={{ background: '#22c55e' }} />Positive</span>
@@ -255,7 +383,7 @@ export default function RedditPage() {
       )}
 
       <section>
-        <div className="two-col">
+        <div ref={sec2.ref} className={`two-col ${revealCls(sec2.vis)}`}>
           <div>
             <div className="section-head"><div>
               <h2>
@@ -363,21 +491,34 @@ export default function RedditPage() {
       </section>
 
       <section id="reddit-mentions-table">
-        <div className="section-head"><div>
-          <h2>
-            Top {sortedMentions.length} mentions · by score
-            <SectionInfo
-              title="Top Reddit Mentions"
-              description="Up to the 20 highest-scoring Reddit posts that mention the tracked brands. Narrow with the brand filter (top right), the date range (top right), or per-column search below. A high score means the community upvoted that thread — strong organic signal."
-              source="reddit_mentions · scraped via trudax/reddit-scraper-lite. Click column headers to sort."
-            />
-          </h2>
-          <div className="sub">
-            Showing <strong style={{ color: 'var(--fg)' }}>{sortedMentions.length}</strong> of up to 20 ·
-            {' '}sorted by score · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+        <div className="section-head">
+          <div>
+            <h2>
+              Top {sortedMentions.length} mentions · by score
+
+              <SectionInfo
+                title="Top Reddit Mentions"
+                description="Up to the 20 highest-scoring Reddit posts that mention the tracked brands. Narrow with the brand filter (top right), the date range (top right), or per-column search below. A high score means the community upvoted that thread — strong organic signal."
+                source="reddit_mentions · scraped via trudax/reddit-scraper-lite. Click column headers to sort."
+              />
+            </h2>
+            <div className="sub">
+              Showing <strong style={{ color: 'var(--fg)' }}>{sortedMentions.length}</strong> of up to 20 ·
+              {' '}sorted by score · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+            </div>
           </div>
-        </div></div>
-        <div className="card">
+          <div className="actions">
+            <button
+              onClick={() => exportCSV('joola-reddit-mentions.csv', sortedMentions as unknown as Record<string, unknown>[])}
+              className="btn btn-ghost"
+              aria-label="Export table as CSV"
+              style={{ fontSize: 11 }}
+            >
+              ↓ CSV
+            </button>
+          </div>
+        </div>
+        <div ref={sec3.ref} className={`card ${revealCls(sec3.vis)}`}>
           {sortedMentions.length > 0 ? (
             <div className="table-wrap">
               <table className="data">
@@ -448,6 +589,6 @@ export default function RedditPage() {
           )}
         </div>
       </section>
-    </>
+    </div>
   )
 }

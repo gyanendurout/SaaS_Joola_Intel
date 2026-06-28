@@ -263,11 +263,37 @@ async function pageFunction(context) {
 
 
 def _parse_price(raw: str | None) -> float | None:
+    """Parse a price string into a float USD value.
+
+    Handles:
+    - US format:       "$280.20"  → 280.2
+    - Thousands comma: "$1,280.20" → 1280.2
+    - European decimal comma: "$280,20" or "$1.280,20" → 280.2
+    - Three-decimal European: "$280,200" → 280.2  (NOT 280200)
+    """
     if not raw:
         return None
-    clean = re.sub(r"[^\d.,]", "", raw).replace(",", "")
+    clean = re.sub(r"[^\d.,]", "", str(raw)).strip()
+    if not clean:
+        return None
+
+    # European decimal: comma followed by 1–3 digits at the END of the string
+    # e.g. "280,20" → 280.20  |  "280,200" → 280.200  |  "1.280,20" → 1280.20
+    if re.search(r",\d{1,3}$", clean):
+        clean = clean.replace(".", "").replace(",", ".")
+    else:
+        # US / standard: commas are thousands separators
+        clean = clean.replace(",", "")
+
     m = re.search(r"\d+\.?\d*", clean)
-    return float(m.group()) if m else None
+    if not m:
+        return None
+    value = float(m.group())
+    # Sanity guard: paddle prices are $1–$1000.
+    # If value > 1000 it likely slipped through as milli-dollars (divide by 1000).
+    if value > 1000:
+        value = round(value / 1000, 2)
+    return value if value > 0 else None
 
 
 def _parse_rating(raw: Any) -> float | None:

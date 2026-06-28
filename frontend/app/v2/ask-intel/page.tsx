@@ -131,7 +131,7 @@ export default function AskIntelPage() {
         height: 'calc(100vh - 280px)', minHeight: 540,
       }}>
         {/* LEFT — chat thread + input */}
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
           <ChatThread turns={turns} onFollowup={handleFollowup} />
           <ChatInput
             value={input}
@@ -146,7 +146,7 @@ export default function AskIntelPage() {
         {/* RIGHT — prompts + coverage + methodology */}
         {rightOpen && (
           <aside style={{
-            borderLeft: '1px solid rgba(255,255,255,0.06)',
+            borderLeft: '1px solid var(--wb-6)',
             background: 'rgba(0,0,0,0.2)',
             padding: 16, overflowY: 'auto',
             display: 'flex', flexDirection: 'column', gap: 18,
@@ -196,8 +196,8 @@ function Badge({ children, tone }: { children: React.ReactNode; tone?: 'joola' }
     <span style={{
       fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
       padding: '3px 7px', borderRadius: 99,
-      background: tone === 'joola' ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.05)',
-      border: '1px solid ' + (tone === 'joola' ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.08)'),
+      background: tone === 'joola' ? 'rgba(34,197,94,0.12)' : 'var(--wb-5)',
+      border: '1px solid ' + (tone === 'joola' ? 'rgba(34,197,94,0.3)' : 'var(--wb-8)'),
       color: tone === 'joola' ? '#22c55e' : 'var(--fg-3)',
     }}>{children}</span>
   )

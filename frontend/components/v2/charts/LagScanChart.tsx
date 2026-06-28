@@ -126,7 +126,7 @@ export function LagScanChart({
               x2={padL + innerW}
               y1={y(t)}
               y2={y(t)}
-              stroke="rgba(255,255,255,0.04)"
+              stroke="var(--line-2)"
             />
             <text x={padL - 6} y={y(t) + 3} textAnchor="end" className="scatter-axis">
               {t.toFixed(2)}

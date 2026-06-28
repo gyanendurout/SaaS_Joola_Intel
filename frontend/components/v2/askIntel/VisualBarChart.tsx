@@ -28,7 +28,7 @@ export function VisualBarChart({ visual }: { visual: VisualBarChart }) {
                 fontSize: 12, fontWeight: 600, color: color === '#22c55e' ? '#22c55e' : 'var(--fg-2)',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right',
               }}>{d.label}</div>
-              <div style={{ background: 'rgba(255,255,255,0.04)', height: 16, borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ background: 'var(--line-2)', height: 16, borderRadius: 3, overflow: 'hidden' }}>
                 <div style={{
                   width: pct + '%', height: '100%', background: color, opacity: 0.85,
                   transition: 'width 240ms ease',

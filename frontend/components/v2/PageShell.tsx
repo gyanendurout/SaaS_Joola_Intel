@@ -55,12 +55,12 @@ export function PageHead({ eyebrow, title, accent, sub, actions }: PageHeadProps
     <header className="page-head">
       <div>
         {eyebrow && (
-          <div className="eyebrow">
+          <div className="eyebrow ov-eyebrow">
             <span style={{ width: 6, height: 6, borderRadius: 99, background: '#F5E625', boxShadow: '0 0 0 4px rgba(245,230,37,0.18)', display: 'inline-block' }} />
             {eyebrow}
           </div>
         )}
-        <h1>{title}{accent && <> <em>{accent}</em></>}</h1>
+        <h1 className="ov-title">{title}{accent && <> <em>{accent}</em></>}</h1>
         {sub && <div className="sub">{sub}</div>}
       </div>
       {actions && <div className="head-actions">{actions}</div>}
@@ -80,7 +80,7 @@ export function MiniKpi({
       <div className="label">
         <span>{label}</span>
         {tip && <SectionInfo title={label} description={tip} source={src || 'Live data'} />}
-        {src && <span className="src" title={src}>{src}</span>}
+        {src && !tip && <span className="src" title={src}>{src}</span>}
       </div>
       <div className="row">
         <div className="value">{value}</div>
@@ -107,22 +107,56 @@ export function MiniKpi({
 // ─── Skeleton loading page ────────────────────────────────────────────
 export function LoadingPage() {
   return (
-    <div className="skeleton-page">
-      <div className="sk-header" style={{ paddingBottom: 24, marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-        <div className="skel sk-h12" style={{ width: 160, marginBottom: 12 }} />
-        <div className="skel sk-h24" style={{ width: 320, marginBottom: 10 }} />
-        <div className="skel sk-h12" style={{ width: 440 }} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingTop: 8 }}>
+      {/* Page head skeleton */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 8 }}>
+        <div className="skeleton skeleton-text" style={{ width: 80 }} />
+        <div className="skeleton skeleton-title" style={{ width: 220 }} />
+        <div className="skeleton skeleton-text" style={{ width: 320 }} />
       </div>
-      <div className="sk-kpis">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="skel sk-h80" style={{ animationDelay: i * 0.06 + 's' }} />
+      {/* KPI row skeleton */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="skeleton-card">
+            <div className="skeleton skeleton-text" style={{ width: '50%', marginBottom: 12 }} />
+            <div className="skeleton skeleton-title" style={{ width: '70%' }} />
+          </div>
         ))}
       </div>
-      <div className="skel sk-h160" style={{ marginTop: 20, animationDelay: '0.2s' }} />
-      <div className="sk-cards" style={{ marginTop: 14 }}>
-        <div className="skel sk-h160" style={{ animationDelay: '0.25s' }} />
-        <div className="skel sk-h160" style={{ animationDelay: '0.3s' }} />
-      </div>
+      {/* Section skeleton × 2 */}
+      {Array.from({ length: 2 }).map((_, si) => (
+        <div key={si} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="skeleton skeleton-text" style={{ width: 160 }} />
+          <div className="skeleton-card" style={{ minHeight: 140 }}>
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="skeleton skeleton-text" style={{ width: `${70 + (i % 3) * 10}%`, marginBottom: 14 }} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Empty state placeholder ──────────────────────────────────────────
+export function EmptyState({
+  icon, title, body, action,
+}: {
+  icon?: React.ReactNode
+  title: string
+  body?: string
+  action?: React.ReactNode
+}) {
+  return (
+    <div style={{ padding: '48px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      {icon && (
+        <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--wb-5)', border: '1px solid var(--wb-8)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 4 }}>
+          {icon}
+        </div>
+      )}
+      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg-2)' }}>{title}</div>
+      {body && <div style={{ fontSize: 12, color: 'var(--fg-4)', maxWidth: 360, lineHeight: 1.6 }}>{body}</div>}
+      {action && <div style={{ marginTop: 8 }}>{action}</div>}
     </div>
   )
 }
@@ -132,17 +166,11 @@ export function SectionInfo({ title, description, source }: {
   title: string; description: string; source: string
 }) {
   const [pinned, setPinned] = useState(false)
-  const [popupLeft, setPopupLeft] = useState(0)
-  const [popupTop, setPopupTop] = useState(0)
+  const [hovered, setHovered] = useState(false)
+  const [pos, setPos] = useState({ left: 0, top: 0 })
   const ref = useRef<HTMLSpanElement | null>(null)
 
-  const updatePos = () => {
-    if (ref.current) {
-      const r = ref.current.getBoundingClientRect()
-      setPopupLeft(r.left + r.width / 2)
-      setPopupTop(r.bottom + 10)
-    }
-  }
+  const visible = pinned || hovered
 
   useEffect(() => {
     if (!pinned) return
@@ -160,23 +188,48 @@ export function SectionInfo({ title, description, source }: {
     }
   }, [pinned])
 
+  function calcPos() {
+    if (!ref.current) return
+    const r = ref.current.getBoundingClientRect()
+    const popupW = 268
+    // Center popup on the icon, then clamp so it never overflows viewport edges
+    const left = Math.max(8, Math.min(
+      r.left + r.width / 2 - popupW / 2,
+      window.innerWidth - popupW - 8,
+    ))
+    setPos({ left, top: r.bottom + 10 })
+  }
+
   return (
     <span
       ref={ref}
-      className={'section-info' + (pinned ? ' is-pinned' : '')}
+      className={'section-info' + (visible ? ' is-pinned' : '')}
       aria-label={title}
       role="button"
       tabIndex={0}
-      onMouseEnter={updatePos}
-      onClick={(e) => { e.stopPropagation(); updatePos(); setPinned(p => !p) }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updatePos(); setPinned(p => !p) } }}
+      onMouseEnter={() => { calcPos(); setHovered(true) }}
+      onMouseLeave={() => setHovered(false)}
+      onClick={(e) => { e.stopPropagation(); calcPos(); setPinned(p => !p) }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          calcPos()
+          setPinned(p => !p)
+        }
+      }}
     >
       ?
-      <span className="si-popup" style={{ left: popupLeft, top: popupTop }} onClick={(e) => e.stopPropagation()}>
-        <div className="si-title">{title}</div>
-        <div className="si-body">{description}</div>
-        <div className="si-source">Source: {source}</div>
-      </span>
+      {visible && (
+        <span
+          className="si-popup"
+          style={{ position: 'fixed', left: pos.left, top: pos.top, transform: 'none' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="si-title">{title}</div>
+          <div className="si-body">{description}</div>
+          <div className="si-source">Source: {source}</div>
+        </span>
+      )}
     </span>
   )
 }
@@ -321,7 +374,7 @@ export function FilterBanner() {
 
 // ─── Toast helper ─────────────────────────────────────────────────────
 export function Toast({ msg, onDone, err }: { msg: string; onDone: () => void; err?: boolean }) {
-  setTimeout(onDone, 2800)
+  setTimeout(onDone, 1500)
   return (
     <div className={'toast' + (err ? ' toast-err' : '')}>
       <span className="toast-dot" />

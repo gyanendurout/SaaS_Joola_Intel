@@ -13,7 +13,7 @@ export function MethodologyAccordion({ response }: { response: AskIntelResponse 
       <button
         onClick={() => setOpen((o) => !o)}
         style={{
-          background: 'transparent', border: '1px solid rgba(255,255,255,0.08)',
+          background: 'transparent', border: '1px solid var(--wb-8)',
           color: 'var(--fg-3)', borderRadius: 3, padding: '4px 10px',
           fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
           cursor: 'pointer', fontWeight: 600,
@@ -24,7 +24,7 @@ export function MethodologyAccordion({ response }: { response: AskIntelResponse 
       {open && (
         <div style={{
           marginTop: 8, padding: 12, background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4,
+          border: '1px solid var(--wb-6)', borderRadius: 4,
           display: 'grid', gap: 6,
         }}>
           {response.methodology && (

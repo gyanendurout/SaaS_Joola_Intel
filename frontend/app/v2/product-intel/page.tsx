@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { BrandSummaryTable } from '@/components/v2/BrandSummaryTable'
+import { ProductDetailModal } from '@/components/v2/product-detail/ProductDetailModal'
 import {
   PageHead,
   FilterBanner,
@@ -66,6 +69,8 @@ function monthShortLabel(ym: string): string {
 
 // ─── Page ────────────────────────────────────────────────────────────
 export default function ProductIntelPage() {
+  const router = useRouter()
+  const [drillProduct, setDrillProduct] = useState<{ brand: string; productId: string } | null>(null)
   const [brands, setBrands] = useState<V2Brand[]>([])
   const [intel, setIntel] = useState<ProductIntelData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -468,6 +473,15 @@ export default function ProductIntelPage() {
   // ─── Render ───────────────────────────────────────────────────────
   return (
     <>
+      {drillProduct && intel && (
+        <ProductDetailModal
+          brand={drillProduct.brand}
+          productId={drillProduct.productId}
+          intel={intel}
+          brands={brands}
+          onClose={() => setDrillProduct(null)}
+        />
+      )}
       <PageHead title="PRODUCT INTEL" />
       <FilterBanner />
 
@@ -553,6 +567,15 @@ export default function ProductIntelPage() {
         </div>
       </section>
 
+      <BrandSummaryTable
+        catalogStats={displayCatalogStats}
+        daily={filteredDaily}
+        brands={brands}
+        curatedProducts={intel?.curatedProducts ?? []}
+        catalogProducts={intel?.catalogProducts ?? []}
+        toTs={toTs}
+      />
+
       {/* ── Section 2: Momentum over time ────────────────────────── */}
       <section>
         <div className="section-head">
@@ -570,7 +593,7 @@ export default function ProductIntelPage() {
         </div>
         {topProductSeries.length > 0 ? (
           <div className="card"><div className="card-pad">
-            <LineChart series={topProductSeries} xLabels={monthLabels} h={320} yLabel="Mentions" />
+            <ProductMomentumBarChart series={topProductSeries} monthLabels={monthLabels} />
           </div></div>
         ) : (
           <div className="card" style={emptyStyle}>
@@ -717,7 +740,12 @@ export default function ProductIntelPage() {
               sortBy="attention"
               showEstUnitsSold={hasAnyEstUnits}
               showBestLag={hasAnyBestLag}
-              interpretation="Click any column header to sort. Brand and product search supported inline."
+              onRowClick={(brand, product) => {
+                const cp = intel?.curatedProducts?.find(c => c.display_name === product)
+                const pid = cp?.id || product
+                setDrillProduct({ brand, productId: pid })
+              }}
+              interpretation="Click any row to open product details · Click column headers to sort · Brand and product search supported inline."
             />
           </div></div>
         ) : leaderboardStatus.hasTimeseries || leaderboardStatus.hasLagScans ? (
@@ -753,7 +781,7 @@ export default function ProductIntelPage() {
           </div>
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                 <tr>
                   <SortTh col="productName" label="Product" sortKey={matrixSortKey} sortDir={matrixSortDir} toggle={mkToggle(setMatrixSortKey, setMatrixSortDir, matrixSortKey, matrixSortDir)} />
                   <SortTh col="brand" label="Brand" sortKey={matrixSortKey} sortDir={matrixSortDir} toggle={mkToggle(setMatrixSortKey, setMatrixSortDir, matrixSortKey, matrixSortDir)} />
@@ -775,7 +803,7 @@ export default function ProductIntelPage() {
                   const trendChar = trendDir === 'up' ? '▲' : trendDir === 'down' ? '▼' : '▬'
                   const trendColor = trendDir === 'up' ? '#22c55e' : trendDir === 'down' ? '#ef4444' : '#6b7280'
                   return (
-                    <tr key={row.productId} style={{ borderLeft: row.isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                    <tr key={row.productId} style={{ borderLeft: row.isJoola ? '2px solid #22c55e' : '2px solid transparent', cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: row.brandSlug, productId: row.productId })}>
                       <td style={{ color: row.isJoola ? '#22c55e' : 'var(--fg)', fontWeight: 600 }}>{row.productName}</td>
                       <td style={{ color: brandIdColor(row.brandId), fontWeight: 700, fontSize: 11.5 }}>{row.brand}</td>
                       <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace' }}>
@@ -817,7 +845,7 @@ export default function ProductIntelPage() {
         <div className="card">
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                 <tr>
                   <SortTh col="productName" label="Product" sortKey={joolaSortKey} sortDir={joolaSortDir} toggle={mkToggle(setJoolaSortKey, setJoolaSortDir, joolaSortKey, joolaSortDir)} />
                   <SortTh col="category" label="Category" sortKey={joolaSortKey} sortDir={joolaSortDir} toggle={mkToggle(setJoolaSortKey, setJoolaSortDir, joolaSortKey, joolaSortDir)} />
@@ -842,7 +870,7 @@ export default function ProductIntelPage() {
                   const trendColor = trendDir === 'up' ? '#22c55e' : trendDir === 'down' ? '#ef4444' : '#6b7280'
                   const sl = row.salesLikelihood
                   return (
-                    <tr key={row.productId} style={{ borderLeft: '2px solid #22c55e' }}>
+                    <tr key={row.productId} style={{ borderLeft: '2px solid #22c55e', cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: 'joola', productId: row.productId })}>
                       <td style={{ color: '#22c55e', fontWeight: 600 }}>{row.productName}</td>
                       <td style={{ fontSize: 11, color: 'var(--fg-3)' }}>{row.category || '—'}</td>
                       <td style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace' }}>
@@ -976,7 +1004,7 @@ export default function ProductIntelPage() {
           </div>
           <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
             <table className="data" style={{ width: '100%' }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                 <tr>
                   <SortTh col="brandName" label="Brand" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} />
                   <SortTh col="name" label="Product" sortKey={catalogTableSortKey} sortDir={catalogTableSortDir} toggle={mkToggle(setCatalogTableSortKey, setCatalogTableSortDir, catalogTableSortKey, catalogTableSortDir)} />
@@ -998,7 +1026,14 @@ export default function ProductIntelPage() {
                   const trendColor = p.trend === 'up' ? '#22c55e' : p.trend === 'down' ? '#ef4444' : p.trend === 'flat' ? '#6b7280' : 'var(--fg-4)'
                   const isJoola = p.brandSlug === 'joola'
                   return (
-                    <tr key={p.id} style={{ borderLeft: isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                    <tr key={p.id}
+                      style={{ borderLeft: isJoola ? '2px solid #22c55e' : '2px solid transparent', cursor: 'pointer' }}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('a')) return
+                        // Use curated product ID for the rich detail page when available
+                        const curatedId = intel?.productMatches?.catalogToCurated.get(p.id)
+                        setDrillProduct({ brand: p.brandSlug, productId: curatedId || p.name || p.id })
+                      }}>
                       <td>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           <span className="brand-dot" style={{ background: pgColor(p.brandSlug) }} />
@@ -1066,7 +1101,7 @@ export default function ProductIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Competitor product</th>
                     <th>Brand</th>
@@ -1084,7 +1119,7 @@ export default function ProductIntelPage() {
                     const grow = r.growthPct
                     const growColor = grow == null ? 'var(--fg-4)' : grow > 0 ? '#22c55e' : grow < 0 ? '#ef4444' : 'var(--fg-3)'
                     return (
-                      <tr key={r.productId}>
+                      <tr key={r.productId} style={{ cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: r.brandSlug, productId: r.productId })}>
                         <td style={{ color: 'var(--fg)', fontWeight: 600 }}>{r.productName}</td>
                         <td>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1168,7 +1203,7 @@ export default function ProductIntelPage() {
                           <div style={{ fontSize: 9, color: 'var(--fg-4)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 3 }}>
                             {s.label}
                           </div>
-                          <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: 3, height: 10, overflow: 'hidden' }}>
+                          <div style={{ background: 'var(--wb-5)', borderRadius: 3, height: 10, overflow: 'hidden' }}>
                             <div style={{ width: s.pct + '%', height: 10, background: `linear-gradient(90deg, ${s.color}, ${s.color}99)` }} />
                           </div>
                           <div style={{ fontSize: 11, color: 'var(--fg)', fontFamily: 'JetBrains Mono, monospace', marginTop: 3, fontWeight: 700 }}>{s.value}</div>
@@ -1210,7 +1245,7 @@ export default function ProductIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Product</th>
                     <th>Brand</th>
@@ -1232,7 +1267,7 @@ export default function ProductIntelPage() {
                       { key: 'promotions', label: 'Promos' },
                     ]
                     return (
-                      <tr key={r.productId} style={{ borderLeft: r.isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                      <tr key={r.productId} style={{ borderLeft: r.isJoola ? '2px solid #22c55e' : '2px solid transparent', cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: r.brandSlug, productId: r.productId })}>
                         <td style={{ color: r.isJoola ? '#22c55e' : 'var(--fg)', fontWeight: 600 }}>{r.productName}</td>
                         <td>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1303,7 +1338,7 @@ export default function ProductIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Product</th>
                     <th>Brand</th>
@@ -1319,7 +1354,7 @@ export default function ProductIntelPage() {
                   {launchData.rows.filter(r => allowedSlugs.has(r.brandSlug)).map((r) => {
                     const isJoola = r.brandSlug === 'joola'
                     return (
-                      <tr key={r.productId} style={{ borderLeft: isJoola ? '2px solid #22c55e' : '2px solid transparent' }}>
+                      <tr key={r.productId} style={{ borderLeft: isJoola ? '2px solid #22c55e' : '2px solid transparent', cursor: 'pointer' }} onClick={() => setDrillProduct({ brand: r.brandSlug, productId: r.productId })}>
                         <td style={{ color: isJoola ? '#22c55e' : 'var(--fg)', fontWeight: 600 }}>{r.productName}</td>
                         <td>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -1376,7 +1411,7 @@ export default function ProductIntelPage() {
           ) : (
             <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Mention text</th>
                     <th style={{ textAlign: 'right' }}>Occurrences</th>
@@ -1395,7 +1430,7 @@ export default function ProductIntelPage() {
                       <td>
                         <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
                           {r.brandsTalking.length === 0 ? <span style={{ color: 'var(--fg-4)' }}>—</span> : r.brandsTalking.map((s) => (
-                            <span key={s} className="brand-dot" style={{ background: pgColor(s), border: '1px solid rgba(255,255,255,0.15)' }} title={pgName(s, brands)} />
+                            <span key={s} className="brand-dot" style={{ background: pgColor(s), border: '1px solid var(--wb-14)' }} title={pgName(s, brands)} />
                           ))}
                         </span>
                       </td>
@@ -1430,7 +1465,7 @@ const labelStyle: React.CSSProperties = {
   fontSize: 11, color: 'var(--fg-4)', fontWeight: 600,
 }
 const selectStyle: React.CSSProperties = {
-  background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)',
+  background: 'rgba(0,0,0,0.3)', border: '1px solid var(--wb-10)',
   color: 'var(--fg-2)', fontSize: 12, padding: '4px 8px', borderRadius: 4,
 }
 const subHeadStyle: React.CSSProperties = {
@@ -1493,3 +1528,163 @@ function sortRows<T>(rows: T[], key: string | null, dir: 'asc' | 'desc'): T[] {
   })
 }
 
+
+
+// ─── Product Momentum Bump Chart (rank over time) ────────────────────
+function ProductMomentumBarChart({ series, monthLabels }: {
+  series: import('@/components/v2/charts').LineSeries[]
+  monthLabels: string[]
+}) {
+  const [hovProduct, setHovProduct] = useState<string | null>(null)
+  if (!series.length || !monthLabels.length) return null
+
+  const N = monthLabels.length
+  const numProducts = series.length
+  const rowH = 32
+  const w = 760, padL = 44, padR = 180, padT = 20, padB = 36
+  const innerW = w - padL - padR
+  const h = padT + numProducts * rowH + padB
+
+  // Compute rank per month:
+  // — products with mentions: ranked 1..K by count
+  // — products with 0 mentions: always render at LAST rank (numProducts) regardless of month
+  const ranks: number[][] = series.map(() => Array(N).fill(0))
+
+  for (let mi = 0; mi < N; mi++) {
+    const withData = series.map((s, si) => ({ si, val: s.data[mi] || 0 })).filter(x => x.val > 0)
+    withData.sort((a, b) => b.val - a.val)
+    // Ranked products get 1..K
+    withData.forEach(({ si }, ri) => { ranks[si][mi] = ri + 1 })
+    // No-data products: go to last position for all months except the final month
+    // For the last month, maintain the previous rank so lines don't drop at the end
+    series.forEach((_, si) => {
+      if ((series[si].data[mi] || 0) === 0) {
+        if (mi < N - 1) {
+          ranks[si][mi] = numProducts
+        } else {
+          // Last month: use previous month's rank to avoid visual drop
+          ranks[si][mi] = mi > 0 ? ranks[si][mi - 1] : numProducts
+        }
+      }
+    })
+  }
+
+  const xPos = (mi: number) => padL + (N <= 1 ? innerW / 2 : (mi / (N - 1)) * innerW)
+  const yPos = (rank: number) => padT + (rank - 1) * rowH + rowH / 2
+
+  function bezier(x1: number, y1: number, x2: number, y2: number): string {
+    const cp = (x1 + x2) / 2
+    return `C ${cp} ${y1}, ${cp} ${y2}, ${x2} ${y2}`
+  }
+
+  const anyHov = hovProduct !== null
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block', overflow: 'visible' }}>
+        {/* Horizontal guide lines */}
+        {series.map((_, ri) => (
+          <line key={ri} x1={padL} x2={padL + innerW} y1={yPos(ri + 1)} y2={yPos(ri + 1)}
+            stroke="var(--line-2)" strokeDasharray="3 6" />
+        ))}
+        {/* Month columns */}
+        {monthLabels.map((lbl, mi) => (
+          <g key={mi}>
+            <line x1={xPos(mi)} x2={xPos(mi)} y1={padT} y2={h - padB}
+              stroke="var(--wb-5)" strokeWidth={1} />
+            <text x={xPos(mi)} y={h - padB + 16} textAnchor="middle" fontSize={10} fill="#6b7280" fontWeight={600}>{lbl}</text>
+          </g>
+        ))}
+        {/* Rank labels */}
+        {series.map((_, ri) => (
+          <text key={ri} x={padL - 8} y={yPos(ri + 1) + 4} textAnchor="end" fontSize={8} fill="#3a4150" fontWeight={600}>#{ri + 1}</text>
+        ))}
+        {/* Pre-compute staggered label Y positions to avoid overlap */}
+        {(() => {
+          // Group products by their last-month rank
+          const lastRankGroups = new Map<number, number[]>()
+          series.forEach((_, si) => {
+            const lr = ranks[si][N - 1]
+            if (!lastRankGroups.has(lr)) lastRankGroups.set(lr, [])
+            lastRankGroups.get(lr)!.push(si)
+          })
+          const labelYOffset: number[] = Array(series.length).fill(0)
+          lastRankGroups.forEach((siList) => {
+            if (siList.length > 1) {
+              const total = siList.length
+              siList.forEach((si, i) => {
+                labelYOffset[si] = (i - (total - 1) / 2) * 13
+              })
+            }
+          })
+          return null
+        })()}
+        {/* Lines + dots per product */}
+        {series.map((s, si) => {
+          const r = ranks[si]
+          const isHov = hovProduct === s.label
+          // Stagger label Y when multiple share same last rank
+          const sameRankIdxs = series.map((_, i) => i).filter(i => ranks[i][N - 1] === r[N - 1])
+          const lastRankIdx = sameRankIdxs.indexOf(si)
+          const labelYOff = sameRankIdxs.length > 1 ? (lastRankIdx - (sameRankIdxs.length - 1) / 2) * 13 : 0
+          // Build smooth path through all months
+          let d = `M ${xPos(0).toFixed(1)} ${yPos(r[0]).toFixed(1)}`
+          for (let mi = 1; mi < N; mi++) {
+            d += ' ' + bezier(xPos(mi - 1), yPos(r[mi - 1]), xPos(mi), yPos(r[mi]))
+          }
+          return (
+            <g key={s.label} style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHovProduct(s.label)}
+              onMouseLeave={() => setHovProduct(null)}>
+              <path d={d} fill="none" stroke="transparent" strokeWidth={12} />
+              <path d={d} fill="none" stroke={s.color}
+                strokeWidth={isHov ? 1.5 : anyHov ? 0.8 : 1.2}
+                strokeLinecap="round" strokeLinejoin="round"
+                opacity={anyHov && !isHov ? 0.12 : isHov ? 1 : 0.75}
+                style={{ transition: 'opacity 150ms, stroke-width 150ms',
+                  filter: isHov ? `drop-shadow(0 0 5px ${s.color}88)` : 'none' }}
+              />
+              {/* Dots */}
+              {r.map((rank, mi) => {
+                const val = s.data[mi] || 0
+                const noData = val === 0
+                return (
+                  <g key={mi}>
+                    <circle cx={xPos(mi)} cy={yPos(rank)} r={isHov ? 4 : 2.5}
+                      fill={noData ? 'var(--sticky-bg)' : s.color}
+                      stroke={s.color}
+                      strokeWidth={noData ? (isHov ? 1.5 : 1) : 0}
+                      strokeDasharray={noData ? '2 2' : 'none'}
+                      opacity={anyHov && !isHov ? 0.12 : noData ? 0.5 : 1}
+                      style={{ transition: 'r 120ms' }}
+                    />
+                    {isHov && (
+                      <text x={xPos(mi)} y={yPos(rank) - 9} textAnchor="middle"
+                        fontSize={8} fill={noData ? '#6b7280' : s.color} fontWeight={700}
+                        style={{ paintOrder: 'stroke', stroke: 'var(--sticky-bg)', strokeWidth: 2 }}>
+                        {noData ? '0 / NO DATA' : val}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+              {/* Right label — staggered to avoid overlap */}
+              <text x={xPos(N - 1) + 14} y={yPos(r[N - 1]) + 4 + labelYOff}
+                fontSize={isHov ? 11 : 10}
+                fontWeight={isHov ? 700 : 500}
+                fill={isHov ? '#fff' : anyHov ? '#2d3748' : s.color}
+                style={{ transition: 'fill 150ms' }}>
+                {s.label.length > 18 ? s.label.slice(0, 17) + '…' : s.label}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', fontSize: 9, color: '#4b5563', marginTop: 4 }}>
+        <span>Rank #1 = most mentions · hover to see counts</span>
+        <span>○ dashed dot = 0 / NO DATA that month</span>
+        <span>{numProducts} paddles tracked</span>
+      </div>
+    </div>
+  )
+}

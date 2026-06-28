@@ -211,7 +211,7 @@ export function IndexedTimeSeries({
               x2={padL + innerW}
               y1={y(t)}
               y2={y(t)}
-              stroke={t === 100 ? 'rgba(245,230,37,0.3)' : 'rgba(255,255,255,0.04)'}
+              stroke={t === 100 ? 'rgba(245,230,37,0.3)' : 'var(--line-2)'}
               strokeDasharray={t === 100 ? '4 3' : undefined}
             />
             <text
@@ -332,7 +332,7 @@ export function IndexedTimeSeries({
             )
           })}
           {hovEvents.length > 0 && (
-            <div style={{ marginTop: 4, paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ marginTop: 4, paddingTop: 4, borderTop: '1px solid var(--wb-10)' }}>
               {hovEvents.map((ev, i) => (
                 <div key={i} style={{ fontSize: 10, color: '#cbd1dc' }}>
                   <span style={{ color: ev.type === 'promo' ? '#ec4899' : ev.type === 'ad-burst' ? '#60a5fa' : ev.type === 'video' ? '#a78bfa' : '#f59e0b' }}>●</span>{' '}

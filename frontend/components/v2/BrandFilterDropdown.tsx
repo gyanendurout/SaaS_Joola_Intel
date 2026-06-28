@@ -80,7 +80,7 @@ export function BrandFilterDropdown() {
               {activeCount}/{allBrands.length}
             </span>
             {isFiltered && (
-              <button className="bfd-clear" onClick={selectAll} title="Clear filter">× Clear</button>
+              <button className="bfd-clear" onClick={selectAll} title="Clear filter" aria-label="Clear brand filter">× Clear</button>
             )}
           </div>
           <div className="bfd-list">
@@ -98,6 +98,7 @@ export function BrandFilterDropdown() {
                     checked={checked}
                     onChange={() => toggle(b.id)}
                     className="bfd-check"
+                    aria-label={`${checked ? 'Deselect' : 'Select'} ${b.name}`}
                   />
                   <span className="brand-dot" style={{ background: b.color, flexShrink: 0 }} />
                   <span className="bfd-name">{b.name}</span>
@@ -105,6 +106,7 @@ export function BrandFilterDropdown() {
                     className="bfd-only"
                     onClick={(e) => { e.preventDefault(); selectOnly(b.id) }}
                     title={`Show only ${b.name}`}
+                    aria-label={`Show only ${b.name}`}
                   >only</button>
                 </label>
               )

@@ -16,6 +16,7 @@ import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { supabase } from '@/lib/shared/supabase'
 import { fetchMarketIntel, type MarketIntelData, type CommandCenterRow, type BrandStrategyCard } from '@/lib/v2/marketIntel'
+import { useReveal, revealCls } from '@/lib/v2/animations'
 
 interface MentionSummaryRow {
   brand_id: string
@@ -302,6 +303,12 @@ export default function MarketIntelPage() {
   const xTotalFollowers = displayX.reduce((s, r) => s + r.followers, 0)
   const igTotalFollowers = displayIG.reduce((s, r) => s + r.followers, 0)
 
+  const row1 = useReveal()
+  const row2 = useReveal()
+  const row3 = useReveal()
+  const row4 = useReveal()
+  const row5 = useReveal()
+
   if (loading) return <LoadingPage />
 
   return (
@@ -311,11 +318,24 @@ export default function MarketIntelPage() {
         title="Market"
         accent="intel"
         sub="One view across paid, organic, and community signals. What competitors are doing right now and what JOOLA should respond to."
+        actions={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <a href="https://www.facebook.com/ads/library/?q=pickleball&search_type=keyword_unordered" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" aria-label="Meta Ads Library">
+              Meta Ads ↗
+            </a>
+            <a href="https://www.reddit.com/r/pickleball/" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" aria-label="r/pickleball on Reddit">
+              r/pickleball ↗
+            </a>
+            <a href="https://www.joola.com" target="_blank" rel="noopener noreferrer" className="btn btn-ghost" aria-label="JOOLA website">
+              joola.com ↗
+            </a>
+          </div>
+        }
       />
       <FilterBanner />
 
       <section>
-        <div className="kpi-grid">
+        <div ref={row1.ref} className={revealCls(row1.vis, 'kpi-grid')}>
           <MiniKpi
             label="Signals (this window)" flavor="warn"
             value={signals.length}
@@ -336,40 +356,48 @@ export default function MarketIntelPage() {
       </section>
 
       <section>
-        <div className="kpi-grid">
-          <MiniKpi
-            label="Reddit conversation" src="Community Mentions" flavor="joola"
-            value={fmt(totalMentions)}
-            color="#06b6d4"
-            spark={joolaMentionSpark}
-            customVs={joolaReddit ? `JOOLA: ${fmt(joolaReddit.mentions)} ${joolaReddit.mentions === 1 ? 'mention' : 'mentions'}` : 'JOOLA: 0 mentions'}
-            tip="Total Reddit mentions of paddle brands in this window (all 11 brands combined). JOOLA's slice is shown below for quick comparison. Reddit is the most candid signal — players talk freely about real product issues here."
-          />
-          <MiniKpi
-            label="Instagram reach" src="Instagram profiles"
-            value={igTotalFollowers > 0 ? fmt(igTotalFollowers) : '—'}
-            color="#ec4899"
-            customVs={joolaIG ? `JOOLA: ${fmt(joolaIG.followers)} followers` : 'JOOLA: pending'}
-            tip="Combined Instagram follower count across all 11 tracked brand profiles. JOOLA's follower number is shown beneath. Big number = total addressable audience JOOLA is fighting for attention against on Instagram."
-          />
-          <MiniKpi
-            label="YouTube reach" src="YouTube channels"
-            value={ytTotalViews > 0 ? fmt(ytTotalViews) : '—'}
-            color="#ef4444"
-            customVs={`${displayYT.filter(y => y.subs > 0).length} channels active`}
-            tip="Total YouTube views across all tracked brand channels in this window. The '#N channels active' tag = how many brands have actually posted videos lately (some brands go dormant on YouTube)."
-          />
-          <MiniKpi
-            label="TikTok velocity" src="TikTok videos"
-            value={ttTotalVideos > 0 ? fmt(ttTotalVideos) : '—'}
-            color="#a855f7"
-            customVs={xTotalFollowers > 0 ? `${fmt(xTotalFollowers)} X followers tracked` : 'across tracked brands'}
-            tip="Total TikTok videos posted by all tracked paddle brands in this window. TikTok is where younger players discover paddles — high velocity here is a leading indicator of brand momentum among Gen Z / new-to-sport buyers."
-          />
+        <div ref={row2.ref} className={revealCls(row2.vis, 'kpi-grid')}>
+          <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Reddit conversation" src="Community Mentions" flavor="joola"
+              value={fmt(totalMentions)}
+              color="#06b6d4"
+              spark={joolaMentionSpark}
+              customVs={joolaReddit ? `JOOLA: ${fmt(joolaReddit.mentions)} ${joolaReddit.mentions === 1 ? 'mention' : 'mentions'}` : 'JOOLA: 0 mentions'}
+              tip="Total Reddit mentions of paddle brands in this window (all 11 brands combined). JOOLA's slice is shown below for quick comparison. Reddit is the most candid signal — players talk freely about real product issues here."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="Instagram reach" src="Instagram profiles"
+              value={igTotalFollowers > 0 ? fmt(igTotalFollowers) : '—'}
+              color="#ec4899"
+              customVs={joolaIG ? `JOOLA: ${fmt(joolaIG.followers)} followers` : 'JOOLA: pending'}
+              tip="Combined Instagram follower count across all 11 tracked brand profiles. JOOLA's follower number is shown beneath. Big number = total addressable audience JOOLA is fighting for attention against on Instagram."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="YouTube reach" src="YouTube channels"
+              value={ytTotalViews > 0 ? fmt(ytTotalViews) : '—'}
+              color="#ef4444"
+              customVs={`${displayYT.filter(y => y.subs > 0).length} channels active`}
+              tip="Total YouTube views across all tracked brand channels in this window. The '#N channels active' tag = how many brands have actually posted videos lately (some brands go dormant on YouTube)."
+            />
+          </div>
+          <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}>
+            <MiniKpi
+              label="TikTok velocity" src="TikTok videos"
+              value={ttTotalVideos > 0 ? fmt(ttTotalVideos) : '—'}
+              color="#a855f7"
+              customVs={xTotalFollowers > 0 ? `${fmt(xTotalFollowers)} X followers tracked` : 'across tracked brands'}
+              tip="Total TikTok videos posted by all tracked paddle brands in this window. TikTok is where younger players discover paddles — high velocity here is a leading indicator of brand momentum among Gen Z / new-to-sport buyers."
+            />
+          </div>
         </div>
       </section>
 
-      <section>
+      <section ref={row3.ref} className={revealCls(row3.vis)}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
           <div className="card" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div>
@@ -400,7 +428,7 @@ export default function MarketIntelPage() {
         </div>
       </section>
 
-      <section>
+      <section ref={row4.ref} className={revealCls(row4.vis)}>
         <div className="section-head"><div>
           <h2>
             Brand Momentum Index
@@ -438,8 +466,8 @@ export default function MarketIntelPage() {
             const dotColor = brandSlug ? pgColor(brandSlug) : '#3a4150'
             const sentimentLeft = ((sentiment + 1) / 2) * 100
             const cardStyle: React.CSSProperties = {
-              background: 'rgba(255,255,255,0.04)',
-              border: isJoola ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(255,255,255,0.08)',
+              background: 'var(--line-2)',
+              border: isJoola ? '1px solid rgba(34,197,94,0.4)' : '1px solid var(--wb-8)',
               borderRadius: 12,
               padding: 14,
               boxShadow: isJoola ? '0 0 20px rgba(34,197,94,0.1)' : 'none',
@@ -481,7 +509,7 @@ export default function MarketIntelPage() {
                       height: 8,
                       borderRadius: 999,
                       background: hasData ? (sentiment >= 0 ? '#22c55e' : '#ef4444') : '#6b7280',
-                      border: '1px solid rgba(13,17,23,0.9)',
+                      border: '1px solid var(--sticky-bg)',
                     }}
                   />
                 </div>
@@ -494,7 +522,7 @@ export default function MarketIntelPage() {
         </div>
       </section>
 
-      <section>
+      <section ref={row5.ref} className={revealCls(row5.vis)}>
         <div className="section-head"><div>
           <h2>
             Competitive Benchmark
@@ -601,7 +629,7 @@ export default function MarketIntelPage() {
             return (
               <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
               <table className="data" style={{ width: '100%', minWidth: 880 }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th style={{ textAlign: 'left' }}>Brand</th>
                     <SortTh col="igFollowers" label="IG Followers" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
@@ -671,7 +699,7 @@ export default function MarketIntelPage() {
           {marketIntel ? (
             <div className="table-wrap" style={{ overflowX: 'auto' }}>
               <table className="data" style={{ width: '100%', minWidth: 960 }}>
-                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th style={{ textAlign: 'left' }}>Area</th>
                     <th style={{ textAlign: 'left' }}>Winner</th>

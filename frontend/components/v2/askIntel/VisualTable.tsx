@@ -53,9 +53,9 @@ export function VisualTable({ visual }: { visual: VisualTable }) {
           {visual.title}
         </div>
       )}
-      <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 4 }}>
+      <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', border: '1px solid var(--wb-6)', borderRadius: 4 }}>
         <table className="data" style={{ width: '100%' }}>
-          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'rgba(13,17,23,0.95)' }}>
+          <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
             <tr>
               {visual.columns.map((c) => (
                 <SortTh

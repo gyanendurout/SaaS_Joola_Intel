@@ -4,9 +4,12 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { useRecentPages } from '@/hooks/useRecentPages'
 
 const I = {
+  home: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
   overview: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>,
+  health: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/></svg>,
   ig: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="4" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor" /></svg>,
   yt: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="3" /><path d="M10 9l5 3-5 3z" fill="currentColor" /></svg>,
   reddit: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="13" r="8" /><circle cx="9" cy="13" r="1" fill="currentColor" /><circle cx="15" cy="13" r="1" fill="currentColor" /><path d="M9 16c1 1 4 1 6 0" /></svg>,
@@ -54,7 +57,7 @@ const navGroups: NavGroup[] = [
       { href: '/v2/market',      label: 'Market Intel',       ic: I.mkt },
       { href: '/v2/correlations', label: 'Correlations',     ic: I.corr },
       { href: '/v2/changepoints', label: 'Changepoints',     ic: I.change },
-      { href: '/v2/data-health',  label: 'Data Health',      ic: I.overview },
+      { href: '/v2/data-health',  label: 'Data Health',      ic: I.health },
     ],
   },
   {
@@ -69,14 +72,62 @@ const navGroups: NavGroup[] = [
   },
 ]
 
+
 export function V2Sidebar() {
   const path = usePathname() || '/v2'
   const [open, setOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('joola-sidebar-collapsed') === '1' } catch { return false } })
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+  const [crisisCount, setCrisisCount] = useState(0)
+  const recentPages = useRecentPages()
+
+  useEffect(() => {
+    import('@/lib/shared/supabase').then(({ supabase }) => {
+      supabase
+        .from('mention_facts')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_crisis', true)
+        .gte('posted_at', new Date(Date.now() - 7 * 86400000).toISOString())
+        .then(({ count }) => { if (count) setCrisisCount(count) })
+    })
+  }, [])
+
+  useEffect(() => {
+    // Restore collapse state
+    const savedCollapsed = localStorage.getItem('joola-sidebar-collapsed') === 'true'
+    setCollapsed(savedCollapsed)
+    document.documentElement.style.setProperty('--sidebar-w', savedCollapsed ? '60px' : '232px')
+    // Restore group collapsed state
+    try {
+      const savedGroups = JSON.parse(localStorage.getItem('joola-nav-groups') || '{}')
+      if (typeof savedGroups === 'object') setCollapsedGroups(savedGroups)
+    } catch {}
+  }, [])
+
+  // Auto-expand the group that contains the current page
+  useEffect(() => {
+    setCollapsedGroups(prev => {
+      let changed = false
+      const next = { ...prev }
+      navGroups.forEach(group => {
+        if (next[group.heading]) {
+          const hasActive = group.items.some(
+            item => path === item.href || (item.href !== '/v2' && path.startsWith(item.href))
+          )
+          if (hasActive) { next[group.heading] = false; changed = true }
+        }
+      })
+      if (!changed) return prev
+      localStorage.setItem('joola-nav-groups', JSON.stringify(next))
+      return next
+    })
+  }, [path])
 
   useEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '60px' : '232px')
+    try { localStorage.setItem('joola-sidebar-collapsed', collapsed ? '1' : '0') } catch {}
   }, [collapsed])
+
 
   return (
     <>
@@ -110,33 +161,118 @@ export function V2Sidebar() {
         </div>
 
         <div className="nav-section" style={{ flex: 1, overflowY: 'auto' }}>
-          {navGroups.map((group, gi) => (
-            <div key={group.heading} className="nav-group" style={gi > 0 ? { marginTop: 12 } : undefined}>
-              {!collapsed && <h6>{group.heading}</h6>}
-              {group.items.map(item => {
-                const active = path === item.href || (item.href !== '/v2' && path.startsWith(item.href))
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={'nav-item ' + (active ? 'active' : '')}
-                    onClick={() => setOpen(false)}
-                    title={collapsed ? item.label : undefined}
-                  >
-                    <span className="ic">{item.ic}</span>
-                    {!collapsed && <span>{item.label}</span>}
-                    {!collapsed && item.badge && <span className="badge">{item.badge}</span>}
-                  </Link>
-                )
-              })}
+          {/* Home entry — always at top */}
+          <div className="nav-group">
+            <Link
+              href="/v2/overview"
+              className={'nav-item ' + (path === '/v2' || path === '/v2/overview' ? 'active' : '')}
+              onClick={() => setOpen(false)}
+              title={collapsed ? 'Home' : undefined}
+              aria-label="Home"
+            >
+              <span className="ic">{I.home}</span>
+              {!collapsed && <span>Home</span>}
+            </Link>
+          </div>
+
+          {recentPages.length > 0 && (
+            <div style={{ padding: '8px 0 4px', borderBottom: '1px solid var(--line)', marginBottom: 4 }}>
+              {!collapsed && <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 16px', marginBottom: 4 }}>Recent</div>}
+              {recentPages.slice(0, 4).map(p => (
+                <a key={p.href} href={p.href}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: collapsed ? '6px 0' : '5px 16px', justifyContent: collapsed ? 'center' : 'flex-start', textDecoration: 'none', color: 'var(--fg-4)', fontSize: 11, borderRadius: 6, margin: '0 4px', transition: 'background 0.15s, color 0.15s', whiteSpace: 'nowrap', overflow: 'hidden' }}
+                  onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = 'var(--wb-6)'; el.style.color = 'var(--fg)' }}
+                  onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = ''; el.style.color = 'var(--fg-4)' }}>
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>{p.icon}</span>
+                  {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.label}</span>}
+                </a>
+              ))}
             </div>
-          ))}
+          )}
+
+          {navGroups.map((group, gi) => {
+            const isGroupCollapsed = !collapsed && !!collapsedGroups[group.heading]
+            function toggleGroup() {
+              setCollapsedGroups(prev => {
+                const next = { ...prev, [group.heading]: !prev[group.heading] }
+                localStorage.setItem('joola-nav-groups', JSON.stringify(next))
+                return next
+              })
+            }
+            return (
+              <div key={group.heading} className="nav-group" style={{ marginTop: gi === 0 ? 16 : 12 }}>
+                {/* Clickable heading with chevron */}
+                {!collapsed && (
+                  <button
+                    onClick={toggleGroup}
+                    aria-expanded={!isGroupCollapsed}
+                    aria-label={`${isGroupCollapsed ? 'Expand' : 'Collapse'} ${group.heading}`}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      width: '100%', background: 'none', border: 'none', cursor: 'pointer',
+                      padding: '0 8px 4px', marginBottom: 2,
+                    }}
+                  >
+                    <h6 style={{ margin: 0, pointerEvents: 'none' }}>{group.heading}</h6>
+                    <svg
+                      width="10" height="10" viewBox="0 0 24 24" fill="none"
+                      stroke="var(--fg-4)" strokeWidth="2.5"
+                      style={{
+                        flexShrink: 0,
+                        transition: 'transform 220ms ease',
+                        transform: isGroupCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                      }}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                )}
+                {/* Items — slide up/down */}
+                <div style={{
+                  overflow: 'hidden',
+                  maxHeight: isGroupCollapsed ? '0px' : '800px',
+                  opacity: isGroupCollapsed ? 0 : 1,
+                  transition: 'max-height 280ms cubic-bezier(0.4,0,0.2,1), opacity 200ms ease',
+                }}>
+                  {group.items.map(item => {
+                    const active = path === item.href || (item.href !== '/v2' && path.startsWith(item.href))
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={'nav-item ' + (active ? 'active' : '')}
+                        onClick={() => setOpen(false)}
+                        title={collapsed ? item.label : undefined}
+                      >
+                        <span className="ic">{item.ic}</span>
+                        {!collapsed && <span>{item.label}</span>}
+                        {!collapsed && item.badge && <span className="badge">{item.badge}</span>}
+                        {item.href === '/v2/community-intel' && crisisCount > 0 && !collapsed && (
+                          <span className="crisis-badge" style={{
+                            marginLeft: 'auto', fontSize: 9, fontWeight: 800,
+                            background: '#ef4444', color: '#fff',
+                            borderRadius: 99, padding: '1px 6px', minWidth: 16, textAlign: 'center',
+                          }} title={`${crisisCount} crisis signals in last 7 days`}>
+                            {crisisCount > 99 ? '99+' : crisisCount}
+                          </span>
+                        )}
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
         </div>
 
         {/* Collapse toggle — desktop only */}
         <button
           className="collapse-btn"
-          onClick={() => setCollapsed(c => !c)}
+          onClick={() => setCollapsed(c => {
+            const next = !c
+            localStorage.setItem('joola-sidebar-collapsed', String(next))
+            return next
+          })}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
