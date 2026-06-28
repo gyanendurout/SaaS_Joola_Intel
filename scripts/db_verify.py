@@ -137,7 +137,7 @@ hdr("P1 -- SCRAPING  (social content)")
 for tbl, col, label in [
     ("ig_posts",         "posted_at",   "ig_posts"),
     ("ig_comments",      "posted_at",   "ig_comments"),
-    ("yt_videos",        "posted_at",   "yt_videos"),
+    ("yt_videos",        "published_at", "yt_videos"),
     ("yt_comments",      "posted_at",   "yt_comments"),
     ("reddit_mentions",  "posted_at",   "reddit_mentions"),
     ("reddit_comments",  "posted_at",   "reddit_comments"),
@@ -155,8 +155,8 @@ for tbl, col, label in [
 # Ads
 print()
 total = row_count("marketing_ads")
-latest = max_val("marketing_ads", "detected_at")
-inf("marketing_ads total", f"{total}   latest detected_at: {latest}")
+latest = max_val("marketing_ads", "captured_at")
+inf("marketing_ads total", f"{total}   latest captured_at: {latest}")
 
 # Promotions
 total = row_count("promotions")
@@ -195,9 +195,16 @@ for tbl, label in [
 # YouTube video analysis
 yt_analyzed = row_count("yt_video_analysis")
 yt_total    = row_count("yt_videos")
-latest_yt   = max_val("yt_video_analysis", "analyzed_at")
+latest_yt   = max_val("yt_video_analysis", "enriched_at")
 chk("yt_video_analysis rows", yt_analyzed, want_positive=True)
-inf(f"vs yt_videos total ({yt_total})", f"latest analyzed_at: {latest_yt}")
+inf(f"vs yt_videos total ({yt_total})", f"latest enriched_at: {latest_yt}")
+
+# IG post analysis — ig_posts has no enriched_at; enrichment tracked here
+ig_analyzed = row_count("joola_ig_post_analysis")
+ig_total    = row_count("ig_posts")
+latest_ig_a = max_val("joola_ig_post_analysis", "analyzed_at")
+chk("joola_ig_post_analysis rows", ig_analyzed, want_positive=True)
+inf(f"vs ig_posts total ({ig_total})", f"latest analyzed_at: {latest_ig_a}")
 
 # ════════════════════════════════════════════════════════════════════
 hdr("P3 -- FACTS")
