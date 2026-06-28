@@ -1,6 +1,9 @@
 """
 DB Cross-Verification -- checks today's data freshness across all pipeline tables.
 Run from repo root: python scripts/db_verify.py
+
+When STALE tables are detected, a REMEDIATION section prints at the end with the
+exact `python scripts/weekly_run.py --module X` command to re-run each one.
 """
 
 from __future__ import annotations
@@ -30,6 +33,39 @@ if not SUPABASE_KEY:
 TODAY = dt.date.today().isoformat()
 TODAY_DT = dt.date.today()
 YESTERDAY = (TODAY_DT - dt.timedelta(days=1)).isoformat()
+
+# Maps table name → rerun command (used by the REMEDIATION section at the end)
+REMEDIATION: dict[str, str] = {
+    "ig_posts":           "python scripts/weekly_run.py --module instagram",
+    "ig_comments":        "python scripts/weekly_run.py --module instagram --source scrape-comments",
+    "yt_videos":          "python scripts/weekly_run.py --module youtube --source scrape-videos",
+    "yt_comments":        "python scripts/weekly_run.py --module youtube --source scrape-comments",
+    "reddit_mentions":    "python scripts/weekly_run.py --module reddit",
+    "reddit_comments":    "python scripts/weekly_run.py --module reddit --source scrape-comments",
+    "x_posts":            "python scripts/weekly_run.py --module twitter --source scrape-brand-posts",
+    "tiktok_videos":      "python scripts/weekly_run.py --module tiktok",
+    "tiktok_comments":    "python scripts/weekly_run.py --module tiktok --source scrape-comments",
+    "influencer_posts":   "python scripts/weekly_run.py --module instagram --source scrape-influencers",
+    "influencer_x_posts": "python scripts/weekly_run.py --module twitter --source scrape-influencer-posts",
+    "marketing_ads":      "python scripts/weekly_run.py --module ads",
+    "promotions":         "python scripts/weekly_run.py --module products --source scrape-promotions",
+    "inventory_events":   "python scripts/weekly_run.py --module sales-intelligence",
+    "yt_video_analysis":  "python scripts/weekly_run.py --module enrichment --source analyze-videos",
+    "joola_ig_post_analysis": "python scripts/weekly_run.py --module facts --source instagram-themes",
+    "mention_facts":      "python scripts/weekly_run.py --module facts",
+    "topic_lifecycle":    "python scripts/weekly_run.py --module facts",
+    "sales_estimates":    "python scripts/weekly_run.py --module sales-intelligence",
+    "sales_facts_daily":  "python scripts/weekly_run.py --module sales-intelligence",
+}
+
+# Structural notes for tables that are stale due to data dependencies, not missing scrapers
+STRUCTURAL_NOTES: dict[str, str] = {
+    "influencer_x_posts": "Requires influencers.x_handle populated in DB (migration 005 only adds confirmed handles)",
+    "yt_comments":        "Apify youtube-comments-scraper may return 0 rows — retry or check actor quota",
+}
+
+# Stale tables collected during the run; printed in REMEDIATION at the end
+_stale: list[str] = []
 
 # GET-only headers — no Content-Type (avoids server rejections on GET)
 HDRS = {
@@ -150,6 +186,8 @@ for tbl, col, label in [
     latest = max_val(tbl, col)
     total = row_count(tbl)
     fresh = "STALE" if latest < YESTERDAY[:10] and latest not in ("(none)", "(null)") else "fresh"
+    if fresh == "STALE":
+        _stale.append(tbl)
     print(f"  ---  {label:<30} total={total:>6}   latest: {latest}  [{fresh}]")
 
 # Ads
@@ -199,12 +237,14 @@ latest_yt   = max_val("yt_video_analysis", "enriched_at")
 chk("yt_video_analysis rows", yt_analyzed, want_positive=True)
 inf(f"vs yt_videos total ({yt_total})", f"latest enriched_at: {latest_yt}")
 
-# IG post analysis — ig_posts has no enriched_at; enrichment tracked here
+# IG post analysis — ig_posts has no enriched_at; enrichment tracked via content_theme
 ig_analyzed = row_count("joola_ig_post_analysis")
 ig_total    = row_count("ig_posts")
-latest_ig_a = max_val("joola_ig_post_analysis", "analyzed_at")
+latest_ig_a = max_val("joola_ig_post_analysis", "content_theme")
 chk("joola_ig_post_analysis rows", ig_analyzed, want_positive=True)
-inf(f"vs ig_posts total ({ig_total})", f"latest analyzed_at: {latest_ig_a}")
+inf(f"vs ig_posts total ({ig_total})", f"latest content_theme: {latest_ig_a}")
+if isinstance(ig_analyzed, int) and ig_analyzed == 0:
+    _stale.append("joola_ig_post_analysis")
 
 # ════════════════════════════════════════════════════════════════════
 hdr("P3 -- FACTS")
@@ -268,3 +308,22 @@ chk("promotion_sales_impact total", psi_total, want_positive=False,
 print(f"\n{'='*W}")
 print(f"  Done. TODAY={TODAY}")
 print(f"{'='*W}\n")
+
+# ════════════════════════════════════════════════════════════════════
+# REMEDIATION — one command per stale table, deduplicated
+if _stale:
+    print(f"\n{'-'*W}")
+    print("  STALE TABLES DETECTED — run these to refresh:")
+    print(f"{'-'*W}")
+    seen_cmds: set[str] = set()
+    for tbl in _stale:
+        note = STRUCTURAL_NOTES.get(tbl)
+        cmd  = REMEDIATION.get(tbl, "python scripts/weekly_run.py --module all")
+        if cmd not in seen_cmds:
+            print(f"  {cmd}")
+            if note:
+                print(f"       ^ NOTE: {note}")
+            seen_cmds.add(cmd)
+    print(f"{'-'*W}\n")
+else:
+    print("  All scraped tables are fresh — no remediation needed.\n")
