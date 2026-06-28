@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
-import { PageHead, SectionInfo, LoadingPage, SortTh, ColumnFilter, pgColor } from '@/components/v2/PageShell'
+import { PageHead, MiniKpi, SectionInfo, LoadingPage, SortTh, ColumnFilter, pgColor } from '@/components/v2/PageShell'
 import { fmt, LineChart, ScatterChart, type ScatterDatum } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import { useReveal, revealCls } from '@/lib/v2/animations'
@@ -1046,6 +1046,16 @@ export default function SalesIntelPage() {
   }
 
   const hasSnapshots = snapshots.length > 0
+
+  const kpis = (() => {
+    const totalProducts = latestSnapshots.length
+    const inStockCount = latestSnapshots.filter(s => s.availability_status === 'in_stock').length
+    const outStockCount = latestSnapshots.filter(s => s.availability_status === 'out_of_stock').length
+    const inStockPct = totalProducts > 0 ? (inStockCount / totalProducts) * 100 : 0
+    const outStockPct = totalProducts > 0 ? (outStockCount / totalProducts) * 100 : 0
+    const brandsWithData = brandCards.length
+    return { totalProducts, inStockPct, outStockPct, brandsWithData }
+  })()
 
   return (
     <>

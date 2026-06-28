@@ -471,6 +471,14 @@ export function EngagementQualityMatrix({ data, w = 760, h = 380, onBubbleClick 
   const xMidVal = xMax * 0.25
   const xTickVals = [xMax * 0.0625, xMax * 0.25, xMax * 0.5625, xMax]
   const yTickVals = [yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax]
+  const quadrant = (d: EQMatrixDatum) => {
+    const highReach = d.followers >= xMidVal
+    const highEng = d.engRate >= yMid
+    if (highReach && highEng) return 'High Value — large reach + strong engagement'
+    if (!highReach && highEng) return 'Rising — strong engagement, smaller audience'
+    if (highReach && !highEng) return 'Legacy — large reach, lower engagement'
+    return 'Low signal — smaller reach and engagement'
+  }
 
   return (
     <div className="scatter-wrap" style={{ position: 'relative' }}
