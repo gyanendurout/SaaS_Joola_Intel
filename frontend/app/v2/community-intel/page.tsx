@@ -392,45 +392,6 @@ export default function CommunityIntelPage() {
           <SummaryItem label="JOOLA mentions" value={fmt(summary.joolaMentions)} color="#22c55e" />
           <SummaryItem label="Negative %" value={`${summary.negativePct}%`} />
         </div>
-
-        {/* KPI grid for accessibility — reuses MiniKpi visuals */}
-        <div className="kpi-grid" style={{ marginBottom: 6 }}>
-          <MiniKpi
-            label="Total signals (filter)"
-            value={fmt(filteredSignals.length)}
-            color="#06b6d4"
-            customVs={`${data.signals.length} pre-filter`}
-            src="ig_comments + yt_comments + reddit_mentions + reddit_comments + mention_facts"
-            tip="Total community signals (mentions + comments + crisis flags) across all channels after applying the active filters at the top of the page. The 'pre-filter' number below shows the full unfiltered population."
-          />
-          <MiniKpi
-            label="Crisis signals"
-            value={fmt(crisisRows.length)}
-            color={crisisRows.length > 0 ? '#ef4444' : '#22c55e'}
-            customVs={`${summary.openCrisis30d} in last 30d`}
-            src="mention_facts.is_crisis"
-            flavor={crisisRows.length > 0 ? 'danger' : undefined}
-            tip="Signals flagged as a CRISIS by the GPT-4o-mini classifier — recall / safety / coordinated-backlash / scandal events that need immediate brand response. Crisis is a much higher bar than 'negative sentiment'."
-          />
-          <MiniKpi
-            label="JOOLA mentions"
-            value={fmt(summary.joolaMentions)}
-            color="#22c55e"
-            customVs={`across ${filteredChannelStats.length} channels`}
-            flavor="joola"
-            src="Filtered JOOLA-brand signals"
-            tip="Count of community signals (mentions + comments + crisis) that are specifically about JOOLA, after applying the active filters."
-          />
-          <MiniKpi
-            label="Negative share"
-            value={`${summary.negativePct}%`}
-            color={summary.negativePct >= 30 ? '#ef4444' : '#F5E625'}
-            customVs={sentimentCoverage > 0
-              ? `${Math.round(sentimentCoverage * 100)}% classifier coverage`
-              : 'Sentiment classifier pending'}
-            tip="Share of all signals classified as negative sentiment. Formula: negative ÷ (positive + neutral + negative) × 100. Yellow >= 15%, red >= 30%. Coverage % shows how many signals have a sentiment label so far."
-          />
-        </div>
       </section>
 
       {/* ─── Section 2: Brand discussion volume ────────────────────── */}

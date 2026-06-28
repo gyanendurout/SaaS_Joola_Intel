@@ -45,7 +45,7 @@ export function CorrelationHeatmap({
   interpretation,
 }: CorrelationHeatmapProps) {
   const [hov, setHov] = useState<CorrelationCell | null>(null)
-  const [hovPos, setHovPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null)
 
   const drivers = Array.from(new Set(data.map((d) => d.driver)))
   const lags = Array.from(new Set(data.map((d) => d.lag))).sort((a, b) => a - b)
@@ -175,26 +175,21 @@ export function CorrelationHeatmap({
                 style={{ cursor: 'pointer', transition: 'opacity 140ms, stroke-width 140ms' }}
                 onMouseEnter={(e) => {
                   setHov(cell)
-                  const rect = (e.currentTarget.ownerSVGElement as SVGSVGElement).getBoundingClientRect()
-                  setHovPos({
-                    x: ((x + cellW / 2) / width) * 100,
-                    y: ((y + cellH / 2) / height) * 100,
-                  })
-                  void rect
+                  setTipPos({ x: e.clientX, y: e.clientY })
                 }}
-                onMouseLeave={() => setHov(null)}
+                onMouseLeave={() => { setHov(null); setTipPos(null) }}
               />
             )
           })
         )}
       </svg>
 
-      {hov && (
+      {hov && tipPos && (
         <div
           className="tip"
           style={{
-            left: hovPos.x + '%',
-            top: hovPos.y + '%',
+            left: tipPos.x,
+            top: tipPos.y,
             transform: 'translate(-50%, -110%)',
             whiteSpace: 'nowrap',
           }}

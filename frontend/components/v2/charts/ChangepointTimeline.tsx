@@ -42,6 +42,7 @@ export function ChangepointTimeline({
 }: ChangepointTimelineProps) {
   const [hovIdx, setHovIdx] = useState<number | null>(null)
   const [hovCp, setHovCp] = useState<number | null>(null)
+  const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null)
 
   if (!series.length) {
     return (
@@ -81,10 +82,12 @@ export function ChangepointTimeline({
     const localX = (e.clientX - rect.left) * scaleX
     if (localX < padL || localX > padL + innerW) {
       setHovIdx(null)
+      setTipPos(null)
       return
     }
     const i = Math.round(((localX - padL) / innerW) * (N - 1))
     setHovIdx(Math.max(0, Math.min(N - 1, i)))
+    setTipPos({ x: e.clientX, y: e.clientY })
   }
 
   const hovPoint = hovIdx !== null ? series[hovIdx] : null
@@ -101,7 +104,7 @@ export function ChangepointTimeline({
         aria-label={`Timeseries of ${seriesLabel} with changepoint markers`}
         style={{ overflow: 'visible', display: 'block' }}
         onMouseMove={onMove}
-        onMouseLeave={() => setHovIdx(null)}
+        onMouseLeave={() => { setHovIdx(null); setTipPos(null) }}
       >
         {/* Y grid */}
         {ticks.map((t, i) => (
@@ -125,8 +128,8 @@ export function ChangepointTimeline({
           <g
             key={`cp-${ci}`}
             style={{ cursor: 'pointer' }}
-            onMouseEnter={() => setHovCp(ci)}
-            onMouseLeave={() => setHovCp(null)}
+            onMouseEnter={(e) => { setHovCp(ci); setTipPos({ x: e.clientX, y: e.clientY }) }}
+            onMouseLeave={() => { setHovCp(null); setTipPos(null) }}
           >
             <line
               x1={x(cp.idx)}
@@ -183,12 +186,12 @@ export function ChangepointTimeline({
       </svg>
 
       {/* Changepoint tooltip takes precedence */}
-      {hovCpData && (
+      {hovCpData && tipPos && (
         <div
           className="tip"
           style={{
-            left: (x(hovCpData.idx) / width) * 100 + '%',
-            top: (padT / height) * 100 + '%',
+            left: tipPos.x,
+            top: tipPos.y,
             transform: 'translate(-50%, -120%)',
             whiteSpace: 'nowrap',
           }}
@@ -202,12 +205,12 @@ export function ChangepointTimeline({
           )}
         </div>
       )}
-      {!hovCpData && hovPoint && hovIdx !== null && (
+      {!hovCpData && hovPoint && hovIdx !== null && tipPos && (
         <div
           className="tip"
           style={{
-            left: (x(hovIdx) / width) * 100 + '%',
-            top: (y(hovPoint.value) / height) * 100 + '%',
+            left: tipPos.x,
+            top: tipPos.y,
             transform: 'translate(-50%, -110%)',
             whiteSpace: 'nowrap',
           }}

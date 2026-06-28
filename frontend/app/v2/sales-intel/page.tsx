@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import { PageHead, MiniKpi, SectionInfo, LoadingPage, SortTh, ColumnFilter, pgColor } from '@/components/v2/PageShell'
-import { fmt, ScatterChart, type ScatterDatum } from '@/components/v2/charts'
+import { PageHead, SectionInfo, LoadingPage, SortTh, ColumnFilter, pgColor } from '@/components/v2/PageShell'
+import { fmt, LineChart, ScatterChart, type ScatterDatum } from '@/components/v2/charts'
 import { fetchBrands, type V2Brand } from '@/lib/v2/data'
 import {
   fetchStockoutOpportunities,
@@ -16,6 +16,7 @@ import {
   type AttentionAvailabilityPoint,
 } from '@/lib/v2/productIntel'
 import { ActionFrame, Caveat } from '@/components/v2/ActionFrame'
+import { useBrandFilter } from '@/lib/v2/BrandFilterContext'
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface Brand {
@@ -30,6 +31,9 @@ interface ProductCatalog {
   display_name: string
   sku: string | null
   category: string | null
+  avg_rating: number | null
+  review_count: number | null
+  image_url: string | null
 }
 
 interface ProductSnapshot {
@@ -48,6 +52,46 @@ interface ProductVariant {
   brand_id: string
   product_id: string | null
   availability_status: string
+  price: number | null
+  compare_at_price: number | null
+  first_seen_at: string | null
+  variant_title: string | null
+}
+
+interface SalesEstimate {
+  brand_id: string
+  product_id: string | null
+  variant_id: string | null
+  estimate_date: string
+  estimated_units_sold: number
+  estimated_revenue: number
+  price_used: number | null
+  confidence_score: number
+  inventory_start: number | null
+  inventory_end: number | null
+  estimation_method: string
+}
+
+interface InventoryEvent {
+  brand_id: string
+  variant_id: string | null
+  event_time: string
+  event_type: string
+  previous_qty: number | null
+  current_qty: number | null
+  delta_qty: number | null
+  confidence_score: number | null
+  reason_code: string | null
+}
+
+interface SalesFact {
+  brand_id: string
+  date: string
+  estimated_units_sold: number
+  estimated_revenue: number
+  avg_price: number | null
+  discount_percent: number | null
+  product_id: string | null
 }
 
 // ─── Brand color helpers ─────────────────────────────────────────────
@@ -125,6 +169,9 @@ export default function SalesIntelPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Sections P-T (Particl-style pricing block) — respect global brand filter
+  const { filteredBrands, isFiltered } = useBrandFilter()
+
   // ── New section state (Sections F-I) ──────────────────────────────
   const [stockoutRows, setStockoutRows] = useState<StockoutOpportunityRow[]>([])
   const [cadenceRows, setCadenceRows] = useState<RestockCadenceRow[]>([])
@@ -157,6 +204,46 @@ export default function SalesIntelPage() {
     else { setRevSortKey(k); setRevSortDir('desc') }
   }
 
+  const [salesEstimates, setSalesEstimates] = useState<SalesEstimate[]>([])
+  const [inventoryEvts, setInventoryEvts] = useState<InventoryEvent[]>([])
+  const [estSortKey, setEstSortKey] = useState<string | null>(null)
+  const [estSortDir, setEstSortDir] = useState<'asc' | 'desc'>('desc')
+  const [evtSortKey, setEvtSortKey] = useState<string | null>(null)
+  const [evtSortDir, setEvtSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function toggleEst(k: string) {
+    if (estSortKey === k) setEstSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setEstSortKey(k); setEstSortDir('desc') }
+  }
+  function toggleEvt(k: string) {
+    if (evtSortKey === k) setEvtSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setEvtSortKey(k); setEvtSortDir('desc') }
+  }
+
+  // Sections M-O state
+  const [salesFacts, setSalesFacts] = useState<SalesFact[]>([])
+  const [salesTimeView, setSalesTimeView] = useState<'volume' | 'revenue'>('volume')
+  const [bsSortKey, setBsSortKey] = useState<string | null>('totalRevenue')
+  const [bsSortDir, setBsSortDir] = useState<'asc' | 'desc'>('desc')
+
+  function toggleBs(k: string) {
+    if (bsSortKey === k) setBsSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setBsSortKey(k); setBsSortDir('desc') }
+  }
+
+  // Search + sort state for sections K, L, N, O
+  const [estSearch, setEstSearch] = useState('')
+  const [evtSearch, setEvtSearch] = useState('')
+  const [bsSearch, setBsSearch] = useState('')
+  const [brandSortKey, setBrandSortKey] = useState<string | null>('totalRevenue')
+  const [brandSortDir, setBrandSortDir] = useState<'asc' | 'desc'>('desc')
+  const [brandSearch, setBrandSearch] = useState('')
+
+  function toggleBrand(k: string) {
+    if (brandSortKey === k) setBrandSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setBrandSortKey(k); setBrandSortDir('desc') }
+  }
+
   useEffect(() => {
     document.title = 'JOOLA INTEL — Sales Intelligence'
   }, [])
@@ -169,7 +256,7 @@ export default function SalesIntelPage() {
           supabase.from('brands').select('id, slug, name'),
           supabase
             .from('products_catalog')
-            .select('id, brand_id, display_name, sku, category'),
+            .select('id, brand_id, display_name, sku, category, avg_rating, review_count, image_url'),
           supabase
             .from('product_snapshots')
             .select(
@@ -179,8 +266,8 @@ export default function SalesIntelPage() {
             .limit(2000),
           supabase
             .from('product_variants')
-            .select('id, brand_id, product_id, availability_status')
-            .limit(500),
+            .select('id, brand_id, product_id, availability_status, price, compare_at_price, first_seen_at, variant_title')
+            .limit(1000),
         ])
 
         if (cancelled) return
@@ -209,6 +296,32 @@ export default function SalesIntelPage() {
         setCadenceRows(cadence)
         setPriceRows2(pressure)
         setAttAvailPoints(attAvail)
+
+        // Sections J-L: sales estimates + inventory events
+        const [estRes, evtRes] = await Promise.all([
+          supabase
+            .from('sales_estimates')
+            .select('brand_id, product_id, variant_id, estimate_date, estimated_units_sold, estimated_revenue, price_used, confidence_score, inventory_start, inventory_end, estimation_method')
+            .order('estimate_date', { ascending: false })
+            .limit(1000),
+          supabase
+            .from('inventory_events')
+            .select('brand_id, variant_id, event_time, event_type, previous_qty, current_qty, delta_qty, confidence_score, reason_code')
+            .order('event_time', { ascending: false })
+            .limit(500),
+        ])
+        if (cancelled) return
+        setSalesEstimates((estRes.data as SalesEstimate[] | null) ?? [])
+        setInventoryEvts((evtRes.data as InventoryEvent[] | null) ?? [])
+
+        // Section M: sales_facts_daily time-series (populated by Phase 3 pipeline)
+        const sfRes = await supabase
+          .from('sales_facts_daily')
+          .select('brand_id, date, estimated_units_sold, estimated_revenue, avg_price, discount_percent, product_id')
+          .order('date', { ascending: true })
+          .limit(500)
+        if (cancelled) return
+        setSalesFacts((sfRes.data as SalesFact[] | null) ?? [])
 
         setLoading(false)
       } catch (err: unknown) {
@@ -248,19 +361,6 @@ export default function SalesIntelPage() {
   }, [snapshots])
 
   const latestSnapshots = useMemo(() => Array.from(latestByProduct.values()), [latestByProduct])
-
-  const kpis = useMemo(() => {
-    const totalProducts = latestSnapshots.length
-    const inStock = latestSnapshots.filter((s) => s.availability_status === 'in_stock').length
-    const outStock = latestSnapshots.filter((s) => s.availability_status === 'out_of_stock').length
-    const brandsWithData = Array.from(new Set(latestSnapshots.map((s) => s.brand_id))).length
-    return {
-      totalProducts,
-      inStockPct: totalProducts > 0 ? (inStock / totalProducts) * 100 : 0,
-      outStockPct: totalProducts > 0 ? (outStock / totalProducts) * 100 : 0,
-      brandsWithData,
-    }
-  }, [latestSnapshots])
 
   // Per-brand inventory grid
   const brandCards = useMemo(() => {
@@ -443,6 +543,437 @@ export default function SalesIntelPage() {
     })
   }, [revenueRows, revColFilter, revSortKey, revSortDir])
 
+  // Estimates table display
+  const displayEstimates = useMemo(() => {
+    const q = estSearch.toLowerCase()
+    const filtered = q
+      ? salesEstimates.filter(e => {
+          const bName = brandById.get(e.brand_id)?.name ?? ''
+          const pName = e.product_id ? (productById.get(e.product_id)?.display_name ?? '') : ''
+          return bName.toLowerCase().includes(q) || pName.toLowerCase().includes(q)
+        })
+      : salesEstimates
+    if (!estSortKey) return filtered
+    return [...filtered].sort((a, b) => {
+      const av = (a as unknown as Record<string, unknown>)[estSortKey]
+      const bv = (b as unknown as Record<string, unknown>)[estSortKey]
+      if (typeof av === 'number' && typeof bv === 'number') return estSortDir === 'asc' ? av - bv : bv - av
+      return estSortDir === 'asc'
+        ? String(av ?? '').localeCompare(String(bv ?? ''))
+        : String(bv ?? '').localeCompare(String(av ?? ''))
+    })
+  }, [salesEstimates, estSearch, estSortKey, estSortDir, brandById, productById])
+
+  // Inventory events table display
+  const displayEvts = useMemo(() => {
+    const q = evtSearch.toLowerCase()
+    const filtered = q
+      ? inventoryEvts.filter(e => (brandById.get(e.brand_id)?.name ?? '').toLowerCase().includes(q))
+      : inventoryEvts
+    if (!evtSortKey) return filtered
+    return [...filtered].sort((a, b) => {
+      const av = (a as unknown as Record<string, unknown>)[evtSortKey]
+      const bv = (b as unknown as Record<string, unknown>)[evtSortKey]
+      if (typeof av === 'number' && typeof bv === 'number') return evtSortDir === 'asc' ? av - bv : bv - av
+      return evtSortDir === 'asc'
+        ? String(av ?? '').localeCompare(String(bv ?? ''))
+        : String(bv ?? '').localeCompare(String(av ?? ''))
+    })
+  }, [inventoryEvts, evtSearch, evtSortKey, evtSortDir, brandById])
+
+  // Sellout velocity — grouped by brand, sorted by count desc
+  const selloutByBrand = useMemo(() => {
+    const events = inventoryEvts.filter(e => e.event_type === 'sellout')
+    const byBrand: Record<string, { brand: Brand; count: number; latest: string }> = {}
+    for (const e of events) {
+      if (!byBrand[e.brand_id]) {
+        const b = brandById.get(e.brand_id)
+        if (!b) continue
+        byBrand[e.brand_id] = { brand: b, count: 0, latest: '' }
+      }
+      byBrand[e.brand_id].count++
+      if (!byBrand[e.brand_id].latest || e.event_time > byBrand[e.brand_id].latest) {
+        byBrand[e.brand_id].latest = e.event_time
+      }
+    }
+    return Object.values(byBrand).sort((a, b) => b.count - a.count)
+  }, [inventoryEvts, brandById])
+
+  const maxSelloutCount = selloutByBrand[0]?.count ?? 1
+  const totalEstRev = salesEstimates.reduce((s, e) => s + (e.estimated_revenue ?? 0), 0)
+  const totalEstUnits = salesEstimates.reduce((s, e) => s + (e.estimated_units_sold ?? 0), 0)
+
+  // ─── Section M–O derived data ──────────────────────────────────────
+
+  const variantById = useMemo(() => {
+    const m = new Map<string, ProductVariant>()
+    for (const v of variants) m.set(v.id, v)
+    return m
+  }, [variants])
+
+  // Sales Over Time — prefer sales_facts_daily, fall back to sales_estimates aggregated by date
+  const salesByDate = useMemo(() => {
+    type TimeRow = { date: string; brand_id: string; units: number; revenue: number }
+    const rows: TimeRow[] = salesFacts.length > 0
+      ? salesFacts.map(f => ({ date: f.date, brand_id: f.brand_id, units: Number(f.estimated_units_sold) || 0, revenue: Number(f.estimated_revenue) || 0 }))
+      : salesEstimates.map(e => ({ date: e.estimate_date, brand_id: e.brand_id, units: Number(e.estimated_units_sold) || 0, revenue: Number(e.estimated_revenue) || 0 }))
+
+    if (rows.length === 0) return { dates: [] as string[], series: [] as { label: string; color: string; data: number[]; dataRev: number[] }[], source: 'empty' }
+
+    const dateSet = Array.from(new Set(rows.map(r => r.date))).sort()
+    const brandSet = Array.from(new Set(rows.map(r => r.brand_id))).filter(bid => brandById.has(bid))
+
+    const series = brandSet.map(bid => {
+      const brand = brandById.get(bid)!
+      const byDate = new Map<string, { units: number; revenue: number }>()
+      for (const r of rows.filter(r => r.brand_id === bid)) {
+        const ex = byDate.get(r.date) ?? { units: 0, revenue: 0 }
+        byDate.set(r.date, { units: ex.units + r.units, revenue: ex.revenue + r.revenue })
+      }
+      return {
+        label: brand.name,
+        color: brandColor(brand.slug),
+        data: dateSet.map(d => byDate.get(d)?.units ?? 0),
+        dataRev: dateSet.map(d => byDate.get(d)?.revenue ?? 0),
+      }
+    }).filter(s => s.data.some(v => v > 0) || s.dataRev.some(v => v > 0))
+
+    return { dates: dateSet, series, source: salesFacts.length > 0 ? 'sales_facts_daily' : 'sales_estimates' }
+  }, [salesFacts, salesEstimates, brandById])
+
+  // Best Selling Products — group estimates by product_id, enrich with catalog + variant data
+  const bestSellers = useMemo(() => {
+    type BsRow = {
+      productId: string
+      productName: string
+      brand: Brand | undefined
+      brandSlug: string
+      category: string | null
+      imageUrl: string | null
+      totalUnits: number
+      totalRevenue: number
+      avgPrice: number
+      avgDiscount: number | null
+      avgConfidence: number
+      firstSeen: string | null
+      reviewCount: number | null
+      avgRating: number | null
+      variantCount: number
+      currentInStock: number
+      sellThroughRate: number | null
+      dailyVelocity: number | null
+    }
+    const map = new Map<string, BsRow>()
+
+    for (const e of salesEstimates) {
+      // Resolve product_id: direct field first, then via variant lookup
+      const productId: string | null = e.product_id ?? (e.variant_id ? (variantById.get(e.variant_id)?.product_id ?? null) : null)
+      if (!productId) continue
+      const prod = productById.get(productId)
+      if (!prod) continue
+      const brand = brandById.get(e.brand_id)
+      const existing = map.get(productId) ?? {
+        productId,
+        productName: prod.display_name,
+        brand,
+        brandSlug: brand?.slug ?? '',
+        category: prod.category,
+        imageUrl: prod.image_url,
+        totalUnits: 0,
+        totalRevenue: 0,
+        avgPrice: 0,
+        avgDiscount: null,
+        avgConfidence: 0,
+        firstSeen: null,
+        reviewCount: prod.review_count ?? null,
+        avgRating: prod.avg_rating ?? null,
+        variantCount: 0,
+        currentInStock: 0,
+        sellThroughRate: null,
+        dailyVelocity: null,
+      }
+      existing.totalUnits += Number(e.estimated_units_sold) || 0
+      existing.totalRevenue += Number(e.estimated_revenue) || 0
+      const n = existing.variantCount
+      existing.avgPrice = n > 0 ? (existing.avgPrice * n + (e.price_used ?? 0)) / (n + 1) : (e.price_used ?? 0)
+      existing.avgConfidence = n > 0 ? (existing.avgConfidence * n + (e.confidence_score ?? 0)) / (n + 1) : (e.confidence_score ?? 0)
+      existing.variantCount++
+      map.set(productId, existing)
+    }
+
+    // Enrich with first_seen + discount from product_variants
+    for (const v of variants) {
+      if (!v.product_id) continue
+      const row = map.get(v.product_id)
+      if (!row) continue
+      if (v.first_seen_at && (!row.firstSeen || v.first_seen_at < row.firstSeen)) row.firstSeen = v.first_seen_at
+      if (v.price && v.compare_at_price && v.compare_at_price > v.price) {
+        const disc = ((v.compare_at_price - v.price) / v.compare_at_price) * 100
+        row.avgDiscount = row.avgDiscount != null ? (row.avgDiscount + disc) / 2 : disc
+      }
+      if (v.availability_status === 'in_stock') row.currentInStock++
+    }
+
+    // Add inventory qty from snapshots for sell-through rate and daily velocity
+    const msPerDay = 86_400_000
+    const now = Date.now()
+    for (const row of Array.from(map.values())) {
+      const prodSnaps = latestSnapshots.filter(s => s.product_id === row.productId)
+      const totalInv = prodSnaps.reduce((s, snap) => s + (snap.visible_inventory_qty ?? 0), 0)
+      if (row.totalUnits > 0 || totalInv > 0) {
+        // Particl formula: units / (units + inventory/2) — halved denominator because
+        // current inventory is an end-of-period snapshot, not average-period inventory.
+        row.sellThroughRate = row.totalUnits > 0
+          ? (row.totalUnits / (row.totalUnits + totalInv / 2)) * 100
+          : 0
+      }
+      // Rate sold: units per day since first variant seen (Particl's rate_sold metric)
+      const daysActive = row.firstSeen
+        ? Math.max(1, Math.floor((now - new Date(row.firstSeen).getTime()) / msPerDay))
+        : null
+      row.dailyVelocity = daysActive != null && row.totalUnits > 0
+        ? row.totalUnits / daysActive
+        : null
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.totalRevenue - a.totalRevenue)
+  }, [salesEstimates, productById, brandById, variants, variantById, latestSnapshots])
+
+  const displayBestSellers = useMemo(() => {
+    const q = bsSearch.toLowerCase()
+    const filtered = q
+      ? bestSellers.filter(r => r.productName.toLowerCase().includes(q) || (r.brand?.name ?? '').toLowerCase().includes(q))
+      : bestSellers
+    if (!bsSortKey) return filtered
+    return [...filtered].sort((a, b) => {
+      const av = (a as unknown as Record<string, unknown>)[bsSortKey]
+      const bv = (b as unknown as Record<string, unknown>)[bsSortKey]
+      if (typeof av === 'number' && typeof bv === 'number') return bsSortDir === 'asc' ? av - bv : bv - av
+      return bsSortDir === 'asc'
+        ? String(av ?? '').localeCompare(String(bv ?? ''))
+        : String(bv ?? '').localeCompare(String(av ?? ''))
+    })
+  }, [bestSellers, bsSearch, bsSortKey, bsSortDir])
+
+  // Brand Sales Breakdown — per-brand: product count, estimates, avg price, avg rating, stock %
+  const brandSalesRows = useMemo(() => {
+    return brands.map(b => {
+      const brandProds = products.filter(p => p.brand_id === b.id)
+      const brandEstimates = salesEstimates.filter(e => e.brand_id === b.id)
+      const totalUnits = brandEstimates.reduce((s, e) => s + (Number(e.estimated_units_sold) || 0), 0)
+      const totalRevenue = brandEstimates.reduce((s, e) => s + (Number(e.estimated_revenue) || 0), 0)
+      const brandSnaps = latestSnapshots.filter(s => s.brand_id === b.id)
+      const pricesWithData = brandSnaps.filter(s => s.price && s.price > 0)
+      const avgPrice = pricesWithData.length > 0 ? pricesWithData.reduce((s, snap) => s + (snap.price ?? 0), 0) / pricesWithData.length : null
+      const brandVariants = variants.filter(v => v.brand_id === b.id)
+      const discountedVariants = brandVariants.filter(v => v.price != null && v.compare_at_price != null && v.compare_at_price > v.price)
+      const avgDiscount = discountedVariants.length > 0
+        ? discountedVariants.reduce((sum, v) => sum + ((v.compare_at_price! - v.price!) / v.compare_at_price!) * 100, 0) / discountedVariants.length
+        : null
+      const inStockCount = brandSnaps.filter(s => s.availability_status === 'in_stock').length
+      const inStockPct = brandSnaps.length > 0 ? (inStockCount / brandSnaps.length) * 100 : null
+      const ratingsWithData = brandProds.filter(p => p.avg_rating != null)
+      const avgRating = ratingsWithData.length > 0 ? ratingsWithData.reduce((s, p) => s + (p.avg_rating ?? 0), 0) / ratingsWithData.length : null
+      const totalReviews = brandProds.reduce((s, p) => s + (p.review_count ?? 0), 0)
+      return { brand: b, productCount: brandProds.length, totalUnits, totalRevenue, avgPrice, avgDiscount, avgRating, totalReviews, inStockPct, snapshotCount: brandSnaps.length }
+    }).filter(r => r.productCount > 0 || r.snapshotCount > 0)
+      .sort((a, b) => b.totalRevenue - a.totalRevenue || b.productCount - a.productCount)
+  }, [brands, products, salesEstimates, latestSnapshots])
+
+  const displayBrandSalesRows = useMemo(() => {
+    const q = brandSearch.toLowerCase()
+    const filtered = q ? brandSalesRows.filter(r => r.brand.name.toLowerCase().includes(q)) : brandSalesRows
+    if (!brandSortKey) return filtered
+    return [...filtered].sort((a, b) => {
+      if (brandSortKey === 'brand') {
+        return brandSortDir === 'asc' ? a.brand.name.localeCompare(b.brand.name) : b.brand.name.localeCompare(a.brand.name)
+      }
+      const av = (a as unknown as Record<string, unknown>)[brandSortKey]
+      const bv = (b as unknown as Record<string, unknown>)[brandSortKey]
+      if (typeof av === 'number' && typeof bv === 'number') return brandSortDir === 'asc' ? av - bv : bv - av
+      return brandSortDir === 'asc'
+        ? String(av ?? '').localeCompare(String(bv ?? ''))
+        : String(bv ?? '').localeCompare(String(av ?? ''))
+    })
+  }, [brandSalesRows, brandSearch, brandSortKey, brandSortDir])
+
+  // ─── Section P-T derived data (Particl-style pricing block) ───────
+  // Brand scope: when the global BrandFilter is active, only these brand ids
+  // participate. Otherwise all loaded brands do.
+  const scopedBrandIds = useMemo(() => {
+    if (!isFiltered) return new Set(brands.map(b => b.id))
+    return new Set(filteredBrands.map(b => b.id))
+  }, [brands, filteredBrands, isFiltered])
+
+  const scopedBrandLabel = useMemo(() => {
+    if (!isFiltered) return `all ${brands.length} brands`
+    if (filteredBrands.length === 1) return filteredBrands[0].name
+    return `${filteredBrands.length} brands`
+  }, [brands, filteredBrands, isFiltered])
+
+  // P · Best Selling Products — top 6 by totalRevenue within scope
+  const pBestSellers = useMemo(() => {
+    return bestSellers
+      .filter(r => r.brand && scopedBrandIds.has(r.brand.id))
+      .slice(0, 6)
+  }, [bestSellers, scopedBrandIds])
+
+  // Q · Total Discounted Products — donut: variants where compare_at_price > price
+  const qDiscountStats = useMemo(() => {
+    const inScope = variants.filter(v => scopedBrandIds.has(v.brand_id) && v.price != null)
+    const total = inScope.length
+    const discounted = inScope.filter(v => v.compare_at_price != null && v.compare_at_price! > (v.price ?? 0)).length
+    const pct = total > 0 ? (discounted / total) * 100 : 0
+    return { total, discounted, pct }
+  }, [variants, scopedBrandIds])
+
+  // R · Product Types — group products_catalog by category, attach pricing + rating from variants/snapshots
+  const rProductTypes = useMemo(() => {
+    type Row = {
+      category: string
+      productCount: number
+      avgRating: number | null
+      pctDiscounted: number
+      minPrice: number | null
+      maxPrice: number | null
+      avgPrice: number | null
+      avgFullPrice: number | null
+      avgDiscount: number | null
+    }
+    const inScope = products.filter(p => scopedBrandIds.has(p.brand_id))
+    const variantByProduct = new Map<string, ProductVariant[]>()
+    for (const v of variants) {
+      if (!v.product_id) continue
+      const arr = variantByProduct.get(v.product_id) ?? []
+      arr.push(v)
+      variantByProduct.set(v.product_id, arr)
+    }
+    const snapByProduct = new Map<string, ProductSnapshot[]>()
+    for (const s of snapshots) {
+      if (!s.product_id) continue
+      const arr = snapByProduct.get(s.product_id) ?? []
+      arr.push(s)
+      snapByProduct.set(s.product_id, arr)
+    }
+    const byCat = new Map<string, ProductCatalog[]>()
+    for (const p of inScope) {
+      const cat = (p.category ?? 'uncategorized').trim() || 'uncategorized'
+      const arr = byCat.get(cat) ?? []
+      arr.push(p)
+      byCat.set(cat, arr)
+    }
+    const rows: Row[] = []
+    for (const [cat, prods] of Array.from(byCat.entries())) {
+      const ratings = prods.map(p => p.avg_rating).filter((r): r is number => r != null)
+      const allVariants = prods.flatMap(p => variantByProduct.get(p.id) ?? [])
+      const allSnaps = prods.flatMap(p => snapByProduct.get(p.id) ?? []).filter(s => s.price && s.price > 0)
+      const discounted = allVariants.filter(v => v.price != null && v.compare_at_price != null && v.compare_at_price! > v.price!)
+      const pctDiscounted = allVariants.length > 0 ? (discounted.length / allVariants.length) * 100 : 0
+      const prices = allSnaps.map(s => s.price as number)
+      const fullPrices = allVariants.map(v => v.compare_at_price).filter((p): p is number => p != null && p > 0)
+      const avgPrice = prices.length > 0 ? prices.reduce((s, p) => s + p, 0) / prices.length : null
+      const avgFullPrice = fullPrices.length > 0 ? fullPrices.reduce((s, p) => s + p, 0) / fullPrices.length : null
+      const avgDiscount = discounted.length > 0
+        ? discounted.reduce((s, v) => s + ((v.compare_at_price! - v.price!) / v.compare_at_price!) * 100, 0) / discounted.length
+        : null
+      rows.push({
+        category: cat,
+        productCount: prods.length,
+        avgRating: ratings.length > 0 ? ratings.reduce((s, r) => s + r, 0) / ratings.length : null,
+        pctDiscounted,
+        minPrice: prices.length > 0 ? Math.min(...prices) : null,
+        maxPrice: prices.length > 0 ? Math.max(...prices) : null,
+        avgPrice,
+        avgFullPrice,
+        avgDiscount,
+      })
+    }
+    return rows.sort((a, b) => b.productCount - a.productCount)
+  }, [products, variants, snapshots, scopedBrandIds])
+
+  // S · Price Distribution — histogram of prices, % of products and % of revenue
+  const sPriceDistribution = useMemo(() => {
+    // Source of prices: latest product snapshots (current price). Revenue
+    // proxy: sum of estimated_revenue from sales_estimates joined by product.
+    const inScopeSnaps = latestSnapshots.filter(s => scopedBrandIds.has(s.brand_id) && s.price && s.price > 0)
+    const prices = inScopeSnaps.map(s => s.price as number).sort((a, b) => a - b)
+    if (prices.length === 0) return { buckets: [] as { lo: number; hi: number; products: number; revenue: number; productPct: number; revenuePct: number }[], totalProducts: 0, totalRevenue: 0 }
+
+    const p5 = prices[Math.floor(prices.length * 0.05)] ?? prices[0]
+    const p95 = prices[Math.floor(prices.length * 0.95)] ?? prices[prices.length - 1]
+    const N_BUCKETS = 11
+    const step = (p95 - p5) / N_BUCKETS
+    const buckets = Array.from({ length: N_BUCKETS }, (_, i) => ({
+      lo: p5 + step * i,
+      hi: p5 + step * (i + 1),
+      products: 0,
+      revenue: 0,
+      productPct: 0,
+      revenuePct: 0,
+    }))
+    // revenue per product (sum of estimated_revenue across all estimates)
+    const revenueByProduct = new Map<string, number>()
+    for (const e of salesEstimates) {
+      const pid = e.product_id ?? (e.variant_id ? variantById.get(e.variant_id)?.product_id ?? null : null)
+      if (!pid || !scopedBrandIds.has(e.brand_id)) continue
+      revenueByProduct.set(pid, (revenueByProduct.get(pid) ?? 0) + (Number(e.estimated_revenue) || 0))
+    }
+    for (const s of inScopeSnaps) {
+      const price = s.price as number
+      let idx = Math.floor((price - p5) / step)
+      if (idx < 0) idx = 0
+      if (idx >= N_BUCKETS) idx = N_BUCKETS - 1
+      buckets[idx].products++
+      buckets[idx].revenue += s.product_id ? (revenueByProduct.get(s.product_id) ?? 0) : 0
+    }
+    const totalProducts = buckets.reduce((s, b) => s + b.products, 0)
+    const totalRevenue = buckets.reduce((s, b) => s + b.revenue, 0)
+    for (const b of buckets) {
+      b.productPct = totalProducts > 0 ? (b.products / totalProducts) * 100 : 0
+      b.revenuePct = totalRevenue > 0 ? (b.revenue / totalRevenue) * 100 : 0
+    }
+    return { buckets, totalProducts, totalRevenue }
+  }, [latestSnapshots, salesEstimates, scopedBrandIds, variantById])
+
+  // T · Pricing Over Time — weekly: avg current price, avg full price, avg discount %
+  const tPricingTimeline = useMemo(() => {
+    const inScope = salesFacts.filter(f => scopedBrandIds.has(f.brand_id) && f.avg_price && f.avg_price > 0)
+    if (inScope.length === 0) return { weeks: [] as string[], avgPrice: [] as number[], avgFullPrice: [] as number[], avgDiscountPct: [] as number[] }
+    // Group by ISO week start (Mon)
+    const weekKey = (iso: string): string => {
+      const d = new Date(iso)
+      if (Number.isNaN(d.getTime())) return iso.slice(0, 10)
+      const day = d.getUTCDay() || 7
+      d.setUTCDate(d.getUTCDate() - day + 1)
+      return d.toISOString().slice(0, 10)
+    }
+    const byWeek = new Map<string, { priceSum: number; discSum: number; n: number }>()
+    for (const f of inScope) {
+      const w = weekKey(f.date)
+      const ex = byWeek.get(w) ?? { priceSum: 0, discSum: 0, n: 0 }
+      ex.priceSum += f.avg_price ?? 0
+      ex.discSum += f.discount_percent ?? 0
+      ex.n++
+      byWeek.set(w, ex)
+    }
+    const weeks = Array.from(byWeek.keys()).sort()
+    const avgPrice: number[] = []
+    const avgFullPrice: number[] = []
+    const avgDiscountPct: number[] = []
+    for (const w of weeks) {
+      const v = byWeek.get(w)!
+      const p = v.priceSum / v.n
+      const d = v.discSum / v.n
+      avgPrice.push(p)
+      avgFullPrice.push(p / Math.max(0.5, 1 - d / 100))
+      avgDiscountPct.push(d)
+    }
+    return { weeks, avgPrice, avgFullPrice, avgDiscountPct }
+  }, [salesFacts, scopedBrandIds])
+
+  // T view toggle
+  const [tView, setTView] = useState<'discount' | 'current' | 'full'>('discount')
+
   // ─── Render ────────────────────────────────────────────────────────
   if (loading) return <LoadingPage />
 
@@ -467,44 +998,6 @@ export default function SalesIntelPage() {
         accent="Signals"
         sub={`Stock signals and estimated sales velocity across ${brands.length} brands`}
       />
-
-      {/* ─── KPI Bar ───────────────────────────────────────────────── */}
-      <section>
-        <div className="kpi-grid">
-          <MiniKpi
-            label="Products tracked"
-            src="product_snapshots · latest per product"
-            value={fmt(kpis.totalProducts)}
-            color="#F5E625"
-            customVs={`${products.length} in catalog`}
-            tip="How many distinct paddle SKUs across the 11 brands had a stock snapshot during this window. Each SKU is checked weekly on the brand's own product page (Add-to-cart button visible = in stock; 'Sold out' = out of stock)."
-          />
-          <MiniKpi
-            label="In stock"
-            src="latest snapshot availability"
-            flavor="joola"
-            value={kpis.inStockPct.toFixed(1) + '%'}
-            color="#22c55e"
-            customVs={`${Math.round((kpis.inStockPct / 100) * kpis.totalProducts)} of ${kpis.totalProducts} SKUs`}
-            tip="Share of tracked paddles currently available to buy. Formula: in_stock_pct = (SKUs in stock at most recent snapshot ÷ total SKUs tracked) × 100. Source: weekly scrape of each brand's own product page."
-          />
-          <MiniKpi
-            label="Out of stock"
-            src="latest snapshot availability"
-            value={kpis.outStockPct.toFixed(1) + '%'}
-            color="#ef4444"
-            customVs={`${Math.round((kpis.outStockPct / 100) * kpis.totalProducts)} SKUs unavailable`}
-            tip="Share of tracked paddles unavailable to buy right now. High out-of-stock % at a competitor = demand-transfer opportunity for JOOLA (their buyers are looking for alternatives). Source: brand product page snapshots."
-          />
-          <MiniKpi
-            label="Brands with data"
-            value={fmt(kpis.brandsWithData)}
-            color="#818cf8"
-            customVs={`of ${brands.length} tracked`}
-            tip="How many of the 11 tracked brands returned at least one stock snapshot this window. If this is low, scraper coverage needs a check before drawing conclusions from the page."
-          />
-        </div>
-      </section>
 
       {/* ─── Section 1: Inventory Status Grid ─────────────────────── */}
       <section>
@@ -876,7 +1369,7 @@ export default function SalesIntelPage() {
                 </table>
               </div>
               <div style={{ fontSize: 10, color: '#6b7280', padding: '8px 16px 12px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                Tracking {variants.length} product variants across {kpis.brandsWithData} brands.
+                Tracking {variants.length} product variants across {Array.from(new Set(latestSnapshots.map(s => s.brand_id))).length} brands.
               </div>
             </>
           )}
@@ -1157,6 +1650,902 @@ export default function SalesIntelPage() {
           action="Treat the upper-left quadrant as the weekly 'switch-the-buyer' list — paid + organic push behind the closest JOOLA paddle for every row, refreshed every Monday."
         />
         <Caveat tables={['product_attention_summary (last_30d)', 'availability_daily (latest per product)']} />
+      </section>
+
+      {/* ─── Section J: Sellout Velocity ──────────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              J. Sellout velocity · {selloutByBrand.length} brands
+              <SectionInfo
+                title="Sellout Velocity"
+                description="How often each brand's products sell out, measured as the total count of 'sellout' events from inventory tracking. Brands with high sellout counts are clearing stock fast — a signal of strong demand or thin inventory buffers. The bar shows relative frequency vs the top brand."
+                source="inventory_events WHERE event_type = 'sellout' · grouped by brand"
+              />
+            </h2>
+            <div className="sub">
+              Relative sellout frequency across {inventoryEvts.filter(e => e.event_type === 'sellout').length} recorded sellout events.
+              {' '}High sellout count = demand outpacing supply.
+            </div>
+          </div>
+        </div>
+
+        {selloutByBrand.length === 0 ? (
+          <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
+            No sellout events recorded yet — inventory_events.event_type=&apos;sellout&apos; populates once the sales pipeline scrapes consecutive snapshots showing in_stock → out_of_stock transitions.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+            {selloutByBrand.map((row) => {
+              const isJoola = row.brand.slug === 'joola'
+              const color = brandColor(row.brand.slug)
+              const pct = (row.count / maxSelloutCount) * 100
+              return (
+                <div
+                  key={row.brand.id}
+                  className="card"
+                  style={{ padding: 16, borderLeft: `3px solid ${color}` }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                    <span style={{ fontWeight: 800, fontSize: 14, color: isJoola ? '#22c55e' : '#fff' }}>
+                      {row.brand.name}
+                    </span>
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontWeight: 800, fontSize: 18, color: color }}>
+                      {row.count}
+                    </span>
+                  </div>
+                  <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 4, height: 6, marginBottom: 8 }}>
+                    <div style={{ background: `linear-gradient(90deg, ${color}cc, ${color}44)`, borderRadius: 4, height: 6, width: `${Math.max(3, pct)}%`, transition: 'width 0.4s ease' }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--fg-4)' }}>
+                    sellout events · last: {row.latest ? row.latest.slice(0, 10) : '—'}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <ActionFrame
+          move="A brand with a high sellout count is repeatedly running out of specific SKUs — demand is outpacing their replenishment cycle."
+          impact="When a competitor sells out of a high-demand paddle, that buyer is now in-market for an alternative. JOOLA's window to capture that demand is typically 48–96 hours before the competitor restocks or the buyer moves on."
+          action="For the top-3 brands by sellout count, prepare same-day paid targeting on their most frequently mentioned paddles. Run for 72h post-sellout detection, refresh every Monday after the pipeline runs."
+        />
+        <Caveat tables={['inventory_events (event_type = sellout, grouped by brand)']} />
+      </section>
+
+      {/* ─── Section K: Estimated Sales Transactions ──────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              K. Estimated sales transactions · {salesEstimates.length} records
+              <SectionInfo
+                title="Estimated Sales Transactions"
+                description="INFERRED sales events derived from public inventory signals. Two methods: (1) inventory_delta — when consecutive snapshots show a quantity drop (e.g. 47→32 units = 15 sold), confidence 0.5–1.0; (2) availability_flip — when status changes in_stock→out_of_stock with no unit count, confidence 0.25. These are estimates, not verified sales data."
+                source="sales_estimates · populated by backend/scraping/sales_intelligence/estimate.py"
+              />
+            </h2>
+            <div className="sub">
+              Est. total:{' '}
+              <strong style={{ color: '#F5E625' }}>{totalEstUnits} units</strong>{' '}
+              ·{' '}
+              <strong style={{ color: '#22c55e' }}>${totalEstRev.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>{' '}
+              estimated revenue · Confidence reflects signal quality, not verified sales.
+            </div>
+          </div>
+          <input
+            className="col-filter"
+            placeholder="Search brand or product…"
+            value={estSearch}
+            onChange={e => setEstSearch(e.target.value)}
+            style={{ width: 220, alignSelf: 'center' }}
+          />
+        </div>
+
+        <div
+          className="card"
+          style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', padding: 12, marginBottom: 12, fontSize: 12, color: '#fbbf24' }}
+        >
+          <strong>Estimation methodology:</strong>{' '}
+          <strong>inventory_delta</strong> (high confidence) = two consecutive crawl4ai snapshots showing a quantity drop; units_sold = prev_qty − curr_qty.{' '}
+          <strong>availability_flip</strong> (low confidence) = in_stock → out_of_stock status change with no quantity data; records as 1 unit minimum signal.{' '}
+          Neither method reflects verified POS data.
+        </div>
+
+        <div className="card">
+          {displayEstimates.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
+              No sales estimates yet — populates after the sales-intelligence pipeline runs with consecutive product snapshots (Phase 4 of weekly_run.py).
+            </div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
+              <table className="data">
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <tr>
+                    <SortTh col="estimate_date" label="Date" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ width: 100 }} />
+                    <SortTh col="brand_id" label="Brand" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} />
+                    <th style={{ minWidth: 140 }}>Product</th>
+                    <SortTh col="estimation_method" label="Method" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} />
+                    <SortTh col="estimated_units_sold" label="Units" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ textAlign: 'right' }} title="Estimated units sold in this window" />
+                    <SortTh col="estimated_revenue" label="Est. Revenue" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ textAlign: 'right' }} title="units × observed price" />
+                    <SortTh col="price_used" label="Price" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ textAlign: 'right' }} />
+                    <SortTh col="confidence_score" label="Confidence" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ textAlign: 'right' }} title="0.25 = flip signal only, 0.5–1.0 = qty delta" />
+                    <th>Qty Δ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayEstimates.map((e, i) => {
+                    const brand = brandById.get(e.brand_id)
+                    const slug = brand?.slug ?? ''
+                    const color = brandColor(slug)
+                    const methodPill = e.estimation_method === 'inventory_delta' ? 'pill-green' : 'pill-ghost'
+                    const confColor = e.confidence_score >= 0.5 ? '#22c55e' : e.confidence_score >= 0.3 ? '#F5E625' : '#9ca3af'
+                    return (
+                      <tr key={i}>
+                        <td style={{ fontSize: 11, color: 'var(--fg-2)', whiteSpace: 'nowrap' }}>{e.estimate_date}</td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="brand-dot" style={{ background: color }} />
+                            <span style={{ fontWeight: 700, color: slug === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 12 }}>
+                              {brand?.name ?? e.brand_id.slice(0, 8)}
+                            </span>
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--fg-2)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            title={(() => { const pid = e.product_id ?? (e.variant_id ? variantById.get(e.variant_id)?.product_id ?? null : null); return pid ? (productById.get(pid)?.display_name ?? '—') : '—' })()}>
+                          {(() => {
+                            const pid = e.product_id ?? (e.variant_id ? variantById.get(e.variant_id)?.product_id ?? null : null)
+                            return pid ? (productById.get(pid)?.display_name ?? '—') : '—'
+                          })()}
+                        </td>
+                        <td><span className={`pill ${methodPill}`} style={{ fontSize: 10 }}>{e.estimation_method.replace(/_/g, ' ')}</span></td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: '#F5E625' }}>
+                          {e.estimated_units_sold}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: '#22c55e' }}>
+                          ${(e.estimated_revenue ?? 0).toFixed(2)}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                          {e.price_used != null ? '$' + e.price_used.toFixed(2) : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: confColor, fontWeight: 700 }}>
+                          {(e.confidence_score * 100).toFixed(0)}%
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--fg-3)', whiteSpace: 'nowrap', fontFamily: 'JetBrains Mono, monospace' }}>
+                          {e.inventory_start != null && e.inventory_end != null
+                            ? `${e.inventory_start} → ${e.inventory_end}`
+                            : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ─── Section L: Inventory Event Timeline ──────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              L. Inventory event log · {inventoryEvts.length} events
+              <SectionInfo
+                title="Inventory Event Log"
+                description="Append-only log of every inventory transition detected. Event types: sale = quantity drop (Path A); restock = quantity increase; sellout = product went out of stock; reappearance = new variant detected or product came back. Color-coded by event type. This is the raw signal feed that feeds the estimates above."
+                source="inventory_events · ordered by event_time DESC, latest 500"
+              />
+            </h2>
+            <div className="sub">
+              {inventoryEvts.filter(e => e.event_type === 'sale').length} sales ·{' '}
+              {inventoryEvts.filter(e => e.event_type === 'restock').length} restocks ·{' '}
+              {inventoryEvts.filter(e => e.event_type === 'sellout').length} sellouts ·{' '}
+              {inventoryEvts.filter(e => e.event_type === 'reappearance').length} reappearances
+            </div>
+          </div>
+          <input
+            className="col-filter"
+            placeholder="Search brand…"
+            value={evtSearch}
+            onChange={e => setEvtSearch(e.target.value)}
+            style={{ width: 200, alignSelf: 'center' }}
+          />
+        </div>
+
+        <div className="card">
+          {displayEvts.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
+              No inventory events yet — populates after the first sales-intelligence pipeline run captures consecutive product snapshots.
+            </div>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 560, overflowY: 'auto', overflowX: 'auto' }}>
+              <table className="data">
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <tr>
+                    <SortTh col="event_time" label="Time" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ width: 130 }} />
+                    <SortTh col="brand_id" label="Brand" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} />
+                    <th style={{ minWidth: 140 }}>Product</th>
+                    <SortTh col="event_type" label="Event" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} />
+                    <SortTh col="previous_qty" label="Prev Qty" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} />
+                    <SortTh col="current_qty" label="Curr Qty" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} />
+                    <SortTh col="delta_qty" label="Delta" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} />
+                    <SortTh col="confidence_score" label="Confidence" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} />
+                    <th>Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayEvts.slice(0, 200).map((e, i) => {
+                    const brand = brandById.get(e.brand_id)
+                    const slug = brand?.slug ?? ''
+                    const color = brandColor(slug)
+                    const eventPill =
+                      e.event_type === 'sale' ? 'pill-green' :
+                      e.event_type === 'restock' ? 'pill-info' :
+                      e.event_type === 'sellout' ? 'pill-red' :
+                      'pill-amber'
+                    const deltaColor = (e.delta_qty ?? 0) < 0 ? '#22c55e' : (e.delta_qty ?? 0) > 0 ? '#3b82f6' : 'var(--fg-3)'
+                    return (
+                      <tr key={i}>
+                        <td style={{ whiteSpace: 'nowrap', fontSize: 11, color: '#9ca3af' }}>
+                          {formatSnapshotTime(e.event_time)}
+                        </td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <span className="brand-dot" style={{ background: color }} />
+                            <span style={{ fontWeight: 700, color: slug === 'joola' ? '#22c55e' : 'var(--fg)', fontSize: 12 }}>
+                              {brand?.name ?? e.brand_id.slice(0, 8)}
+                            </span>
+                          </span>
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--fg-2)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            title={(() => { const pid = e.variant_id ? variantById.get(e.variant_id)?.product_id ?? null : null; return pid ? (productById.get(pid)?.display_name ?? '—') : '—' })()}>
+                          {(() => {
+                            const pid = e.variant_id ? variantById.get(e.variant_id)?.product_id ?? null : null
+                            return pid ? (productById.get(pid)?.display_name ?? '—') : '—'
+                          })()}
+                        </td>
+                        <td><span className={`pill ${eventPill}`} style={{ fontSize: 10 }}>{e.event_type}</span></td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: 'var(--fg-3)' }}>
+                          {e.previous_qty != null ? e.previous_qty : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', color: 'var(--fg)' }}>
+                          {e.current_qty != null ? e.current_qty : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, color: deltaColor }}>
+                          {e.delta_qty != null ? (e.delta_qty > 0 ? '+' : '') + e.delta_qty : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: (e.confidence_score ?? 0) >= 0.5 ? '#22c55e' : '#9ca3af' }}>
+                          {e.confidence_score != null ? (e.confidence_score * 100).toFixed(0) + '%' : '—'}
+                        </td>
+                        <td style={{ fontSize: 10 }}>
+                          <span className="pill pill-ghost">{e.reason_code?.replace(/_/g, ' ') ?? '—'}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <Caveat tables={['inventory_events (ordered by event_time DESC, limit 200 displayed of 500 fetched)']} />
+      </section>
+
+      {/* ─── Section M: Sales Over Time ────────────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              M. Sales over time · {salesByDate.dates.length} date{salesByDate.dates.length === 1 ? '' : 's'} tracked
+              <SectionInfo
+                title="Sales Over Time"
+                description="Estimated units sold or revenue across all brands over the scraped date range. Prefers sales_facts_daily (Phase 3 denormalised roll-up) and falls back to sales_estimates aggregated by estimate_date. Both are inferred from public inventory signals, not verified POS data."
+                source="sales_facts_daily (preferred) · sales_estimates (fallback) — grouped by brand × date"
+              />
+            </h2>
+            <div className="sub">
+              {salesByDate.source === 'sales_facts_daily' ? 'Source: sales_facts_daily (Phase 3 roll-up)' : salesByDate.source === 'sales_estimates' ? 'Source: sales_estimates (availability-flip signals)' : 'Populates after Phase 3 or Phase 4 pipeline runs.'}
+              {salesByDate.series.length > 0 && (
+                <span style={{ marginLeft: 12, color: '#F5E625' }}>
+                  {salesByDate.series.length} brand{salesByDate.series.length === 1 ? '' : 's'} with data
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button
+              className={salesTimeView === 'volume' ? 'btn btn-yellow' : 'btn'}
+              style={{ fontSize: 12, padding: '4px 12px' }}
+              onClick={() => setSalesTimeView('volume')}
+            >
+              Volume
+            </button>
+            <button
+              className={salesTimeView === 'revenue' ? 'btn btn-yellow' : 'btn'}
+              style={{ fontSize: 12, padding: '4px 12px' }}
+              onClick={() => setSalesTimeView('revenue')}
+            >
+              Revenue
+            </button>
+          </div>
+        </div>
+
+        {salesByDate.dates.length === 0 ? (
+          <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
+            Sales over time chart populates once <strong style={{ color: 'var(--fg-2)' }}>Phase 3</strong> (sales_facts_daily roll-up) or <strong style={{ color: 'var(--fg-2)' }}>Phase 4</strong> (crawl4ai inventory snapshots) of the weekly pipeline complete.
+            <div style={{ fontSize: 11, marginTop: 8, color: 'var(--fg-4)' }}>
+              Run: <code style={{ background: 'rgba(255,255,255,0.06)', padding: '1px 6px', borderRadius: 4 }}>python scripts/weekly_run.py</code>
+            </div>
+          </div>
+        ) : (
+          <div className="card"><div className="card-pad">
+            <LineChart
+              series={salesByDate.series.map(s => ({
+                id: s.label,
+                label: s.label,
+                color: s.color,
+                data: salesTimeView === 'volume' ? s.data : s.dataRev,
+              }))}
+              xLabels={salesByDate.dates.map(d => d.slice(5))}
+              h={300}
+            />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14 }}>
+              {salesByDate.series.map(s => (
+                <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 2, background: s.color, flexShrink: 0 }} />
+                  <span style={{ color: 'var(--fg-2)' }}>{s.label}</span>
+                  <span style={{ color: s.color, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace' }}>
+                    {salesTimeView === 'volume'
+                      ? s.data.reduce((a, b) => a + b, 0) + ' units'
+                      : '$' + s.dataRev.reduce((a, b) => a + b, 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div></div>
+        )}
+        <ActionFrame
+          move="Track which brands show consistent weekly sales velocity vs. one-off spikes — velocity brands are taking share, spike brands are clearing excess inventory."
+          impact="A brand with rising revenue velocity and rising out-of-stock events is supply-constrained, not demand-constrained — JOOLA's window to capture that demand is narrow."
+          action="Flag any brand whose weekly volume drops >30% WoW while sellout events rise — that's the clearest demand-transfer trigger for same-day campaign activation."
+        />
+        <Caveat tables={['sales_facts_daily (Phase 3 roll-up, preferred)', 'sales_estimates (Phase 4 availability signals, fallback)']} />
+      </section>
+
+      {/* ─── Section N: Best Selling Products ─────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              N. Best selling products · {bestSellers.length} ranked
+              <SectionInfo
+                title="Best Selling Products"
+                description="Products ranked by estimated revenue, derived from inventory delta signals. Each row is one paddle in the catalog that had at least one estimable sales event. Price, discount, and sell-through rate come from snapshot data; reviews and rating from the product catalog."
+                source="sales_estimates (units + revenue) · products_catalog (name, rating, reviews) · product_variants (price, first seen) · product_snapshots (sell-through inventory)"
+              />
+            </h2>
+            <div className="sub">
+              Ranked by estimated revenue. Sell-through = units ÷ (units + inventory ÷ 2). Daily vel. = units ÷ days active.
+              {' '}<span style={{ color: 'var(--fg-4)', fontSize: 11 }}>Confidence reflects signal method, not verified sales.</span>
+            </div>
+          </div>
+          <input
+            className="col-filter"
+            placeholder="Search product or brand…"
+            value={bsSearch}
+            onChange={e => setBsSearch(e.target.value)}
+            style={{ width: 220, alignSelf: 'center' }}
+          />
+        </div>
+
+        {bestSellers.length === 0 ? (
+          <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--fg-4)' }}>
+            Best selling products populates after the <strong style={{ color: 'var(--fg-2)' }}>sales-intelligence pipeline</strong> (Phase 4) detects inventory deltas on consecutive product snapshots.
+            <div style={{ fontSize: 11, marginTop: 8 }}>
+              Requires at least 2 weekly crawl4ai runs to produce inventory_delta records.
+            </div>
+          </div>
+        ) : (
+          <div className="card">
+            <div className="table-wrap" style={{ maxHeight: 640, overflowY: 'auto', overflowX: 'auto' }}>
+              <table className="data">
+                <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                  <tr>
+                    <th style={{ width: 36, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
+                    <SortTh col="productName" label="Product" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} />
+                    <SortTh col="brandSlug" label="Brand" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} />
+                    <SortTh col="avgPrice" label="Price" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Average price observed across snapshots for this product's variants" />
+                    <SortTh col="avgDiscount" label="Avg Disc%" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Average discount % = (compare_at_price − price) ÷ compare_at_price × 100. Only populated when compare_at_price is available in Shopify JSON." />
+                    <SortTh col="totalUnits" label="Volume" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Estimated total units sold — sum of inventory_delta events for this product across all variants" />
+                    <SortTh col="dailyVelocity" label="Daily Vel." sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Estimated units sold per day = total volume ÷ days since first seen. Equivalent to Particl's rate_sold metric. Higher = faster-moving SKU." />
+                    <SortTh col="totalRevenue" label="Est. Revenue" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Estimated revenue = units sold × observed price. Not verified POS data." />
+                    <SortTh col="sellThroughRate" label="Sell-Through" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Sell-through rate = units sold ÷ (units sold + current inventory ÷ 2). Halved denominator follows Particl convention: current snapshot is end-of-period, so average-period inventory ≈ current ÷ 2. High rate = strong demand vs. stock." />
+                    <SortTh col="reviewCount" label="Reviews" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Total public review count from the brand's product page (scraped via scrape_catalog). Industry proxy: ~3-5% of buyers leave a review." />
+                    <SortTh col="avgRating" label="Rating" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Average star rating scraped from the brand's product page (1–5). Source: products_catalog.avg_rating." />
+                    <SortTh col="avgConfidence" label="Conf." sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Average confidence of the underlying sales estimate. 0.5–1.0 = quantity delta method (high). 0.25 = availability-flip only (low)." />
+                    <SortTh col="firstSeen" label="First Seen" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} title="Date this variant first appeared in the JOOLA Intel product tracking database." />
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayBestSellers.map((row, i) => {
+                    const color = brandColor(row.brandSlug)
+                    const isJoola = row.brandSlug === 'joola'
+                    const confColor = row.avgConfidence >= 0.5 ? '#22c55e' : row.avgConfidence >= 0.3 ? '#F5E625' : '#9ca3af'
+                    const stColor = (row.sellThroughRate ?? 0) >= 50 ? '#22c55e' : (row.sellThroughRate ?? 0) >= 20 ? '#F5E625' : '#9ca3af'
+                    return (
+                      <tr key={row.productId}>
+                        <td style={{ textAlign: 'center', color: 'var(--fg-4)', fontFamily: 'JetBrains Mono, monospace', fontSize: 11 }}>
+                          {i + 1}
+                        </td>
+                        <td style={{ maxWidth: 240 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: isJoola ? '#22c55e' : 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.productName}>
+                            {row.productName}
+                          </div>
+                          {row.category && (
+                            <div style={{ fontSize: 10, color: 'var(--fg-4)', marginTop: 2 }}>{row.category}</div>
+                          )}
+                        </td>
+                        <td>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                            <span className="brand-dot" style={{ background: color }} />
+                            <span style={{ fontSize: 12, fontWeight: 600, color: isJoola ? '#22c55e' : 'var(--fg-2)' }}>{row.brand?.name ?? row.brandSlug}</span>
+                          </span>
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
+                          {row.avgPrice > 0 ? '$' + row.avgPrice.toFixed(0) : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontSize: 12 }}>
+                          {row.avgDiscount != null ? (
+                            <span style={{ color: '#f59e0b', fontWeight: 700 }}>{row.avgDiscount.toFixed(1)}%</span>
+                          ) : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 800, color: '#F5E625', fontSize: 13 }}>
+                          {row.totalUnits.toFixed(0)}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--fg-2)' }}>
+                          {row.dailyVelocity != null ? row.dailyVelocity.toFixed(2) + '/d' : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 800, color: '#22c55e', fontSize: 13 }}>
+                          ${row.totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right' }}>
+                          {row.sellThroughRate != null ? (
+                            <span style={{ color: stColor, fontWeight: 700, fontSize: 12 }}>{row.sellThroughRate.toFixed(1)}%</span>
+                          ) : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontSize: 12 }}>
+                          {row.reviewCount != null && row.reviewCount > 0 ? (
+                            <span style={{ color: 'var(--fg-2)' }}>{row.reviewCount.toLocaleString()}</span>
+                          ) : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right' }}>
+                          {row.avgRating != null ? (
+                            <span style={{ color: '#F5E625', fontSize: 12, fontWeight: 700 }}>
+                              ★ {row.avgRating.toFixed(1)}
+                            </span>
+                          ) : '—'}
+                        </td>
+                        <td className="cell-num" style={{ textAlign: 'right', fontWeight: 700, color: confColor, fontSize: 11 }}>
+                          {(row.avgConfidence * 100).toFixed(0)}%
+                        </td>
+                        <td style={{ fontSize: 11, color: 'var(--fg-3)', whiteSpace: 'nowrap' }}>
+                          {row.firstSeen ? row.firstSeen.slice(0, 10) : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+        <ActionFrame
+          move="Products with high sell-through (>50%) and high review counts are in genuine demand — use these as benchmarks for JOOLA comparable paddle positioning."
+          impact="A competitor paddle with 200+ reviews and >40% sell-through is a proven market winner. If JOOLA has no direct comparable at a similar price, that's a product gap."
+          action="For every top-10 product with high sell-through and high reviews, identify the closest JOOLA paddle by specs (weight, material, shape). If the JOOLA comp ranks below #20, escalate to product team as a positioning priority."
+        />
+        <Caveat tables={['sales_estimates (units + revenue)', 'products_catalog (display_name, avg_rating, review_count)', 'product_variants (price, compare_at_price, first_seen_at)', 'product_snapshots (visible_inventory_qty for sell-through)']} />
+      </section>
+
+      {/* ─── Section O: Brand Sales Breakdown ─────────────────── */}
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              O. Brand sales breakdown · {brandSalesRows.length} brands
+              <SectionInfo
+                title="Brand Sales Breakdown"
+                description="Per-brand rollup of estimated sales volume, revenue, average price, discount rate, stock availability, and product ratings. All revenue and unit figures are inferred from public inventory signals (not verified POS). Sorted by estimated revenue descending."
+                source="sales_estimates (units + revenue) · product_snapshots (price, stock %) · products_catalog (avg_rating, review_count)"
+              />
+            </h2>
+            <div className="sub">
+              Per-brand summary. Revenue is estimated from inventory signals — compare relative ranking, not absolute values.
+            </div>
+          </div>
+          <input
+            className="col-filter"
+            placeholder="Search brand…"
+            value={brandSearch}
+            onChange={e => setBrandSearch(e.target.value)}
+            style={{ width: 180, alignSelf: 'center' }}
+          />
+        </div>
+
+        <div className="card">
+          <div className="table-wrap" style={{ overflowX: 'auto' }}>
+            <table className="data">
+              <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
+                <tr>
+                  <SortTh col="brand" label="Brand" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} />
+                  <SortTh col="productCount" label="# Products" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Number of paddle SKUs in products_catalog for this brand" />
+                  <SortTh col="avgPrice" label="Avg Price" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Average price observed across all product snapshots for this brand" />
+                  <SortTh col="avgDiscount" label="Avg Disc%" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Average discount % from product_variants compare_at_price" />
+                  <SortTh col="totalUnits" label="Est. Units" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Total estimated units sold (sum of all sales_estimates records)" />
+                  <SortTh col="totalRevenue" label="Est. Revenue" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Total estimated revenue = units × observed price" />
+                  <SortTh col="totalReviews" label="Reviews" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Total public review count across all products in this brand's catalog" />
+                  <SortTh col="avgRating" label="Avg Rating" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Average star rating across all products with ratings in this brand's catalog" />
+                  <SortTh col="inStockPct" label="In Stock %" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Percentage of tracked product variants currently in_stock at latest snapshot" />
+                </tr>
+              </thead>
+              <tbody>
+                {displayBrandSalesRows.map((row) => {
+                  const color = brandColor(row.brand.slug)
+                  const isJoola = row.brand.slug === 'joola'
+                  const hasEstimates = row.totalRevenue > 0 || row.totalUnits > 0
+                  return (
+                    <tr key={row.brand.id}>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ width: 10, height: 10, borderRadius: 2, background: color, flexShrink: 0 }} />
+                          <span style={{ fontWeight: 800, fontSize: 13, color: isJoola ? '#22c55e' : 'var(--fg)' }}>
+                            {row.brand.name}
+                          </span>
+                          {isJoola && <span className="pill pill-green" style={{ fontSize: 9 }}>JOOLA</span>}
+                        </span>
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: 'var(--fg-2)' }}>
+                        {row.productCount}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}>
+                        {row.avgPrice != null ? '$' + row.avgPrice.toFixed(0) : '—'}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {row.avgDiscount != null ? (
+                          <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 12 }}>{row.avgDiscount.toFixed(1)}%</span>
+                        ) : '—'}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 800, color: hasEstimates ? '#F5E625' : 'var(--fg-4)', fontSize: 13 }}>
+                        {hasEstimates ? row.totalUnits.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', fontFamily: 'JetBrains Mono, monospace', fontWeight: 800, color: hasEstimates ? '#22c55e' : 'var(--fg-4)', fontSize: 13 }}>
+                        {hasEstimates ? '$' + row.totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right', color: 'var(--fg-2)', fontSize: 12 }}>
+                        {row.totalReviews > 0 ? row.totalReviews.toLocaleString() : '—'}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {row.avgRating != null ? (
+                          <span style={{ color: '#F5E625', fontWeight: 700, fontSize: 12 }}>★ {row.avgRating.toFixed(1)}</span>
+                        ) : '—'}
+                      </td>
+                      <td className="cell-num" style={{ textAlign: 'right' }}>
+                        {row.inStockPct != null ? (
+                          <span style={{ color: row.inStockPct >= 70 ? '#22c55e' : row.inStockPct >= 40 ? '#F5E625' : '#ef4444', fontWeight: 700, fontSize: 12 }}>
+                            {row.inStockPct.toFixed(0)}%
+                          </span>
+                        ) : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <ActionFrame
+          move="Brands with high review counts + high ratings + growing estimated revenue are the 'proven winners' in the category — they've crossed the social-proof threshold."
+          impact="A brand with >$50K estimated revenue AND >4.5 avg rating AND >200 total reviews has a self-reinforcing competitive moat. JOOLA needs to match or exceed on at least two of the three axes."
+          action="For any brand outperforming JOOLA on this table, run the 'crisis scan' on the underperforming JOOLA paddles (Section D) and fast-follow with review-solicitation campaigns on the JOOLA comparable."
+        />
+        <Caveat tables={['sales_estimates (grouped by brand_id)', 'product_snapshots (latest per product, price + availability)', 'products_catalog (avg_rating, review_count — from scrape_catalog scraper)']} />
+        <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: 12, marginTop: 12, fontSize: 11, color: '#fbbf24' }}>
+          <strong>What scraper populates which column:</strong>
+          {' '}Est. Units + Revenue → <code style={{ background: 'rgba(255,255,255,0.06)', padding: '0 4px', borderRadius: 3 }}>scripts/pipeline/sales_intelligence/estimate.py</code> (Phase 4).
+          {' '}Avg Price + In Stock % → <code style={{ background: 'rgba(255,255,255,0.06)', padding: '0 4px', borderRadius: 3 }}>scripts/pipeline/scrape_inventory_crawl4ai.py</code> (Phase 4).
+          {' '}Reviews + Rating → <code style={{ background: 'rgba(255,255,255,0.06)', padding: '0 4px', borderRadius: 3 }}>scripts/pipeline/scrape_catalog.py</code> (Phase 1).
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════════════════ */}
+      {/*  PRICING INTELLIGENCE BLOCK — Sections P-T                       */}
+      {/*  Particl-style per-brand pricing view, scoped by global filter   */}
+      {/* ════════════════════════════════════════════════════════════════ */}
+
+      {/* ─── Section P: Best Selling Products (visual grid) ─────── */}
+      <section>
+        <div className="card">
+          <div className="section-head">
+            <h2>
+              P · Best Selling Products
+              <SectionInfo
+                title="Best Selling Products"
+                description={`Top 6 products by estimated revenue across ${scopedBrandLabel}. Revenue is sum of estimated_revenue from sales_estimates (Phase 4 pipeline). Product image is the og:image / Shopify featured_image scraped per product URL — falls back to brand-color placeholder when image_url is null.`}
+                source="sales_estimates → product_id → products_catalog · ordered by total estimated_revenue desc"
+              />
+            </h2>
+            <span className="sub">Scope: <strong style={{ color: '#fff' }}>{scopedBrandLabel}</strong></span>
+          </div>
+          {pBestSellers.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+              No sales estimates yet for the selected scope. The Phase 4 estimator populates this after 2+ consecutive scrapes detect inventory deltas.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginTop: 8 }}>
+              {pBestSellers.map((row, i) => {
+                const color = brandColor(row.brandSlug)
+                return (
+                  <div key={row.productId} className="kpi" style={{ padding: 0, overflow: 'hidden', position: 'relative', minHeight: 240, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 2, background: 'rgba(13,17,23,0.85)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '2px 8px', fontWeight: 800, fontSize: 11, color: '#fff' }}>
+                      #{i + 1}
+                    </div>
+                    <div style={{ height: 140, background: `linear-gradient(135deg, ${color}33 0%, ${color}11 50%, rgba(13,17,23,0.6) 100%)`, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: `2px solid ${color}`, overflow: 'hidden' }}>
+                      {row.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={row.imageUrl}
+                          alt={row.productName}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                          style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }}
+                        />
+                      ) : (
+                        <span style={{ fontSize: 42, opacity: 0.35, fontWeight: 900, letterSpacing: -2, color }}>
+                          {(row.brand?.name ?? '?').slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ padding: 10, flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ fontSize: 9, color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>{row.brand?.name ?? '—'}</div>
+                      <div style={{ fontSize: 12, color: '#fff', fontWeight: 600, lineHeight: 1.25 }} title={row.productName}>
+                        {row.productName.length > 50 ? row.productName.slice(0, 48) + '…' : row.productName}
+                      </div>
+                      <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>${row.avgPrice ? row.avgPrice.toFixed(0) : '—'}</span>
+                        <span style={{ fontSize: 10, color: 'var(--muted)' }}>{fmt(row.totalRevenue)} rev</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          <Caveat tables={['products_catalog (display_name, image_url)', 'sales_estimates (estimated_revenue grouped by product_id)', 'product_variants (price)']} />
+        </div>
+      </section>
+
+      {/* ─── Section Q: Total Discounted Products (donut) ─────── */}
+      <section>
+        <div className="card">
+          <div className="section-head">
+            <h2>
+              Q · Total Discounted Products
+              <SectionInfo
+                title="Total Discounted Products"
+                description={`How many products are actively on sale right now. A variant is discounted when its current price is below its compare_at_price. % discounted = discounted_variants / total_variants. Scope: ${scopedBrandLabel}.`}
+                source="product_variants · price < compare_at_price"
+              />
+            </h2>
+            <span className="sub">Discount pressure check · {scopedBrandLabel}</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 32, alignItems: 'center', padding: '8px 4px' }}>
+            <div style={{ position: 'relative', width: 200, height: 200, justifySelf: 'center' }}>
+              <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                <circle cx="50" cy="50" r="42" stroke="rgba(255,255,255,0.08)" strokeWidth="10" fill="none" />
+                <circle
+                  cx="50" cy="50" r="42"
+                  stroke="#3b82f6" strokeWidth="10" fill="none"
+                  strokeDasharray={`${(qDiscountStats.pct / 100) * (2 * Math.PI * 42)} ${2 * Math.PI * 42}`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ fontSize: 28, fontWeight: 900, color: '#fff' }}>{qDiscountStats.pct.toFixed(0)}%</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>discounted</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 32, fontWeight: 800, color: '#fff', lineHeight: 1 }}>
+                {qDiscountStats.discounted} <span style={{ fontSize: 18, color: 'var(--muted)', fontWeight: 600 }}>/ {qDiscountStats.total}</span>
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--muted)' }}>products on sale right now</div>
+              <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <span className="pill pill-info">discounted: {qDiscountStats.discounted}</span>
+                <span className="pill pill-ghost">full price: {qDiscountStats.total - qDiscountStats.discounted}</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5 }}>
+                {qDiscountStats.pct >= 40
+                  ? 'Heavy promotional activity — likely clearing inventory or defending share.'
+                  : qDiscountStats.pct >= 15
+                    ? 'Moderate, healthy discount cadence.'
+                    : 'Low discount intensity — full-price pricing posture.'}
+              </div>
+            </div>
+          </div>
+          <Caveat tables={['product_variants (price, compare_at_price)']} />
+        </div>
+      </section>
+
+      {/* ─── Section R: Product Types ─────── */}
+      <section>
+        <div className="card">
+          <div className="section-head">
+            <h2>
+              R · Product Types
+              <SectionInfo
+                title="Product Types"
+                description={`Catalog rolled up by category. # Products counts products_catalog rows. Avg Rating averages products_catalog.avg_rating. % Discount = share of variants in the category with compare_at_price > price. Price Range, Avg Price, Avg Full Price come from latest snapshots and variant compare_at_price. Scope: ${scopedBrandLabel}.`}
+                source="products_catalog grouped by category · enriched with product_variants + product_snapshots"
+              />
+            </h2>
+            <span className="sub">Catalog by category · {scopedBrandLabel}</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data" style={{ width: '100%', minWidth: 760 }}>
+              <thead style={{ position: 'sticky', top: 0, background: '#0d1117', zIndex: 1 }}>
+                <tr>
+                  <th style={{ textAlign: 'left' }}>Category</th>
+                  <th style={{ textAlign: 'right' }}># Products</th>
+                  <th style={{ textAlign: 'right' }}>Avg Rating</th>
+                  <th style={{ textAlign: 'right' }}>% Discounted</th>
+                  <th style={{ textAlign: 'right' }}>Price Range</th>
+                  <th style={{ textAlign: 'right' }}>Avg Price</th>
+                  <th style={{ textAlign: 'right' }}>Avg Full Price</th>
+                  <th style={{ textAlign: 'right' }}>Avg Discount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rProductTypes.length === 0 ? (
+                  <tr><td colSpan={8} style={{ textAlign: 'center', color: 'var(--muted)', padding: 24, fontSize: 12 }}>No catalog data for this scope.</td></tr>
+                ) : rProductTypes.map(row => (
+                  <tr key={row.category}>
+                    <td style={{ fontWeight: 600, color: '#fff', textTransform: 'capitalize' }}>{row.category}</td>
+                    <td style={{ textAlign: 'right' }}>{row.productCount}</td>
+                    <td style={{ textAlign: 'right' }}>{row.avgRating != null ? row.avgRating.toFixed(2) : '—'}</td>
+                    <td style={{ textAlign: 'right', color: row.pctDiscounted >= 30 ? '#3b82f6' : '#fff' }}>{row.pctDiscounted.toFixed(0)}%</td>
+                    <td style={{ textAlign: 'right', color: 'var(--muted)', fontSize: 11 }}>
+                      {row.minPrice != null && row.maxPrice != null
+                        ? `$${row.minPrice.toFixed(0)} – $${row.maxPrice.toFixed(0)}`
+                        : '—'}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>{row.avgPrice != null ? '$' + row.avgPrice.toFixed(0) : '—'}</td>
+                    <td style={{ textAlign: 'right', color: 'var(--muted)' }}>{row.avgFullPrice != null ? '$' + row.avgFullPrice.toFixed(0) : '—'}</td>
+                    <td style={{ textAlign: 'right', color: row.avgDiscount != null && row.avgDiscount > 20 ? '#ef4444' : '#fff' }}>
+                      {row.avgDiscount != null ? row.avgDiscount.toFixed(1) + '%' : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Caveat tables={['products_catalog (category, avg_rating)', 'product_variants (price, compare_at_price)', 'product_snapshots (price)']} />
+        </div>
+      </section>
+
+      {/* ─── Section S: Price Distribution (histogram) ─────── */}
+      <section>
+        <div className="card">
+          <div className="section-head">
+            <h2>
+              S · Price Distribution
+              <SectionInfo
+                title="Price Distribution"
+                description={`Where products sit on the price axis. The x-axis is split into 11 buckets between the 5th and 95th percentile of current prices (latest snapshot per product). The top bar shows % of products in each bucket; the bottom bar shows % of revenue (sum of estimated_revenue from sales_estimates). A right-shifted revenue distribution vs. product distribution signals premium-skewed demand. Scope: ${scopedBrandLabel}.`}
+                source="product_snapshots (latest price) + sales_estimates (estimated_revenue)"
+              />
+            </h2>
+            <span className="sub">{sPriceDistribution.totalProducts} products · {fmt(sPriceDistribution.totalRevenue)} est. revenue</span>
+          </div>
+          {sPriceDistribution.buckets.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>No price data for this scope.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '4px 0 8px' }}>
+              {/* % of Product Prices */}
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, fontWeight: 600, letterSpacing: 0.3 }}>% OF PRODUCT PRICES</div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${sPriceDistribution.buckets.length}, 1fr)`, gap: 4, alignItems: 'end', height: 120 }}>
+                  {sPriceDistribution.buckets.map((b, i) => {
+                    const maxPct = Math.max(...sPriceDistribution.buckets.map(x => x.productPct), 1)
+                    const h = (b.productPct / maxPct) * 100
+                    const isTop = b.productPct === maxPct
+                    return (
+                      <div key={i} title={`$${b.lo.toFixed(0)}–$${b.hi.toFixed(0)} · ${b.products} products · ${b.productPct.toFixed(1)}%`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{b.productPct.toFixed(0)}%</div>
+                        <div style={{ width: '100%', height: `${h}%`, background: isTop ? '#3b82f6' : 'rgba(59,130,246,0.45)', borderRadius: '4px 4px 0 0', minHeight: 2 }} />
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${sPriceDistribution.buckets.length}, 1fr)`, gap: 4, marginTop: 4, fontSize: 9, color: 'var(--muted)', textAlign: 'center' }}>
+                  {sPriceDistribution.buckets.map((b, i) => <div key={i}>${b.lo.toFixed(0)}</div>)}
+                </div>
+              </div>
+              {/* % of Revenue */}
+              <div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6, fontWeight: 600, letterSpacing: 0.3 }}>% OF REVENUE</div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${sPriceDistribution.buckets.length}, 1fr)`, gap: 4, alignItems: 'end', height: 120 }}>
+                  {sPriceDistribution.buckets.map((b, i) => {
+                    const maxPct = Math.max(...sPriceDistribution.buckets.map(x => x.revenuePct), 1)
+                    const h = (b.revenuePct / maxPct) * 100
+                    const isTop = b.revenuePct === maxPct
+                    return (
+                      <div key={i} title={`$${b.lo.toFixed(0)}–$${b.hi.toFixed(0)} · ${fmt(b.revenue)} revenue · ${b.revenuePct.toFixed(1)}%`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{b.revenuePct.toFixed(0)}%</div>
+                        <div style={{ width: '100%', height: `${h}%`, background: isTop ? '#22c55e' : 'rgba(34,197,94,0.45)', borderRadius: '4px 4px 0 0', minHeight: 2 }} />
+                      </div>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${sPriceDistribution.buckets.length}, 1fr)`, gap: 4, marginTop: 4, fontSize: 9, color: 'var(--muted)', textAlign: 'center' }}>
+                  {sPriceDistribution.buckets.map((b, i) => <div key={i}>${b.lo.toFixed(0)}</div>)}
+                </div>
+              </div>
+            </div>
+          )}
+          <Caveat tables={['product_snapshots (latest price per product)', 'sales_estimates (estimated_revenue per product)']} />
+        </div>
+      </section>
+
+      {/* ─── Section T: Pricing Over Time ─────── */}
+      <section>
+        <div className="card">
+          <div className="section-head">
+            <h2>
+              T · Pricing Over Time
+              <SectionInfo
+                title="Pricing Over Time"
+                description={`Weekly evolution of pricing. Avg Current Price is the realized price after discounts (sales_facts_daily.avg_price, weekly mean). Avg Full Price reverses discount % to estimate list price (avg_price ÷ (1 – discount/100)). Avg Discount % is the mean discount across the week. Use to spot rising discount intensity (margin compression) or rising prices (premium repositioning). Scope: ${scopedBrandLabel}.`}
+                source="sales_facts_daily · weekly aggregation (Mon–Sun)"
+              />
+            </h2>
+            <span className="sub">{tPricingTimeline.weeks.length} weeks · {scopedBrandLabel}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            {(['discount', 'current', 'full'] as const).map(v => (
+              <button
+                key={v}
+                onClick={() => setTView(v)}
+                className={tView === v ? 'btn btn-yellow' : 'btn'}
+                style={{ fontSize: 11, padding: '4px 10px', textTransform: 'capitalize' }}
+              >
+                Avg {v} {v === 'discount' ? '%' : 'Price'}
+              </button>
+            ))}
+          </div>
+          {tPricingTimeline.weeks.length === 0 ? (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+              No sales_facts_daily data yet for this scope. Phase 3 pipeline populates this weekly on Mondays.
+            </div>
+          ) : (
+            <LineChart
+              series={[{
+                id: `pricing-${tView}`,
+                label: tView === 'discount' ? 'Avg Discount %' : tView === 'full' ? 'Avg Full Price' : 'Avg Current Price',
+                color: tView === 'discount' ? '#3b82f6' : tView === 'full' ? '#94a3b8' : '#22c55e',
+                data: tView === 'discount' ? tPricingTimeline.avgDiscountPct : tView === 'full' ? tPricingTimeline.avgFullPrice : tPricingTimeline.avgPrice,
+              }]}
+              xLabels={tPricingTimeline.weeks}
+              w={760}
+              h={260}
+              yLabel={tView === 'discount' ? 'Discount %' : 'USD'}
+            />
+          )}
+          <Caveat tables={['sales_facts_daily (avg_price, discount_percent — weekly aggregated)']} />
+        </div>
       </section>
     </>
   )

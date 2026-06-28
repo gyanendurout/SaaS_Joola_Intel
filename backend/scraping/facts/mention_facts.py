@@ -241,15 +241,29 @@ def _build_for_channel(
             f_slug = r.get("competitor_switch_from")
             t_slug = r.get("competitor_switch_to")
             if f_slug or t_slug:
-                switches.append({
-                    "from_brand_id": brand_map.get((f_slug or "").lower()),
-                    "to_brand_id":   brand_map.get((t_slug or "").lower()),
-                    "confidence":    0.8,
-                    "text_snippet":  snippet_fn(r),
-                    "posted_at":     r.get(ts_col),
-                })
+                from_id = brand_map.get((f_slug or "").lower())
+                to_id   = brand_map.get((t_slug or "").lower())
+                # Skip rows where brand lookup failed — nulls break the unique index
+                if from_id and to_id:
+                    switches.append({
+                        "from_brand_id": from_id,
+                        "to_brand_id":   to_id,
+                        "confidence":    0.8,
+                        "text_snippet":  snippet_fn(r),
+                        "posted_at":     r.get(ts_col),
+                    })
 
-    return _insert_facts(facts), _insert_switch_events(switches)
+    # Deduplicate switches on the upsert key before sending — PostgreSQL rejects
+    # batches where the same (posted_at, from_brand_id, to_brand_id) appears twice.
+    seen: set[tuple] = set()
+    deduped_switches: list[dict] = []
+    for sw in switches:
+        key = (sw.get("posted_at"), sw.get("from_brand_id"), sw.get("to_brand_id"))
+        if key not in seen:
+            seen.add(key)
+            deduped_switches.append(sw)
+
+    return _insert_facts(facts), _insert_switch_events(deduped_switches)
 
 
 def run(ctx: dict[str, Any]) -> int:

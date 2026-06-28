@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 from ..core import supabase_client as sb
@@ -39,11 +39,13 @@ def run(ctx: dict[str, Any]) -> int:
         log.info("[DRY-RUN] would aggregate %d estimates into sales_facts_daily", len(estimates))
         return 0
 
-    # Check promotion flags
+    # promotions table has no is_active column — treat any promo detected in the
+    # last 30 days as "active" (mirrors the approach in correlation.py)
+    promo_floor = (date.today() - timedelta(days=30)).isoformat()
     promotions = sb.get_filtered(
         "promotions",
-        "brand_id,is_active",
-        "is_active=eq.true",
+        "brand_id",
+        f"detected_at=gte.{promo_floor}&limit=500",
     )
     promo_brands: set[str] = {p["brand_id"] for p in promotions if p.get("brand_id")}
 

@@ -77,7 +77,7 @@ def run(ctx: dict[str, Any]) -> int:
                 continue
             if brand_filter_ids and brand_id not in brand_filter_ids:
                 continue
-            occurred = r.get(ts_col) or ""
+            occurred = r.get(ts_col) or None
             for topic in (r.get("topics") or []):
                 if not topic:
                     continue

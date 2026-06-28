@@ -47,6 +47,7 @@ export function IndexedTimeSeries({
   interpretation,
 }: IndexedTimeSeriesProps) {
   const [hovIdx, setHovIdx] = useState<number | null>(null)
+  const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null)
 
   // Build union of dates (sorted) across all series
   const allDates = useMemo(() => {
@@ -110,10 +111,12 @@ export function IndexedTimeSeries({
     const localX = (e.clientX - rect.left) * scaleX
     if (localX < padL || localX > padL + innerW) {
       setHovIdx(null)
+      setTipPos(null)
       return
     }
     const i = Math.round(((localX - padL) / innerW) * (N - 1))
     setHovIdx(Math.max(0, Math.min(N - 1, i)))
+    setTipPos({ x: e.clientX, y: e.clientY })
   }
 
   // Group promo events into contiguous bands (same date treated singly)
@@ -136,7 +139,7 @@ export function IndexedTimeSeries({
         aria-label="Indexed timeseries with event annotations"
         style={{ overflow: 'visible', display: 'block' }}
         onMouseMove={onMove}
-        onMouseLeave={() => setHovIdx(null)}
+        onMouseLeave={() => { setHovIdx(null); setTipPos(null) }}
       >
         {/* Legend */}
         <g transform={`translate(${padL}, 14)`}>
@@ -303,12 +306,12 @@ export function IndexedTimeSeries({
         )}
       </svg>
 
-      {hovIdx !== null && hovDate && (
+      {hovIdx !== null && hovDate && tipPos && (
         <div
           className="tip"
           style={{
-            left: (x(hovIdx) / width) * 100 + '%',
-            top: (padT / height) * 100 + '%',
+            left: tipPos.x,
+            top: tipPos.y,
             transform: 'translate(-50%, -100%)',
             whiteSpace: 'nowrap',
           }}

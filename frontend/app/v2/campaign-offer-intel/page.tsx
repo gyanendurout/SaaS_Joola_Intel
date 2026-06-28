@@ -405,40 +405,6 @@ export default function CampaignOfferIntelPage() {
           />
           <SummaryItem label="Avg discount" value={avgDiscountAll > 0 ? `${avgDiscountAll}%` : '—'} />
         </div>
-
-        <div className="kpi-grid" style={{ marginBottom: 6 }}>
-          <MiniKpi
-            label="Active ads (filter)"
-            value={fmt(activeAds)}
-            color="#f59e0b"
-            customVs={`${totalAds} total in window`}
-            src="marketing_ads"
-            tip="Number of paddle-brand ads currently running in the selected window after applying the active filters. Source: Meta Ad Library + Google Ads Transparency scrape -> marketing_ads table."
-          />
-          <MiniKpi
-            label="Active promos (filter)"
-            value={fmt(activePromos)}
-            color="#ef4444"
-            customVs={`${totalPromos} total in window`}
-            src="promotions"
-            tip="Number of homepage / banner / email promotions detected across the 11 brands' own websites in the active window. Source: brand homepage scrape -> promotions table."
-          />
-          <MiniKpi
-            label="JOOLA ad share"
-            value={`${joolaAdShare.toFixed(1)}%`}
-            color="#22c55e"
-            customVs={joolaAd ? `${joolaAd.total} ads · #${joolaAdRank} rank` : '—'}
-            flavor="joola"
-            tip="JOOLA's share of all paid ad creatives running across the 11 brands. Formula: JOOLA active ads ÷ total active ads × 100. Rank shows JOOLA's position vs the other 10 brands."
-          />
-          <MiniKpi
-            label="Avg discount"
-            value={avgDiscountAll > 0 ? `${avgDiscountAll}%` : '—'}
-            color="#818cf8"
-            customVs={`${brandsDiscounting} brands discounting`}
-            tip="Average % off across all active promotions in the window. High value = aggressive discounting environment. The 'brands discounting' count tells you how many of the 11 brands are running promos right now."
-          />
-        </div>
       </section>
 
       {/* ─── Section 2: Brand campaign pressure ───────────────────── */}
@@ -1183,6 +1149,7 @@ function PromoCadenceHeatmap({ rows, name }: { rows: PromoCadenceRow[]; name: (s
 }
 
 function AdsVsPromosScatter({ rows, name }: { rows: CampaignPressureStat[]; name: (s: string) => string }) {
+  const [hov, setHov] = useState<{ r: CampaignPressureStat; cx: number; cy: number } | null>(null)
   const w = 760
   const h = 380
   const padL = 60, padR = 30, padT = 30, padB = 52
@@ -1205,8 +1172,17 @@ function AdsVsPromosScatter({ rows, name }: { rows: CampaignPressureStat[]; name
     return <div style={{ color: '#6b7280', fontSize: 13, padding: '32px 0', textAlign: 'center' }}>No campaign activity in the window.</div>
   }
 
+  function quadrantLabel(r: CampaignPressureStat): string {
+    const hiX = r.ads >= xMid
+    const hiY = r.promos >= yMid
+    if (hiX && hiY) return 'BOTH LEVERS (HIGH PRESSURE)'
+    if (!hiX && hiY) return 'DISCOUNT-FOCUSED'
+    if (hiX && !hiY) return 'PAID-FOCUSED'
+    return 'QUIET'
+  }
+
   return (
-    <div className="scatter-wrap">
+    <div className="scatter-wrap" style={{ position: 'relative' }}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
         <rect x={padL} y={padT} width={x(xMid) - padL} height={y(yMid) - padT} fill="rgba(239,68,68,0.05)" />
         <rect x={x(xMid)} y={padT} width={padL + innerW - x(xMid)} height={y(yMid) - padT} fill="rgba(245,158,11,0.06)" />
@@ -1231,13 +1207,30 @@ function AdsVsPromosScatter({ rows, name }: { rows: CampaignPressureStat[]; name
           const cy = y(r.promos)
           const rad = radius(r.avgDiscount)
           const isJ = r.brand === 'joola'
+          const isHov = hov?.r.brand === r.brand
           return (
-            <g key={r.brand}>
-              <circle cx={cx} cy={cy} r={rad} fill={pgColor(r.brand)} opacity={isJ ? 0.95 : 0.6} stroke={isJ ? '#22c55e' : 'transparent'} strokeWidth={isJ ? 2 : 0}>
-                <title>{`${name(r.brand)} · ${r.ads} ads · ${r.promos} promos · avg discount ${r.avgDiscount}%`}</title>
+            <g key={r.brand}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHov({ r, cx, cy })}
+              onMouseLeave={() => setHov(null)}
+            >
+              {/* Soft halo when hovered or for JOOLA */}
+              <circle cx={cx} cy={cy} r={rad + 6} fill={pgColor(r.brand)} opacity={isHov ? 0.22 : isJ ? 0.10 : 0} />
+              <circle cx={cx} cy={cy} r={rad}
+                fill={pgColor(r.brand)}
+                opacity={isJ ? 0.95 : isHov ? 0.95 : 0.65}
+                stroke={isJ ? '#22c55e' : isHov ? '#fff' : 'transparent'}
+                strokeWidth={isJ ? 2 : isHov ? 2 : 0}
+              >
+                <title>{`${name(r.brand)} · ${r.ads} ads · ${r.promos} promos · avg discount ${r.avgDiscount}% · ${quadrantLabel(r)}`}</title>
               </circle>
-              {isJ && (
-                <text x={cx} y={cy - rad - 6} textAnchor="middle" style={{ fontWeight: 800, fill: '#22c55e', fontSize: 11, pointerEvents: 'none' }}>
+              {(isJ || isHov) && (
+                <text x={cx} y={cy - rad - 6} textAnchor="middle" style={{
+                  fontWeight: 800, fontSize: 11,
+                  fill: isJ ? '#22c55e' : '#fff',
+                  paintOrder: 'stroke', stroke: 'rgba(7,9,14,0.85)', strokeWidth: 2.5, strokeLinejoin: 'round',
+                  pointerEvents: 'none',
+                }}>
                   {name(r.brand)}
                 </text>
               )}
@@ -1245,6 +1238,42 @@ function AdsVsPromosScatter({ rows, name }: { rows: CampaignPressureStat[]; name
           )
         })}
       </svg>
+
+      {/* Hover tooltip — floating card with full details */}
+      {hov && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${Math.min(80, Math.max(2, (hov.cx / w) * 100))}%`,
+            top: `${Math.max(2, (hov.cy / h) * 100 - 18)}%`,
+            transform: 'translate(-50%, -100%)',
+            background: 'rgba(7,9,14,0.96)',
+            border: '1px solid rgba(255,255,255,0.18)',
+            borderRadius: 6,
+            padding: '10px 12px',
+            fontSize: 11,
+            color: '#cbd1dc',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            zIndex: 5,
+            boxShadow: '0 6px 18px rgba(0,0,0,0.55)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 99, background: pgColor(hov.r.brand), display: 'inline-block' }} />
+            <span style={{ color: hov.r.brand === 'joola' ? '#22c55e' : '#fff' }}>{name(hov.r.brand)}</span>
+          </div>
+          <div style={{ display: 'grid', gap: 3 }}>
+            <div><span style={{ color: 'var(--fg-4)' }}>Active ads:</span> <b style={{ color: '#fff' }}>{hov.r.ads}</b></div>
+            <div><span style={{ color: 'var(--fg-4)' }}>Active promos:</span> <b style={{ color: '#fff' }}>{hov.r.promos}</b></div>
+            <div><span style={{ color: 'var(--fg-4)' }}>Avg discount:</span> <b style={{ color: '#fff' }}>{hov.r.avgDiscount > 0 ? hov.r.avgDiscount + '%' : '—'}</b></div>
+            <div style={{ marginTop: 4, paddingTop: 4, borderTop: '1px solid rgba(255,255,255,0.10)', color: '#F5E625', fontWeight: 700 }}>
+              Quadrant: {quadrantLabel(hov.r)}
+            </div>
+          </div>
+        </div>
+      )}
+
       {!joola && (
         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, textAlign: 'center' }}>
           JOOLA has no ads or promos in the active window.

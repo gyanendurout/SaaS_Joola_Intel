@@ -1316,6 +1316,7 @@ interface Bubble { name: string; brandSlug: string; reach: number; er: number; t
 
 function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Brand[] }) {
   const [hov, setHov] = useState<{ b: Bubble; cx: number; cy: number } | null>(null)
+  const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
   const w = 760, h = 380
   const padL = 64, padR = 30, padT = 30, padB = 46
   const innerW = w - padL - padR
@@ -1399,7 +1400,9 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
   ]
 
   return (
-    <div className="scatter-wrap" style={{ position: 'relative' }}>
+    <div className="scatter-wrap" style={{ position: 'relative' }}
+      onMouseMove={(e) => setTipPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => { setHov(null); setTipPos(null) }}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
         {/* Quadrant tinted backgrounds */}
         {quadrants.map((q, i) => (
@@ -1460,8 +1463,8 @@ function ImpactBubbleMap({ bubbles, brands }: { bubbles: Bubble[]; brands: V2Bra
           )
         })}
       </svg>
-      {hov && (
-        <div className="tip" style={{ left: (hov.cx / w) * 100 + '%', top: (hov.cy / h) * 100 + '%' }}>
+      {hov && tipPos && (
+        <div className="tip" style={{ left: tipPos.x, top: tipPos.y }}>
           <div className="t-name">{hov.b.name}</div>
           {pgName(hov.b.brandSlug, brands)} · {fmt(hov.b.reach)} reach · {hov.b.er.toFixed(2)}% ER · {hov.b.total} signals
           <div style={{ marginTop: 4, fontSize: 10, color: 'var(--fg-4)' }}>

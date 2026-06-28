@@ -65,6 +65,12 @@ def run(ctx: dict[str, Any]) -> int:
 
         has_qty_data = any(s.get("visible_inventory_qty") is not None for s in snaps)
 
+        # Tracks the most recent snapshot where we had a real inventory count.
+        # Used to estimate units sold when an availability flip happens with no
+        # qty data in the immediate pair — e.g. crawl4ai captured qty=50 last
+        # week but this week returned None; we still know at least 50 were sold.
+        last_known_qty: int | None = None
+
         for i in range(1, len(snaps)):
             prev = snaps[i - 1]
             curr = snaps[i]
@@ -74,6 +80,10 @@ def run(ctx: dict[str, Any]) -> int:
 
             prev_qty = prev.get("visible_inventory_qty")
             curr_qty = curr.get("visible_inventory_qty")
+
+            # Update running tracker before using prev_qty
+            if prev_qty is not None:
+                last_known_qty = prev_qty
 
             # ── Path A: inventory quantity delta ──────────────────────────
             if prev_qty is not None and curr_qty is not None:
@@ -135,17 +145,22 @@ def run(ctx: dict[str, Any]) -> int:
             curr_avail = curr.get("availability_status") or "unknown"
 
             if prev_avail == "in_stock" and curr_avail == "out_of_stock":
-                # Sold out — unit count unknown, use 1 as minimum signal
+                # Sold out — prefer last known qty as units estimate over hardcoded 1.
+                # If crawl4ai got a real count in an earlier snapshot for this variant,
+                # that qty is our best guess for how many units cleared before the sellout.
+                estimated_units = last_known_qty if last_known_qty is not None else 1
+                # Slightly higher confidence when we have an inventory reference point.
+                flip_conf = 0.35 if last_known_qty is not None else FLIP_CONFIDENCE
                 estimates.append({
                     "brand_id":             brand_id,
                     "variant_id":           variant_id or None,
                     "estimate_date":        estimate_date,
-                    "estimated_units_sold": 1,
-                    "estimated_revenue":    round(price, 2),
+                    "estimated_units_sold": estimated_units,
+                    "estimated_revenue":    round(estimated_units * price, 2),
                     "price_used":           price,
-                    "confidence_score":     FLIP_CONFIDENCE,
-                    "inventory_start":      None,
-                    "inventory_end":        None,
+                    "confidence_score":     flip_conf,
+                    "inventory_start":      last_known_qty,
+                    "inventory_end":        0,
                     "restock_qty":          0,
                     "estimation_method":    "availability_flip",
                 })
@@ -154,10 +169,10 @@ def run(ctx: dict[str, Any]) -> int:
                     "variant_id":     variant_id or None,
                     "event_time":     curr.get("snapshot_time"),
                     "event_type":     "sale",
-                    "previous_qty":   None,
-                    "current_qty":    None,
-                    "delta_qty":      None,
-                    "confidence_score": FLIP_CONFIDENCE,
+                    "previous_qty":   last_known_qty,
+                    "current_qty":    0,
+                    "delta_qty":      -estimated_units if last_known_qty is not None else None,
+                    "confidence_score": flip_conf,
                     "reason_code":    "availability_flip",
                 })
             elif prev_avail == "out_of_stock" and curr_avail == "in_stock":

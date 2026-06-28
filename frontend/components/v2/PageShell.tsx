@@ -132,7 +132,17 @@ export function SectionInfo({ title, description, source }: {
   title: string; description: string; source: string
 }) {
   const [pinned, setPinned] = useState(false)
+  const [popupLeft, setPopupLeft] = useState(0)
+  const [popupTop, setPopupTop] = useState(0)
   const ref = useRef<HTMLSpanElement | null>(null)
+
+  const updatePos = () => {
+    if (ref.current) {
+      const r = ref.current.getBoundingClientRect()
+      setPopupLeft(r.left + r.width / 2)
+      setPopupTop(r.bottom + 10)
+    }
+  }
 
   useEffect(() => {
     if (!pinned) return
@@ -157,11 +167,12 @@ export function SectionInfo({ title, description, source }: {
       aria-label={title}
       role="button"
       tabIndex={0}
-      onClick={(e) => { e.stopPropagation(); setPinned(p => !p) }}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPinned(p => !p) } }}
+      onMouseEnter={updatePos}
+      onClick={(e) => { e.stopPropagation(); updatePos(); setPinned(p => !p) }}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); updatePos(); setPinned(p => !p) } }}
     >
       ?
-      <span className="si-popup" onClick={(e) => e.stopPropagation()}>
+      <span className="si-popup" style={{ left: popupLeft, top: popupTop }} onClick={(e) => e.stopPropagation()}>
         <div className="si-title">{title}</div>
         <div className="si-body">{description}</div>
         <div className="si-source">Source: {source}</div>

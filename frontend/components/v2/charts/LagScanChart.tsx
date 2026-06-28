@@ -36,6 +36,7 @@ export function LagScanChart({
   interpretation,
 }: LagScanChartProps) {
   const [hovIdx, setHovIdx] = useState<number | null>(null)
+  const [tipPos, setTipPos] = useState<{ x: number; y: number } | null>(null)
 
   if (!data.length) {
     return (
@@ -85,6 +86,7 @@ export function LagScanChart({
     const localX = (e.clientX - rect.left) * scaleX
     if (localX < padL || localX > padL + innerW) {
       setHovIdx(null)
+      setTipPos(null)
       return
     }
     const lagApprox = lagMin + ((localX - padL) / innerW) * lagRange
@@ -98,6 +100,7 @@ export function LagScanChart({
       }
     }
     setHovIdx(bestI)
+    setTipPos({ x: e.clientX, y: e.clientY })
   }
 
   const hov = hovIdx !== null ? sorted[hovIdx] : null
@@ -113,7 +116,7 @@ export function LagScanChart({
         aria-label={`Lag scan: correlation between ${driverLabel} and ${targetLabel} at different lags`}
         style={{ overflow: 'visible', display: 'block' }}
         onMouseMove={onMove}
-        onMouseLeave={() => setHovIdx(null)}
+        onMouseLeave={() => { setHovIdx(null); setTipPos(null) }}
       >
         {/* Y grid + ticks */}
         {yTicks.map((t, i) => (
@@ -226,12 +229,12 @@ export function LagScanChart({
         </g>
       </svg>
 
-      {hov && (
+      {hov && tipPos && (
         <div
           className="tip"
           style={{
-            left: (x(hov.lag) / width) * 100 + '%',
-            top: (padT / height) * 100 + '%',
+            left: tipPos.x,
+            top: tipPos.y,
             transform: 'translate(-50%, -110%)',
             whiteSpace: 'nowrap',
           }}

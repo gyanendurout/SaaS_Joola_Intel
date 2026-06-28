@@ -4,15 +4,35 @@
 
 - **Product**: JOOLA Intel — pickleball competitive intelligence dashboard.
 - **Owner**: JOOLA (paddle brand). Operating contact: api@joola.com.
-- **Users**: JOOLA's marketing & competitive-intel team (internal only).
-- **Why**: Track 11 brands' performance across all social channels in one view; spot crisis signals, defection trends, product wins/losses, athlete ROI.
+- **Users**: JOOLA's marketing & competitive-intel team (internal only); product also serves as a CFO/board-facing BI surface.
+- **Why**: Track 11 brands' performance across all social channels in one view; spot crisis signals, defection trends, product wins/losses, athlete ROI. Translate **public-signal data into leading indicators for internal P&L variables** (sales, inventory, forecasts, warranty staffing, athlete-spend reallocation, M&A targeting).
 - **Tracked brands (11)**: `joola`, `selkirk`, `paddletek`, `crbn`, `six-zero`, `engage`, `onix`, `franklin` (Franklin Pickleball), `head`, `wilson`, `gamma`.
 - **Tracked athletes**: 27 (see `influencers` table; full roster seeded in `migrations/005_influencer_x.sql`).
-- **Tracked products**: 25 seeded paddles in `products_catalog` (extensible) — JOOLA Perseus/Hyperion/Scorpeus, Selkirk Vanguard/Luxx, Paddletek Bantam, CRBN-1/3/X, Six Zero DBD, Engage Pursuit Pro, Onix Z5, etc.
-- **Data sources**: Instagram (brand + athlete + comments), YouTube (channel + comments), Reddit (OPs + comment trees), X (brand + athlete), TikTok, Meta Ad Library, Google Ads Transparency, brand homepage banners (promotions), brand product catalogs.
+- **Tracked products**: 86 paddles in `products_catalog` post-migration 015 (extensible) — JOOLA Perseus/Hyperion/Scorpeus, Selkirk Vanguard/Luxx/Boomstick, Paddletek Bantam, CRBN-1/3/X, Six Zero DBD, Engage Pursuit Pro, Onix Z5, etc.
+- **Data sources**: Instagram (brand + athlete + comments), YouTube (channel + comments), Reddit (OPs + comment trees), X (brand + athlete), TikTok, Meta Ad Library, Google Ads Transparency, brand homepage banners (promotions), brand product catalogs + public review counts, weekly product-page stock snapshots.
+- **Data scope (strict)**: 100% web / publicly-available. **No internal sales, inventory, or ERP feeds wired in yet** — the platform is designed to fold them in later via the same schema. Read-only Supabase role; OpenAI never executes SQL — backend validates every plan via `sqlSafety.ts`.
 - **Update cadence**: Weekly (Monday 07:00 IST). Manual trigger: `python scripts/pipeline/apify_to_supabase.py`. Cron via GitHub Actions is a pending hardening item.
 - **AI enrichment**: GPT-4o-mini (`scripts/pipeline/enrich_with_ai.py`) for sentiment scoring, topic extraction, brand/player/product NER, crisis flagging, purchase-intent scoring, and Reddit competitor-switch detection. Followed by `populate_mention_facts.py` and `populate_topic_lifecycle.py`.
 - **Key KPIs surfaced**: SoV by brand (recomputed from `displayAds`, never the static DB `share` field), sentiment per brand × product, crisis count, purchase-intent count, competitor net defection score, topic lifecycle with first-channel detection.
+- **Ask Intel (AI Q&A layer)**: `/v2/ask-intel` lets any user query the warehouse in plain English. Two-step OpenAI flow (planner → executor → answerer), structured query plans validated by `sqlSafety.ts`, column-alias autocorrect, name→UUID resolution. Hardened to **0 hard errors on the 29-question test harness** (`scripts/test_ask_intel.py`).
+- **BI correlation use-cases** (CFO-facing, design intent — implementations vary by section):
+  - **Athlete-signing attach-lift** — mention spike + sentiment shift + SoV gain in 0-30d after signing → implied unit lift via category conversion ratio
+  - **Competitor stockout → demand-transfer forecast** — weekly product-page snapshots × resulting SoV movement
+  - **Crisis → competitor defection rate** — Reddit "switching from X to Y" extraction, 4-8 week lead-time on retail re-orders
+  - **Promo cadence → ad ROI proxy** — Meta + Google ad library × homepage promo × mention velocity per dollar
+  - **Public review velocity → unit-sales proxy** — review-count delta × industry 3-5% review rate (works for Selkirk, Onix, Wilson, Franklin, Paddletek, CRBN, Gamma, JOOLA where review counts are scraped)
+  - **Topic lifecycle → inventory-burn window** — first-channel detection (TikTok → Reddit → IG → YT) gives 7-14 day defensive-burn window before competitor demand peaks
+  - **Negative-sentiment spike → warranty-claim forecast** — 30-60 day lead indicator for warranty/return-rate
+  - **Influencer ER × follower → marketing-spend reallocation** — quarterly athlete-portfolio re-optimization
+  - **Topic-driven launch timing, counter-launch war room, RL promo calendar** — futuristic plays on the same dataset
+- **UX standards (dashboard)**:
+  - Every KPI box, section heading, and table column header must carry a **layman-language tooltip** (1–3 sentences) explaining what it shows, the source, the formula (if computed), and how comparisons work. Owner: `MiniKpi.tip` prop + `SectionInfo` component + `SortTh.title`.
+  - No duplicate KPI rows — the compact summary strip is canonical; redundant MiniKpi grids that duplicate it are removed.
+  - Global page-level filter bars (Range / From / To / Channel / Sentiment / Crisis style) are removed from `community-intel`, `campaign-offer-intel`, and `influencers` pages — state retained, UI gone. Per-table column filters (`ColumnFilter`) and brand-search in table headers remain.
+  - All scatter / matrix / quadrant charts must have **on-hover floating tooltips** with full datapoint detail (no relying on SVG `<title>`). Required for: Community Trend chart, Ads vs Promotions Matrix, Player Impact Map, Campaign Strategy Matrix.
+  - Quadrant charts: 4 visible quadrants split by **median** of plotted values, tinted backgrounds, corner labels with counts + 1-line explanations, in-tooltip quadrant indicator.
+  - Search-box text must be pure white (`#ffffff !important`) — never inherit dark color. Table "open →" links must use brand-yellow accent for visibility on dark background.
+- **Sidebar / navigation**: Home (`/v2`) redirects to `/v2/ask-intel`. Executive Overview removed. Data Health (`/v2/data-health`) probes 17 tables for staleness.
 - **Full recovery docs**: see `backup/` directory (`README.md` is the master index).
 
 ---

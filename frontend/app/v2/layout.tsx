@@ -6,6 +6,7 @@ import { BrandFilterProvider } from '@/lib/v2/BrandFilterContext'
 import { BrandFilterDropdown } from '@/components/v2/BrandFilterDropdown'
 import { DateRangeProvider } from '@/lib/v2/DateRangeContext'
 import { DateRangePicker } from '@/components/v2/DateRangePicker'
+import { AgentationFeedback } from '@/components/v2/AgentationFeedback'
 
 export const metadata: Metadata = {
   title: 'JOOLA INTEL — Executive Briefing',
@@ -40,6 +41,7 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
         </div>
        </DateRangeProvider>
       </BrandFilterProvider>
+      <AgentationFeedback />
     </div>
   )
 }

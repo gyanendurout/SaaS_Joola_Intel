@@ -106,8 +106,8 @@ CHANNELS: list[tuple] = [
      "posted_at", "sentiment_label", "purchase_intent_score", "is_crisis"),
 
     ("tiktok_videos", "tiktok",
-     "id,brand_id,description,view_count,like_count,comment_count,share_count,sentiment_label,sentiment_score,purchase_intent_score,is_crisis,posted_at",
-     _txt("description"),
+     "id,brand_id,text,view_count,like_count,comment_count,share_count,sentiment_label,sentiment_score,purchase_intent_score,is_crisis,posted_at",
+     _txt("text"),
      _eng(lambda r: (r.get("view_count") or 0) / 100 + (r.get("like_count") or 0) * 2 + (r.get("comment_count") or 0) * 3 + (r.get("share_count") or 0) * 4),
      "posted_at", "sentiment_label", "purchase_intent_score", "is_crisis"),
 
@@ -135,12 +135,12 @@ CHANNELS: list[tuple] = [
      _eng(lambda r: 75.0),
      "detected_at", None, None, None),
 
-    # news_articles is conditional — wrapped in try/except below
+    # news_articles: no brand_id column — brand is inferred from alias match hit
     ("news_articles", "news",
-     "id,brand_id,title,description,ai_summary,sentiment_label,sentiment_score,published_at",
-     _txt("title", "description", "ai_summary"),
+     "id,title,sentiment,published_at",
+     _txt("title"),
      _eng(lambda r: 60.0),
-     "published_at", "sentiment_label", None, None),
+     "published_at", "sentiment", None, None),
 ]
 
 

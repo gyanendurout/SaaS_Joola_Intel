@@ -70,6 +70,7 @@ export type LineSeries = { id: string; label: string; color: string; data: numbe
 export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { series: LineSeries[]; w?: number; h?: number; yLabel?: string; xLabels?: string[] }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
 
   // VIZ-01: filter out series with all-zero or all-invalid data (these caused NaN labels)
   const cleanSeries = series
@@ -111,9 +112,10 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { 
     const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect()
     const scaleX = w / rect.width
     const localX = (e.clientX - rect.left) * scaleX
-    if (localX < padL || localX > padL + innerW) { setHoverIdx(null); return }
+    if (localX < padL || localX > padL + innerW) { setHoverIdx(null); setTipPos(null); return }
     const i = Math.round(((localX - padL) / innerW) * (N - 1))
     setHoverIdx(Math.max(0, Math.min(N - 1, i)))
+    setTipPos({ x: e.clientX, y: e.clientY })
   }
 
   const tipIdx = hoverIdx
@@ -124,7 +126,7 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { 
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}
         style={{ overflow: 'visible', display: 'block' }}
         onMouseMove={onMove}
-        onMouseLeave={() => setHoverIdx(null)}>
+        onMouseLeave={() => { setHoverIdx(null); setTipPos(null) }}>
         {ticks.map((t, i) => (
           <g key={i}>
             <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,0.04)" />
@@ -188,11 +190,9 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { 
         {yLabel && <text x={10} y={padT + 6} className="scatter-axis" style={{ fontWeight: 700 }}>{yLabel}</text>}
       </svg>
       {/* Per-week tooltip: shows all series values at hovered week */}
-      {tipIdx !== null && (
+      {tipIdx !== null && tipPos && (
         <div className="tip" style={{
-          left: (x(tipIdx) / w) * 100 + '%',
-          top: (padT / h) * 100 + '%',
-          whiteSpace: 'nowrap', transform: 'translate(-50%, -110%)',
+          left: tipPos.x, top: tipPos.y, whiteSpace: 'nowrap',
         }}>
           <div className="t-name">{xLabels?.[tipIdx] ?? `Week ${tipIdx + 1}`}</div>
           {[...cleanSeries]
@@ -207,12 +207,8 @@ export function LineChart({ series, w = 760, h = 260, yLabel = '', xLabels }: { 
         </div>
       )}
       {/* Series-hover hint (replaces previous "latest" tooltip when not hovering grid) */}
-      {tipSeries && tipIdx === null && (
-        <div className="tip" style={{
-          left: ((x(N - 1) - 30) / w) * 100 + '%',
-          top: (y(tipSeries.data[N - 1]) / h) * 100 + '%',
-          whiteSpace: 'nowrap',
-        }}>
+      {tipSeries && tipIdx === null && tipPos && (
+        <div className="tip" style={{ left: tipPos.x, top: tipPos.y, whiteSpace: 'nowrap' }}>
           <div className="t-name" style={{ color: tipSeries.color }}>{tipSeries.label}</div>
           Latest: {fmt(tipSeries.data[N - 1])}
         </div>
@@ -227,6 +223,7 @@ export function StackedArea({ series, weeks = 13, w = 760, h = 240 }: {
 }) {
   const [hoverLayer, setHoverLayer] = useState<number | null>(null)
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
   if (!series.length) return null
   const padL = 36, padR = 12, padT = 12, padB = 28
   const innerW = w - padL - padR
@@ -257,10 +254,11 @@ export function StackedArea({ series, weeks = 13, w = 760, h = 240 }: {
     const lx = (e.clientX - rect.left) * scaleX
     const ly = (e.clientY - rect.top) * scaleY
     if (lx < padL || lx > padL + innerW || ly < padT || ly > padT + innerH) {
-      setHoverIdx(null); setHoverLayer(null); return
+      setHoverIdx(null); setHoverLayer(null); setTipPos(null); return
     }
     const i = Math.round(((lx - padL) / innerW) * (N - 1))
     setHoverIdx(i)
+    setTipPos({ x: e.clientX, y: e.clientY })
     // which stack layer is at ly?
     let cumul = 0
     for (let si = 0; si < series.length; si++) {
@@ -277,7 +275,7 @@ export function StackedArea({ series, weeks = 13, w = 760, h = 240 }: {
     <div className="scatter-wrap" style={{ position: 'relative' }}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}
         onMouseMove={onMove}
-        onMouseLeave={() => { setHoverIdx(null); setHoverLayer(null) }}>
+        onMouseLeave={() => { setHoverIdx(null); setHoverLayer(null); setTipPos(null) }}>
         {yticks.map((t, i) => (
           <g key={i}>
             <line x1={padL} x2={w - padR} y1={y(t)} y2={y(t)} stroke="rgba(255,255,255,0.04)" />
@@ -305,12 +303,8 @@ export function StackedArea({ series, weeks = 13, w = 760, h = 240 }: {
             stroke="rgba(245,230,37,0.5)" strokeDasharray="3 3" strokeWidth="1" />
         )}
       </svg>
-      {hoverIdx !== null && hovS && (
-        <div className="tip" style={{
-          left: (x(hoverIdx) / w) * 100 + '%',
-          top: (y((series.slice(0, hoverLayer || 0).reduce((s, ser) => s + (ser.data[hoverIdx] || 0), 0)) + hovVal / 2) / h) * 100 + '%',
-          whiteSpace: 'nowrap',
-        }}>
+      {hoverIdx !== null && hovS && tipPos && (
+        <div className="tip" style={{ left: tipPos.x, top: tipPos.y, whiteSpace: 'nowrap' }}>
           <div className="t-name" style={{ color: hovS.color }}>{hovS.label}</div>
           Week {hoverIdx + 1}: {hovVal} ads
         </div>
@@ -333,13 +327,16 @@ export function ScatterChart({ data, w = 760, h = 380 }: { data: ScatterDatum[];
   const y = (v: number) => padT + innerH - (Math.min(v, yMax) / yMax) * innerH
   const r = (v: number) => 5 + Math.min(v, 100) / 12
   const [hover, setHover] = useState<(ScatterDatum & { cx: number; cy: number }) | null>(null)
+  const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
   const joola = data.find(d => d.brand === 'joola')
   const xMidVal = xMax * 0.25
   const xTickVals = [xMax * 0.0625, xMax * 0.25, xMax * 0.5625, xMax]
   const yTickVals = [yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax]
 
   return (
-    <div className="scatter-wrap">
+    <div className="scatter-wrap"
+      onMouseMove={(e) => setTipPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => { setHover(null); setTipPos(null) }}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
         <rect x={padL} y={padT} width={x(xMidVal) - padL} height={y(yMid) - padT} fill="rgba(129,140,248,0.05)" />
         <rect x={x(xMidVal)} y={padT} width={padL + innerW - x(xMidVal)} height={y(yMid) - padT} fill="rgba(34,197,94,0.06)" />
@@ -404,8 +401,8 @@ export function ScatterChart({ data, w = 760, h = 380 }: { data: ScatterDatum[];
           )
         })}
       </svg>
-      {hover && (
-        <div className="tip" style={{ left: (hover.cx / w) * 100 + '%', top: (hover.cy / h) * 100 + '%' }}>
+      {hover && tipPos && (
+        <div className="tip" style={{ left: tipPos.x, top: tipPos.y }}>
           <div className="t-name">{hover.name}</div>
           {fmt(hover.followers)} followers · {hover.engRate.toFixed(2)}% eng
         </div>
@@ -440,6 +437,7 @@ export function EngagementQualityMatrix({
   const innerW = w - padL - padR
   const innerH = h - padT - padB
   const [hover, setHover] = useState<EQMatrixDatum | null>(null)
+  const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
 
   if (!data || data.length === 0) {
     return (
@@ -543,7 +541,9 @@ export function EngagementQualityMatrix({
   }
 
   return (
-    <div className="scatter-wrap" style={{ position: 'relative' }}>
+    <div className="scatter-wrap" style={{ position: 'relative' }}
+      onMouseMove={(e) => setTipPos({ x: e.clientX, y: e.clientY })}
+      onMouseLeave={() => { setHover(null); setTipPos(null) }}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h}>
         {/* Quadrant backgrounds (faint) */}
         <rect x={padL} y={padT} width={x(fMed) - padL} height={y(eMed) - padT} fill="rgba(129,140,248,0.05)" />
@@ -654,12 +654,8 @@ export function EngagementQualityMatrix({
         })}
       </svg>
 
-      {hover && (
-        <div className="tip" style={{
-          left: (x(hover.followers) / w) * 100 + '%',
-          top: (y(hover.engRate) / h) * 100 + '%',
-          whiteSpace: 'nowrap', pointerEvents: 'none',
-        }}>
+      {hover && tipPos && (
+        <div className="tip" style={{ left: tipPos.x, top: tipPos.y, whiteSpace: 'nowrap' }}>
           <div className="t-name" style={{ color: hover.color }}>{hover.name}</div>
           <div>{fmt(hover.followers)} followers · {hover.engRate.toFixed(2)}% eng</div>
           <div style={{ fontSize: 10, color: 'var(--fg-4)' }}>
@@ -689,6 +685,7 @@ export function Donut({ data, size = 200, thickness = 36, centerLabel, centerSub
   size?: number; thickness?: number; centerLabel?: string; centerSub?: string
 }) {
   const [hovered, setHovered] = useState<number | null>(null)
+  const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
   const total = data.reduce((s, d) => s + d.value, 0) || 1
   const r = size / 2 - thickness / 2 - 2
   const cx = size / 2, cy = size / 2
@@ -707,7 +704,9 @@ export function Donut({ data, size = 200, thickness = 36, centerLabel, centerSub
   const pct = hoveredArc ? Math.round((hoveredArc.value / total) * 100) : null
   return (
     <div className="scatter-wrap" style={{ width: size, height: size, position: 'relative' }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}
+        onMouseMove={(e) => setTipPos({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => setTipPos(null)}>
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth={thickness} />
         {arcs.map((a, i) => (
           <path
@@ -742,12 +741,8 @@ export function Donut({ data, size = 200, thickness = 36, centerLabel, centerSub
           </g>
         )}
       </svg>
-      {hoveredArc && pct !== null && (
-        <div className="tip" style={{
-          left: '50%', top: '50%',
-          transform: 'translate(-50%, calc(-50% - 80px))',
-          whiteSpace: 'nowrap',
-        }}>
+      {hoveredArc && pct !== null && tipPos && (
+        <div className="tip" style={{ left: tipPos.x, top: tipPos.y, whiteSpace: 'nowrap' }}>
           <div className="t-name" style={{ color: hoveredArc.color }}>{hoveredArc.name}</div>
           {hoveredArc.value} ads · {pct}%
         </div>
@@ -761,6 +756,7 @@ export type BoxPlotDatum = { brand: string; name: string; color: string; min: nu
 
 export function BoxPlot({ data, w = 760, h = 280 }: { data: BoxPlotDatum[]; w?: number; h?: number }) {
   const [hov, setHov] = useState<number | null>(null)
+  const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
   if (!data.length) return null
   // VIZ-22: increase padR so "avg $X · N items" labels don't clip
   const padL = 148, padR = 120, padT = 20, padB = 36
@@ -774,7 +770,9 @@ export function BoxPlot({ data, w = 760, h = 280 }: { data: BoxPlotDatum[]; w?: 
 
   return (
     <div className="scatter-wrap" style={{ position: 'relative' }}>
-      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{ overflow: 'visible' }}>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} style={{ overflow: 'visible' }}
+        onMouseMove={(e) => setTipPos({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => { setHov(null); setTipPos(null) }}>
         {xTicks.map((v, i) => (
           <g key={i}>
             <line x1={x(v)} x2={x(v)} y1={padT} y2={padT + innerH} stroke="rgba(255,255,255,0.04)" />
@@ -814,12 +812,8 @@ export function BoxPlot({ data, w = 760, h = 280 }: { data: BoxPlotDatum[]; w?: 
         </text>
       </svg>
       {/* VIZ-11: hover tooltip with full stats */}
-      {hovD && hov !== null && (
-        <div className="tip" style={{
-          left: ((padL + innerW / 2) / w) * 100 + '%',
-          top: ((padT + hov * rowH + rowH / 2) / h) * 100 + '%',
-          whiteSpace: 'nowrap',
-        }}>
+      {hovD && hov !== null && tipPos && (
+        <div className="tip" style={{ left: tipPos.x, top: tipPos.y, whiteSpace: 'nowrap' }}>
           <div className="t-name" style={{ color: hovD.color }}>{hovD.name}</div>
           Min ${hovD.min} · Med ${hovD.med} · Avg ${hovD.avg} · Max ${hovD.max}
           <div style={{ fontSize: 10, color: '#8a93a4', marginTop: 2 }}>{hovD.count} items</div>

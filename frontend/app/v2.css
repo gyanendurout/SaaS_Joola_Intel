@@ -709,14 +709,14 @@
 
 /* Tooltips (simple) */
 .v2-root .tip {
-  position: absolute; pointer-events: none;
+  position: fixed; pointer-events: none;
   background: #000; border: 1px solid var(--yellow-edge);
   padding: 8px 10px; border-radius: 4px;
   font-size: 11px; color: var(--fg);
   font-family: var(--font-mono);
   white-space: nowrap;
-  z-index: 50;
-  transform: translate(-50%, -120%);
+  z-index: 9999;
+  transform: translate(-50%, calc(-100% - 8px));
 }
 .v2-root .tip .t-name { font-family: var(--font-sans); font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; color: var(--yellow); font-size: 10px; margin-bottom: 2px; }
 
@@ -889,15 +889,14 @@ html { scroll-behavior: smooth; }
 }
 .v2-root .si-popup {
   display: none;
-  position: absolute;
-  left: 50%; top: calc(100% + 10px);
+  position: fixed;
   transform: translateX(-50%);
   background: rgba(7,9,14,0.98);
   border: 1px solid rgba(245,230,37,0.28);
   border-radius: 10px;
   padding: 12px 14px;
   width: 268px;
-  z-index: 300;
+  z-index: 9999;
   box-shadow: 0 16px 48px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.03);
   backdrop-filter: blur(16px);
   text-align: left;
@@ -1744,7 +1743,7 @@ html { scroll-behavior: smooth; }
   border-radius: 10px;
   box-shadow: 0 16px 48px rgba(0,0,0,0.55);
   padding: 10px;
-  z-index: 70;
+  z-index: 9999;
   animation: bfd-fade 140ms ease-out;
 }
 @keyframes bfd-fade {
