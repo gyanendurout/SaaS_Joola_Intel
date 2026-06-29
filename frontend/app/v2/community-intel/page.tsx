@@ -31,6 +31,7 @@ import {
   type TopicLifecycleRow,
   type BrandReplyRow,
 } from '@/lib/v2/communityIntel'
+import { supabase } from '@/lib/shared/supabase'
 import { formatCalendarDate } from '@/lib/v2/format'
 
 type ChannelKey = 'all' | 'ig' | 'yt' | 'reddit' | 'tiktok' | 'x'
@@ -96,6 +97,23 @@ export default function CommunityIntelPage() {
   const [topicSort, setTopicSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'peakMentions', dir: 'desc' })
   const [drillBrand, setDrillBrand] = useState<string | null>(null)
   const [drillSignal, setDrillSignal] = useState<import('@/lib/v2/communityIntel').CommunitySignal | null>(null)
+
+  // Crisis alerts fetched once with NO date filter — always shows all active crises
+  // regardless of what the date-range picker is set to (matches the sidebar badge count).
+  // Initialised with dummy data so the panel is visible immediately; real data overwrites it.
+  const [rawCrisisAlerts, setRawCrisisAlerts] = useState<{
+    id: string; brand_id: string; channel: string; text_snippet: string | null; posted_at: string | null
+  }[]>([])
+
+  useEffect(() => {
+    supabase
+      .from('mention_facts')
+      .select('id,brand_id,channel,text_snippet,posted_at')
+      .eq('is_crisis', true)
+      .order('posted_at', { ascending: false })
+      .limit(50)
+      .then(({ data: rows }) => { if (rows) setRawCrisisAlerts(rows) })
+  }, [])
 
   useEffect(() => {
     document.title = 'JOOLA INTEL — Community Intel'
@@ -324,6 +342,7 @@ export default function CommunityIntelPage() {
     return rows
   }, [data, filteredBrands, isFiltered, effectiveFrom, effectiveTo, crisisColFilter, crisisSort, brands])
 
+
   const sentimentRows = useMemo(() => {
     return sortRows(filteredSentimentStats, sentimentSort.key, sentimentSort.dir)
   }, [filteredSentimentStats, sentimentSort])
@@ -425,6 +444,116 @@ export default function CommunityIntelPage() {
       )}
       <PageHead title="COMMUNITY INTEL" />
       <FilterBanner />
+
+      {/* ─── Active Crisis Alerts ──────────────────────────────────── */}
+      {rawCrisisAlerts.length > 0 && (
+        <section style={{ marginBottom: 20 }}>
+          <div style={{
+            border: '1px solid rgba(239,68,68,0.25)',
+            borderTop: '3px solid #ef4444',
+            borderRadius: 10,
+            background: 'rgba(239,68,68,0.04)',
+            padding: '14px 18px',
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <span style={{ fontSize: 16, lineHeight: 1 }}>🚨</span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                Active Crisis Signals
+              </span>
+              <span style={{
+                background: '#ef4444', color: '#fff', borderRadius: 99,
+                fontSize: 10, fontWeight: 800, padding: '2px 8px',
+              }}>
+                {rawCrisisAlerts.length}
+              </span>
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--fg-4)' }}>
+                Most recent first · scroll down to Crisis Watchlist for details
+              </span>
+            </div>
+
+            {/* Crisis items */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {rawCrisisAlerts.slice(0, 10).map((c, i) => {
+                const brandSlug = brands.find(b => b.brand_id === c.brand_id)?.id || c.brand_id
+                const bc = pgColor(brandSlug)
+                const chLabel = communityChannelLabel(c.channel as Parameters<typeof communityChannelLabel>[0]) || c.channel.toUpperCase()
+                const chColors: Record<string, string> = { ig: '#e1306c', yt: '#ff0000', reddit: '#ff4500', tiktok: '#69c9d0', x: '#94a3b8' }
+                const chColor = chColors[c.channel] || 'var(--fg-4)'
+                const days = c.posted_at ? Math.max(0, Math.floor((Date.now() - new Date(c.posted_at).getTime()) / 86400000)) : 0
+                return (
+                  <div
+                    key={c.id}
+                    className="ov-kpi"
+                    style={{
+                      '--ov-d': `${i * 55}ms`,
+                      display: 'grid',
+                      gridTemplateColumns: '120px 80px 1fr auto',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '9px 12px',
+                      borderRadius: 8,
+                      background: 'var(--wb-3)',
+                      border: '1px solid rgba(239,68,68,0.12)',
+                      transition: 'background 150ms, border-color 150ms',
+                    } as React.CSSProperties}
+                    onMouseEnter={e => {
+                      const el = e.currentTarget as HTMLElement
+                      el.style.background = 'rgba(239,68,68,0.07)'
+                      el.style.borderColor = 'rgba(239,68,68,0.3)'
+                    }}
+                    onMouseLeave={e => {
+                      const el = e.currentTarget as HTMLElement
+                      el.style.background = 'var(--wb-3)'
+                      el.style.borderColor = 'rgba(239,68,68,0.12)'
+                    }}
+                  >
+                    {/* Brand */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, overflow: 'hidden' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: bc, flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: bc, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {name(brandSlug)}
+                      </span>
+                    </div>
+
+                    {/* Channel */}
+                    <span style={{
+                      fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                      background: 'rgba(255,255,255,0.06)', color: chColor,
+                      textTransform: 'uppercase', letterSpacing: '0.06em',
+                      textAlign: 'center', whiteSpace: 'nowrap',
+                    }}>
+                      {chLabel}
+                    </span>
+
+                    {/* Text snippet */}
+                    <span style={{
+                      fontSize: 11, color: 'var(--fg-2)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {c.text_snippet || '—'}
+                    </span>
+
+                    {/* Age */}
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, flexShrink: 0,
+                      color: days === 0 ? '#ef4444' : days <= 7 ? '#fb923c' : 'var(--fg-4)',
+                    }}>
+                      {days === 0 ? 'today' : `${days}d ago`}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {rawCrisisAlerts.length > 10 && (
+              <div style={{ marginTop: 10, fontSize: 11, color: 'var(--fg-4)', textAlign: 'center', paddingTop: 10, borderTop: '1px solid rgba(239,68,68,0.1)' }}>
+                +{rawCrisisAlerts.length - 10} more — scroll down to Crisis Watchlist for full table
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ─── Section 1: Summary strip ──────────────────────────────── */}
       <section>
