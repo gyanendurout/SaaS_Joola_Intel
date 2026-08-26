@@ -29,7 +29,7 @@ import pathlib
 import urllib.parse
 import urllib.request
 
-from backend.scraping.sources.ads.ad_payload import meta_fields, restrict
+from backend.scraping.sources.ads.ad_payload import google_fields, meta_fields, restrict
 
 log = logging.getLogger(__name__)
 
@@ -63,28 +63,58 @@ def _req(url: str, key: str, path: str, method: str = "GET", body: dict | None =
         return json.loads(raw) if raw.strip() else None
 
 
-def derive(raw_value) -> dict:
+def derive(raw_value, platform: str = "meta") -> dict:
     """Map one raw Apify item onto marketing_ads columns.
 
-    Delegates to ad_payload.meta_fields so the backfill and the live scraper can
-    never disagree about what a field is called -- that disagreement is the bug
-    this script exists to repair.
+    Delegates to ad_payload so the backfill and the live scraper can never
+    disagree about what a field is called -- that disagreement is the bug this
+    script exists to repair.
+
+    Google is worth running too even though its actor returns no ad copy: the
+    payload already carries approxDaysShown, adFormat and adUrl, which are what
+    make "how long has this ad been running" answerable without a re-scrape.
     """
+    if platform == "google":
+        return google_fields(raw_value)
     return meta_fields(raw_value)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--apply", action="store_true", help="write changes (default: dry run)")
-    ap.add_argument("--platform", default="meta")
+    ap.add_argument("--platform", default="meta", choices=["meta", "google"])
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     url, key = _env()
+
+    # Ask the TABLE what columns exist BEFORE selecting any, for two reasons:
+    # naming a column that does not exist makes PostgREST reject the whole
+    # query, and reading the keys of our own projection could never observe
+    # migrations/026 landing -- the guard would suppress the new columns for
+    # ever. migrations/026 adds ad_title, publisher_platforms, last_shown,
+    # approx_days_shown, ad_format, archive_url and is_template_ad, and it is
+    # applied by hand in the Supabase SQL editor, so this script has to stay
+    # runnable on either schema.
+    probe = _req(url, key, "marketing_ads?select=*&limit=1") or []
+    available = set(probe[0].keys()) if probe else set()
+
+    # Every column any mapper can emit must be SELECTed, or the fill-only check
+    # below reads an unselected column as empty and overwrites good data --
+    # page_name is 100% populated and would have been rewritten for all 908
+    # Google rows.
+    wanted = [
+        "id", "page_name", "body", "cta", "creative_url", "landing_url",
+        "started_at", "is_active", "raw",
+        "ad_title", "publisher_platforms", "last_shown", "approx_days_shown",
+        "ad_format", "archive_url", "is_template_ad",
+    ]
+    select = ",".join(c for c in wanted if not available or c in available)
+
     rows, off = [], 0
     while True:
         q = urllib.parse.urlencode({
-            "select": "id,body,cta,creative_url,landing_url,started_at,is_active,raw",
+            "select": select,
             "platform": f"eq.{args.platform}", "order": "id.asc", "limit": PAGE, "offset": off,
         })
         batch = _req(url, key, f"marketing_ads?{q}") or []
@@ -93,22 +123,17 @@ def main() -> int:
             break
         off += PAGE
 
-    # migrations/026 adds ad_title, publisher_platforms, last_shown,
-    # approx_days_shown, ad_format, archive_url and is_template_ad. It is applied
-    # by hand in the Supabase SQL editor, so this script must stay runnable
-    # before it lands: PATCHing an unknown column is rejected outright
-    # (PGRST204) and would abort a repair that is otherwise fine.
-    available = set(rows[0].keys()) if rows else set()
     pending = sorted({
-        k for r in rows for k in derive(r.get("raw")) if k not in available
+        k for r in rows for k in derive(r.get("raw"), args.platform)
+        if available and k not in available
     })
     if pending:
-        log.info("skipping (migrations/026 not applied yet): %s", ", ".join(pending))
+        log.info("skipping (column not present -- is migrations/026 applied?): %s", ", ".join(pending))
 
     filled: dict[str, int] = {}
     changed = 0
     for r in rows:
-        d = restrict(derive(r.get("raw")), available)
+        d = restrict(derive(r.get("raw"), args.platform), available)
         # Fill-only for content columns: never overwrite something already good.
         patch = {k: v for k, v in d.items() if k != "is_active" and not r.get(k)}
         # is_active is a correction, not a fill. Every row currently reads true
