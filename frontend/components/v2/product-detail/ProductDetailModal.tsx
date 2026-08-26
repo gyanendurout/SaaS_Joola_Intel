@@ -9,6 +9,7 @@ import { ProductHero }         from '@/components/v2/product-detail/ProductHero'
 import { ProductAttention }    from '@/components/v2/product-detail/ProductAttention'
 import { ProductPeriodMatrix } from '@/components/v2/product-detail/ProductPeriodMatrix'
 import { ProductPriceContext } from '@/components/v2/product-detail/ProductPriceContext'
+import { tipFor } from '@/lib/v2/tooltips'
 
 const norm = (v: number) => (v > 1000 ? +(v / 1000).toFixed(2) : v)
 
@@ -187,11 +188,11 @@ export function ProductDetailModal({ brand, productId, intel, brands, onClose }:
                 <div className="table-wrap" style={{ maxHeight: 240, overflowY: 'auto' }}>
                   <table className="data" style={{ width: '100%' }}>
                     <thead><tr>
-                      <th style={{ textAlign: 'left' }}>Brand</th>
-                      <th style={{ textAlign: 'left' }}>Product</th>
-                      <th style={{ textAlign: 'right' }}>Attention</th>
-                      <th style={{ textAlign: 'right' }}>Mentions</th>
-                      <th>Trend</th>
+                      <th style={{ textAlign: 'left' }} title={tipFor('Brand')}>Brand</th>
+                      <th style={{ textAlign: 'left' }} title={tipFor('Product')}>Product</th>
+                      <th style={{ textAlign: 'right' }} title={tipFor('Attention')}>Attention</th>
+                      <th style={{ textAlign: 'right' }} title={tipFor('Mentions')}>Mentions</th>
+                      <th title={tipFor('Trend')}>Trend</th>
                     </tr></thead>
                     <tbody>
                       {peers.map(p => (

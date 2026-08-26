@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/shared/supabase'
-import { PageHead, LoadingPage } from '@/components/v2/PageShell'
+import { PageHead, LoadingPage, SectionInfo } from '@/components/v2/PageShell'
+import { tipFor } from '@/lib/v2/tooltips'
 
 type HealthStatus = 'green' | 'amber' | 'red' | 'grey'
 
@@ -133,7 +134,7 @@ export default function DataHealthPage() {
       <section>
         <div className="section-head">
           <div>
-            <h2>Pipeline diagnostic · {rows.length} tables probed</h2>
+            <h2>Pipeline diagnostic · {rows.length} tables probed<SectionInfo title="Pipeline Diagnostic" description="A health check on every dataset behind this dashboard: when each was last refreshed and whether anything looks stale or incomplete. Check here first if a number elsewhere looks wrong." source="live probe of each table" /></h2>
             <div className="sub">
               Live status of every important table. Green = fresh, amber = stale, red = empty/broken.
             </div>
@@ -144,13 +145,13 @@ export default function DataHealthPage() {
             <table className="data" style={{ width: '100%' }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                 <tr>
-                  <th>Area</th>
-                  <th>Table</th>
-                  <th>Status</th>
-                  <th>Last refresh</th>
-                  <th style={{ textAlign: 'right' }}>Coverage</th>
-                  <th>Issue</th>
-                  <th>Action</th>
+                  <th title={tipFor('Area')}>Area</th>
+                  <th title={tipFor('Table')}>Table</th>
+                  <th title={tipFor('Status')}>Status</th>
+                  <th title={tipFor('Last refresh')}>Last refresh</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Coverage')}>Coverage</th>
+                  <th title={tipFor('Issue')}>Issue</th>
+                  <th title={tipFor('Action')}>Action</th>
                 </tr>
               </thead>
               <tbody>

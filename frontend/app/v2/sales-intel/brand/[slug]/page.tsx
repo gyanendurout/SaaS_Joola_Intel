@@ -10,10 +10,11 @@ import {
 } from '@/lib/v2/productIntel'
 import { useReveal, revealCls } from '@/lib/v2/animations'
 import { fmt } from '@/components/v2/charts'
-import { LoadingPage, pgName } from '@/components/v2/PageShell'
+import { LoadingPage, pgName, SectionInfo } from '@/components/v2/PageShell'
 import { StatCard } from '@/components/v2/StatCard'
 import { BackButton } from '@/components/v2/BackButton'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
+import { tipFor } from '@/lib/v2/tooltips'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -174,7 +175,7 @@ export default function SalesIntelBrandPage() {
         <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Product catalog · stock status</h2>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Product catalog · stock status<SectionInfo title="Product Catalog" description="Every paddle this brand sells that we track, and whether shoppers can currently buy it. Sold-out lines are where demand is going unmet." source="products_catalog - product_snapshots" /></h2>
               <div className="sub">{products.length} products · latest snapshot availability</div>
             </div>
             <div style={{ display: 'flex', gap: 4, background: 'var(--wb-5)', borderRadius: 8, padding: 3 }}>
@@ -206,11 +207,11 @@ export default function SalesIntelBrandPage() {
             <div className="table-wrap">
               <table className="data" style={{ width: '100%' }}>
                 <thead><tr>
-                  <th style={{ minWidth: 200 }}>Product</th>
-                  <th>Category</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: 'right' }}>Price</th>
-                  <th>Last Snapshot</th>
+                  <th style={{ minWidth: 200 }} title={tipFor('Product')}>Product</th>
+                  <th title={tipFor('Category')}>Category</th>
+                  <th title={tipFor('Status')}>Status</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Price')}>Price</th>
+                  <th title={tipFor('Last Snapshot')}>Last Snapshot</th>
                 </tr></thead>
                 <tbody>
                   {sortedProducts.map(p => (
@@ -243,7 +244,7 @@ export default function SalesIntelBrandPage() {
         {stockouts.length > 0 && (
           <section>
             <div className="section-head">
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Stockout opportunities</h2>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Stockout opportunities<SectionInfo title="Stockout Opportunities" description="Competitor paddles that have sold out. Shoppers who wanted these need an alternative right now, which is the moment JOOLA can win them." source="product_snapshots - availability" /></h2>
               <div className="sub">{stockouts.length} competitor gaps · demand vs availability</div>
             </div>
             <div className="card"><div className="card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -268,7 +269,7 @@ export default function SalesIntelBrandPage() {
         {pressure.length > 0 && (
           <section>
             <div className="section-head">
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Price pressure</h2>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Price pressure<SectionInfo title="Price Pressure" description="How this brand is pricing against its own recent history. Sustained discounting usually signals either a clearance push or a demand problem." source="product_variants - price history" /></h2>
               <div className="sub">{pressure.length} products with pricing signals</div>
             </div>
             <div className="card"><div className="card-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -303,7 +304,7 @@ export default function SalesIntelBrandPage() {
       {cadence.length > 0 && (
         <section ref={sec3.ref} className={revealCls(sec3.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head">
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Restock cadence</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Restock cadence<SectionInfo title="Restock Cadence" description="How regularly this brand puts stock back on the shelf. Long, irregular gaps suggest supply trouble that competitors can exploit." source="inventory_events" /></h2>
             <div className="sub">{cadence.length} products with restock history</div>
           </div>
           <div className="card"><div className="card-pad">

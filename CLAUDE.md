@@ -1,550 +1,157 @@
-# JOOLA Intel — Claude Session Memory
+# CLAUDE.md — working rules for this repo
 
-## BUSINESS REQUIREMENTS
+How to work in JOOLA Intel. **Rules and invariants only** — no product spec, no
+history. If you need something else:
 
-- **Product**: JOOLA Intel — pickleball competitive intelligence dashboard.
-- **Owner**: JOOLA (paddle brand). Operating contact: api@joola.com.
-- **Users**: JOOLA's marketing & competitive-intel team (internal only); product also serves as a CFO/board-facing BI surface.
-- **Why**: Track 11 brands' performance across all social channels in one view; spot crisis signals, defection trends, product wins/losses, athlete ROI. Translate **public-signal data into leading indicators for internal P&L variables** (sales, inventory, forecasts, warranty staffing, athlete-spend reallocation, M&A targeting).
-- **Tracked brands (11)**: `joola`, `selkirk`, `paddletek`, `crbn`, `six-zero`, `engage`, `onix`, `franklin` (Franklin Pickleball), `head`, `wilson`, `gamma`.
-- **Tracked athletes**: 27 (see `influencers` table; full roster seeded in `migrations/005_influencer_x.sql`).
-- **Tracked products**: 86 paddles in `products_catalog` post-migration 015 (extensible) — JOOLA Perseus/Hyperion/Scorpeus, Selkirk Vanguard/Luxx/Boomstick, Paddletek Bantam, CRBN-1/3/X, Six Zero DBD, Engage Pursuit Pro, Onix Z5, etc.
-- **Data sources**: Instagram (brand + athlete + comments), YouTube (channel + comments), Reddit (OPs + comment trees), X (brand + athlete), TikTok, Meta Ad Library, Google Ads Transparency, brand homepage banners (promotions), brand product catalogs + public review counts, weekly product-page stock snapshots.
-- **Data scope (strict)**: 100% web / publicly-available. **No internal sales, inventory, or ERP feeds wired in yet** — the platform is designed to fold them in later via the same schema. Read-only Supabase role; OpenAI never executes SQL — backend validates every plan via `sqlSafety.ts`.
-- **Update cadence**: Weekly (Monday 07:00 IST). Manual trigger: `python scripts/pipeline/apify_to_supabase.py`. Cron via GitHub Actions is a pending hardening item.
-- **AI enrichment**: GPT-4o-mini (`scripts/pipeline/enrich_with_ai.py`) for sentiment scoring, topic extraction, brand/player/product NER, crisis flagging, purchase-intent scoring, and Reddit competitor-switch detection. Followed by `populate_mention_facts.py` and `populate_topic_lifecycle.py`.
-- **Key KPIs surfaced**: SoV by brand (recomputed from `displayAds`, never the static DB `share` field), sentiment per brand × product, crisis count, purchase-intent count, competitor net defection score, topic lifecycle with first-channel detection.
-- **Ask Intel (AI Q&A layer)**: `/v2/ask-intel` lets any user query the warehouse in plain English. Two-step OpenAI flow (planner → executor → answerer), structured query plans validated by `sqlSafety.ts`, column-alias autocorrect, name→UUID resolution. Hardened to **0 hard errors on the 29-question test harness** (`scripts/test_ask_intel.py`).
-- **BI correlation use-cases** (CFO-facing, design intent — implementations vary by section):
-  - **Athlete-signing attach-lift** — mention spike + sentiment shift + SoV gain in 0-30d after signing → implied unit lift via category conversion ratio
-  - **Competitor stockout → demand-transfer forecast** — weekly product-page snapshots × resulting SoV movement
-  - **Crisis → competitor defection rate** — Reddit "switching from X to Y" extraction, 4-8 week lead-time on retail re-orders
-  - **Promo cadence → ad ROI proxy** — Meta + Google ad library × homepage promo × mention velocity per dollar
-  - **Public review velocity → unit-sales proxy** — review-count delta × industry 3-5% review rate (works for Selkirk, Onix, Wilson, Franklin, Paddletek, CRBN, Gamma, JOOLA where review counts are scraped)
-  - **Topic lifecycle → inventory-burn window** — first-channel detection (TikTok → Reddit → IG → YT) gives 7-14 day defensive-burn window before competitor demand peaks
-  - **Negative-sentiment spike → warranty-claim forecast** — 30-60 day lead indicator for warranty/return-rate
-  - **Influencer ER × follower → marketing-spend reallocation** — quarterly athlete-portfolio re-optimization
-  - **Topic-driven launch timing, counter-launch war room, RL promo calendar** — futuristic plays on the same dataset
-- **UX standards (dashboard)**:
-  - Every KPI box, section heading, and table column header must carry a **layman-language tooltip** (1–3 sentences) explaining what it shows, the source, the formula (if computed), and how comparisons work. Owner: `MiniKpi.tip` prop + `SectionInfo` component + `SortTh.title`.
-  - No duplicate KPI rows — the compact summary strip is canonical; redundant MiniKpi grids that duplicate it are removed.
-  - Global page-level filter bars (Range / From / To / Channel / Sentiment / Crisis style) are removed from `community-intel`, `campaign-offer-intel`, and `influencers` pages — state retained, UI gone. Per-table column filters (`ColumnFilter`) and brand-search in table headers remain.
-  - All scatter / matrix / quadrant charts must have **on-hover floating tooltips** with full datapoint detail (no relying on SVG `<title>`). Required for: Community Trend chart, Ads vs Promotions Matrix, Player Impact Map, Campaign Strategy Matrix.
-  - Quadrant charts: 4 visible quadrants split by **median** of plotted values, tinted backgrounds, corner labels with counts + 1-line explanations, in-tooltip quadrant indicator.
-  - Search-box text must be pure white (`#ffffff !important`) — never inherit dark color. Table "open →" links must use brand-yellow accent for visibility on dark background.
-- **Sidebar / navigation**: Home (`/v2`) redirects to `/v2/ask-intel`. Executive Overview removed. Data Health (`/v2/data-health`) probes 17 tables for staleness.
-- **Full recovery docs**: see `backup/` directory (`README.md` is the master index).
-
----
-
-## 🚀 LIVE DEPLOYMENT
-
-| What | Where |
+| You need | Read |
 |---|---|
-| **Production URL** | https://saas-joola-intel.vercel.app |
-| **Example page** | https://saas-joola-intel.vercel.app/v2/reddit |
-| **GitHub repo** | https://github.com/gyanendurout/SaaS_Joola_Intel |
-| **Default branch** | `main` |
-| **Hosting** | Vercel (auto-deploys on push to `main`) |
-| **Database** | Supabase project `loecyghnkkxyymelgexz` |
-| **Local repo path** | `c:\Workspace\joola-intel-nextjs` |
-| **Initial commit** | POC initial commit on 2026-05-15 |
+| What the product is, who it's for, what's in scope | [BRD.md](BRD.md) |
+| Repo map + quickstart | [README.md](README.md) |
+| Where a given file lives, end-to-end data flow | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Open work | [TODO.md](TODO.md) |
+| Visual conventions, component contracts | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) |
+| Running / debugging the scrapers | [backend/README.md](backend/README.md) |
+| Past session logs (pre-2026-05-24 paths) | [docs/CHANGELOG.md](docs/CHANGELOG.md) |
 
-### How updates flow
-```
-Local edit  →  git push origin main  →  Vercel auto-rebuilds  →  Live in ~90s
-                                            ↑ reads env vars set in Vercel dashboard
-                                            ↑ reads data from Supabase
-```
-
-### How data flows
-```
-Local laptop                          Supabase                    Vercel app
-┌──────────────────┐                 ┌──────────┐               ┌──────────────┐
-│ python scripts/  │   writes        │ Postgres │   reads       │ Next.js read │
-│ run_resumable.py │ ──────────────► │  tables  │ ────────────► │ via anon key │
-│ (uses .env)      │ (service_role)  │          │ (anon key)    │              │
-└──────────────────┘                 └──────────┘               └──────────────┘
-```
-- Run scrapers locally → Supabase grows → refresh Vercel URL → new data shows up. **No redeploy needed for data changes.**
-- Redeploy only when code changes (auto-triggered by `git push`).
-
-### Env vars set in Vercel project settings (Production + Preview)
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_OPENAI_KEY`  *(should be renamed to `OPENAI_API_KEY` without `NEXT_PUBLIC_` prefix before prod — currently leaks to browser bundle, POC-acceptable)*
-
-### Env vars in local `scripts/.env` (NOT in Vercel, NEVER commit)
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `APIFY_TOKEN`
-
-### 🔴 Pending POC → prod hardening
-- [ ] **Rotate Supabase service-role key** — was exposed when GitHub blocked initial push
-- [ ] **Rotate Apify token** — same exposure
-- [ ] **Rotate OpenAI key** — was shared in chat transcript on 2026-05-15
-- [ ] Rename `NEXT_PUBLIC_OPENAI_KEY` → `OPENAI_API_KEY` server-only in `app/api/generate-content/route.ts`
-- [ ] Enable Supabase Row-Level Security policies on all tables (anon role = SELECT only)
-- [ ] Add `scripts/requirements.txt` (pip freeze) for Python reproducibility
-- [ ] Set up GitHub Actions cron for the Python pipeline (currently runs manually on laptop)
+**Do not restate content from those files here.** Each fact has exactly one
+home; duplicating it is how this repo's docs went stale before.
 
 ---
 
+## Repo shape (the thing most often gotten wrong)
 
-## Project Overview
-Next.js 14 dashboard (`/app/v2/`) — Pickleball competitive intelligence platform.
-Dark-themed, data-rich, chart-heavy. Uses custom CSS (`app/v2.css`), not Tailwind.
-
-## Deployment & Architecture (IMPORTANT)
-**This is a SINGLE deployable Next.js 14 app.** Not a separate frontend + backend.
+Three independent units since the 2026-05-24 split. There is **no `app/` at the
+repo root** and **no `scripts/pipeline/`** — both were moved.
 
 ```
-┌───────────────────────────────────────────────┐
-│  Next.js 14 App (App Router)  — single deploy │
-│                                                │
-│  ┌─────────────────┐    ┌──────────────────┐ │
-│  │ Frontend pages  │    │ API Routes       │ │
-│  │ /app/v2/*       │    │ /app/api/*       │ │
-│  │ React Server +  │    │ Serverless       │ │
-│  │ Client comps    │    │ functions        │ │
-│  └────────┬────────┘    └────────┬─────────┘ │
-│           │                       │            │
-│           └──────────┬────────────┘            │
-└───────────────────────┼────────────────────────┘
-                        │
-        ┌───────────────┼────────────────┐
-        ▼                                ▼
-┌──────────────────┐            ┌──────────────────┐
-│ Supabase (cloud) │            │ OpenAI API       │
-│ PostgreSQL DB    │            │ (LLM calls from  │
-│ + auth           │            │  api routes)     │
-└──────────────────┘            └──────────────────┘
-        ▲
-        │ (writes only)
-┌──────────────────────────────────┐
-│ Python scripts (scripts/*.py)    │ ← SEPARATE, runs locally/cron
-│ Scrape & populate Supabase       │   NOT deployed with the app
-└──────────────────────────────────┘
+frontend/           Next.js 14 dashboard  → Vercel (Root Directory = frontend/)
+backend/scraping/   Python scrape + enrich + facts + sales-intelligence
+analytics_backend/  Python marts + statistics (runs after scraping)
+scripts/            Cross-cutting utilities (weekly_run.py, deploy.ps1, db_verify.py)
+migrations/         SQL, shared by both Python units
 ```
 
-- **Deploy target**: Vercel (recommended) or any Node host. One `npm run build && npm start`.
-- **Backend logic lives inside Next.js**:
-  - **API routes**: `app/api/generate-content/route.ts` — OpenAI content generation (the only custom server endpoint)
-  - **Direct Supabase queries**: `lib/v2/data.ts` uses `@supabase/supabase-js` directly from client components — no custom API layer needed for reads
-- **Database**: Supabase (managed Postgres). Connected via `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- **Python pipeline** (`scripts/`): scrapes Instagram/YouTube/Reddit/Ads via Apify, writes to Supabase. **Runs separately** — does NOT ship with the Next.js build. Trigger it on cron / Mondays.
-
-### Required env vars at deploy
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_OPENAI_KEY` (only if `/api/generate-content` is used)
-
-### Dependencies (`package.json`)
-Runtime: `next 14.2.5`, `react 18`, `@supabase/supabase-js`, `openai`
-Build: TypeScript 5, Tailwind 3 (config exists but v2 uses custom CSS instead)
+Frontend paths are `frontend/app/v2/…`, `frontend/lib/v2/…`,
+`frontend/components/v2/…`, `frontend/app/v2.css`. Always include the
+`frontend/` prefix.
 
 ---
 
-## Architecture
+## Invariants — breaking these breaks the product
 
-### Key Files
-| File | Purpose |
-|------|---------|
-| `app/v2.css` | All styles for the v2 dashboard (sidebar, layout, charts, tables, pills, etc.) |
-| `app/v2/layout.tsx` | Root layout: wraps `<V2Sidebar />` + `<main className="main">` |
-| `components/v2/Sidebar.tsx` | Client component sidebar with collapse/expand toggle |
-| `components/v2/charts.tsx` | All chart components: `StackedArea`, `Donut`, `ScatterChart`, `LineChart`, `BubbleChart` |
-| `components/v2/PageShell.tsx` | `PageHead`, `MiniKpi`, `SectionInfo`, `SortTh`, `LoadingPage`, `pgColor`, `pgName`, `fmt` |
-| `lib/v2/data.ts` | Data fetching: `fetchBrands`, `fetchAds`, `fetchAdSample`, etc. |
+### 1. Share of Voice must be recomputed under a brand filter
 
-### Pages (`app/v2/`)
-- `/v2` — Executive Overview
-- `/v2/instagram` — Instagram analytics
-- `/v2/youtube` — YouTube analytics
-- `/v2/reddit` — Reddit & Community
-- `/v2/comments` — Comments Intel
-- `/v2/influencers` — Influencer Network (bubble chart)
-- `/v2/ads` — Ads Library
-- `/v2/promotions` — Promotions
-- `/v2/products` — Product Catalog
-- `/v2/market` — Market Intel
+The DB `share` field on `v2_ads` is precomputed across all 11 brands. It is
+**wrong** whenever a brand filter is active. Always derive from the filtered
+list:
 
----
-
-## Layout System (Critical)
-
-### Sidebar — Fixed Positioning
-```css
-/* In app/v2.css */
-:root { --sidebar-w: 232px; }
-
-.v2-root .sidebar {
-  width: var(--sidebar-w); min-width: var(--sidebar-w);
-  position: fixed; top: 0; left: 0; bottom: 0; z-index: 50;
-  overflow: hidden;
-  transition: width 240ms ease, min-width 240ms ease;
-}
-
-.v2-root .sidebar.sidebar-collapsed { width: 60px; min-width: 60px; }
-
-.v2-root .main {
-  padding: 24px 32px 64px;
-  margin-left: var(--sidebar-w);
-  transition: margin-left 240ms ease;
-}
-
-@media (max-width: 768px) {
-  .v2-root .main { margin-left: 0; }
-  .v2-root .collapse-btn { display: none !important; }
-}
-```
-
-### Sidebar Collapse (JS side)
-In `components/v2/Sidebar.tsx`:
-```tsx
-const [collapsed, setCollapsed] = useState(false)
-useEffect(() => {
-  document.documentElement.style.setProperty('--sidebar-w', collapsed ? '60px' : '232px')
-}, [collapsed])
-```
-- CSS custom property `--sidebar-w` is the single source of truth, shared between sidebar width and `.main`'s `margin-left`.
-- Mobile: hamburger + overlay pattern (unchanged), collapse button hidden.
-
----
-
-## Chart Patterns
-
-### ScatterChart / BubbleChart — No Label Overlap
-Labels are rendered **only for JOOLA (always)** and the **currently hovered item**:
-```tsx
-{(isJ || isHov) && (
-  <text x={cx} y={cy - dotR - 8} textAnchor="middle" className="scatter-label"
-    style={{ fontWeight: 800, fill: isJ ? '#22c55e' : '#fff', fontSize: 11, pointerEvents: 'none' }}>
-    {d.name}
-  </text>
-)}
-```
-Never render all labels at once — they overlap when brands cluster.
-
-### LineChart — Hover Tooltip
-Wrapped in `<div className="scatter-wrap" style={{ position: 'relative' }}>`.
-On hover: floating `.tip` div (company name + latest value), crosshair line, endpoint circle.
-```tsx
-{hovSeries && (
-  <div className="tip" style={{ left: ..., top: ..., whiteSpace: 'nowrap' }}>
-    <div className="t-name" style={{ color: hovSeries.color }}>{hovSeries.label}</div>
-    Latest: {fmt(hovLastVal)}
-  </div>
-)}
-```
-
----
-
-## UI Conventions
-
-### Colors (brand)
-- JOOLA: `#22c55e` (green)
-- Accent/highlight: `#F5E625` (yellow)
-- Pill classes: `pill-green`, `pill-info`, `pill-amber`, `pill-ghost`
-
-### No Export Brief Button
-**Do NOT add** `<button className="btn btn-yellow">Export brief</button>` to any page.
-It was removed from all 9 pages and should not return.
-
-### PageHead Component
-```tsx
-<PageHead eyebrow="..." title="..." accent="..." sub="..." actions={<>...</>} />
-```
-Actions slot: search inputs, selects, filter dropdowns — NOT export buttons.
-
-### CTAs Pattern
-Each page should have CTAs to external platforms (open in new tab):
-- YouTube: link to brand's YouTube channel
-- Instagram: link to brand's Instagram
-- Reddit: link to subreddit
-- Meta Ads Library: `https://www.facebook.com/ads/library/?...`
-- Brand website if available in DB
-
----
-
-## TypeScript Notes
-- `Set` spread: use `Array.from(new Set(...))` not `[...new Set(...)]` (TS2802 error with some configs).
-- Always run `npx tsc --noEmit` to verify no type errors after changes.
-
----
-
-## Design System
-
-### Style
-- Dark mode only, `#0d1117` background
-- Card: `background: rgba(255,255,255,0.04)`, `border: 1px solid rgba(255,255,255,0.08)`
-- Section titles: bold, white
-- Muted text: `var(--muted)` (~`#6b7280`)
-- Font: system stack or Archivo Black for brand mark
-
-### Charts
-- All bar/pie charts: 3D effect requested
-- All boxes/cards: 3D hover pop-out effect on mouse hover
-- Responsive: tablet (768px) and mobile (375px)
-
-### Scatter/Bubble chart quadrant labels
-- Keep 4 quadrant regions clearly visible with grid lines and labels
-- Brands that cluster: use hover-only labels to avoid overlap
-
----
-
-## Scraping / Data Pipeline (Background)
-- Script: `scripts/pipeline/fix_missing_data.py`
-- Progress file: `scripts/SCRAPE_PROGRESS.md`
-- Pipeline state: `pipeline_state.json`
-- Row counts script: `_count_rows.py`
-- Log: `resumable_run.log`
-
----
-
-## Known Issues / History
-1. **Sidebar sticky → fixed**: Was `position: sticky`, broke on some scroll contexts. Now `position: fixed`.
-2. **Set spread TS error**: Fixed with `Array.from(new Set(...))`.
-3. **Scatter label overlap**: Fixed by label-on-hover-only pattern.
-4. **LineChart hover**: Now shows floating tooltip + crosshair.
-5. **Export brief**: Removed from all pages (ads, comments, influencers, instagram, market, products, promotions, reddit, youtube).
-
----
-
-## Session Log (Latest Changes — 2026-05-15)
-- `app/v2.css`: Sidebar → `position: fixed`, added `--sidebar-w` CSS var, collapse classes, mobile overrides
-- `components/v2/Sidebar.tsx`: Added collapse/expand toggle with chevron icons, `useEffect` syncing CSS var
-- `components/v2/charts.tsx`: ScatterChart label-on-hover, LineChart floating tooltip
-- `app/v2/influencers/page.tsx`: Bubble chart label-on-hover (renamed `r` → `bR`)
-- All 9 page files: Removed Export brief button
-
-## Session Log — VIZ Defects Round (2026-05-15)
-Fixed 28-item visual defect report (`VIZ-01` through `VIZ-28`):
-
-### charts.tsx (mass overhaul)
-- **VIZ-01** LineChart: `fmt()` and `y()` guard with `isFinite`; series with all-zero data filtered out; `<text>` only rendered when `labelY` is finite.
-- **VIZ-09** LineChart: deconflict end-of-line labels — sort by y, push down by `minLabelGap=14`, add connector line.
-- **VIZ-10/14** LineChart: per-week crosshair + multi-series tooltip on mouse-move over chart area; shows top 6 series sorted by value.
-- **VIZ-02** StackedArea: detects layer + week from mouse position; highlights hovered layer (opacity 1, stroke 1.5); floating tooltip with `Week N: V ads`.
-- **VIZ-11** BoxPlot: per-row hover with full stats tooltip (Min/Med/Avg/Max + count); transparent row hit-area; wider `padR=120` so labels don't clip (VIZ-22).
-- **VIZ-26** Donut: `<title>` SVG tooltip + floating `.tip` div with name + pct on hover.
-- **VIZ-25** SentimentBar: neutral band now uses fixed `#94a3b8` gray (not brand color) so green/positive convention is never confused.
-
-### PageShell.tsx
-- **VIZ-16** SortTh: ARIA `aria-sort`, larger arrows (9px), active arrow scales to 1.35x in yellow. CSS at v2.css:815-826 unchanged in selectors, tightened active state to scale-transform.
-- **VIZ-21** MiniKpi: added `title={src}` to `.src` span for full-name reveal on hover.
-- **VIZ-28** SectionInfo: now click-aware; clicking `?` pins popup open; outside click + Esc to dismiss. Hover still works for desktop quick-glance.
-
-### v2.css
-- **VIZ-03/19** `.trend-row` grid: `30px 160px minmax(120px,1fr) 50px auto` — third column gives mtrack explicit room (previously 0 width). `.mtrack`: `height: 8px; min-width: 80px; width: 100%`.
-- **VIZ-16** Sort arrows: increased to 9px, active uses `transform: scale(1.35)` + yellow color.
-- **VIZ-28** Added `.section-info.is-pinned .si-popup { display: block }`.
-
-### Per-page fixes
-- **VIZ-05/06/20** `influencers/page.tsx`: iterative bubble repulsion (60 iters, gap=3px, clamped to chart area); per-bubble label deconflict (push down 11px when within 60px horizontally); all athletes get labels with text stroke for readability; quadrant labels in corners with backing rect (`rgba(7,9,14,0.78)`).
-- **VIZ-17** `ads/page.tsx`: Copy column now sortable (`col="copy"`). All brands in StackedArea series + legend (was sliced to 6).
-- **VIZ-18** `youtube/page.tsx`: Title column now sortable (`col="title"`).
-- **VIZ-15** `reddit/page.tsx`: subreddit row gets full `title=` tooltip + clickable subreddit link to reddit.com.
-- **VIZ-03 markup** `reddit/page.tsx`: trend-row pill uses brand color gradient (was hard-coded green for JOOLA which clashed with positive sentiment color). Also added `title=` summary on the row.
-- **VIZ-23** `promotions/page.tsx`: Promotion text cell uses `maxWidth: 380; overflow:hidden; textOverflow:ellipsis` + full `title=` reveal.
-- **VIZ-27** `promotions/page.tsx`: Heatmap cells `title=` now includes brand, week, and active state.
-
-### Architecture notes
-- `SectionInfo` is the only stateful "hover or click" pattern — uses `useEffect` with `mousedown` + `keydown` listeners scoped to pinned state.
-- LineChart filters out empty series early; downstream code shouldn't pass series with all-zero data, but if it does, an "No data available" message renders instead of NaN labels.
-- BoxPlot now needs `w >= 600` to avoid label clipping due to `padR=120`. Default `w=760` is safe.
-- Bubble collision uses simple O(n²) repulsion — fine for <50 athletes. If athlete count grows, switch to D3 forceSimulation.
-
-## Session Log — Hover-Pop Behavior (2026-05-15, follow-up)
-**Problem**: Entire `.card` was lifting on hover (`translateY(-5px) scale(1.008)`), making the whole list/table box pop instead of individual rows/cells inside.
-
-**Fix**: Decoupled card-level lift from inner-row pop.
-
-### v2.css changes
-- `.card:hover` now applies **shadow + border only** (no transform). Cards that contain interactive lists feel stable; the inner content becomes the focus.
-- `.kpi:hover`, `.brief-card:hover`, `.opp-card:hover` **keep** the lift (those ARE the interactive unit).
-- New per-row hover rules:
-  - `.signal:hover` — translateX(4px) + yellow inset border + shadow
-  - `.trend-row:hover` — translateX(4px) + mfill brightens
-  - `table.data tbody tr:hover` — translateX(3px) + yellow tint + shadow
-  - `.heatmap .h-cell:hover` — scale(1.25) + glow + z-index raise
-  - `.tier-row:hover` / `.tier-seg:hover` — row lifts, individual segment scales vertically (1.6x)
-  - `.cadence-cell:hover` — scale(1.4) + glow
-  - `.sent-row:hover` — row lifts, bars brighten
-
-### Class additions for inline-styled cells
-- `app/v2/products/page.tsx` price-tier bars → `.tier-row` on each brand, `.tier-seg` on each value/mid/premium div
-- `app/v2/instagram/page.tsx` posting cadence cells → `.cadence-cell` on each day cell; richer tooltip with brand + week + day
-- `components/v2/charts.tsx` `SentimentBar` → `.sent-row` on each row
-
-### Pattern to follow
-**Rule of thumb**: if a card contains a list/table/heatmap, the card itself should NOT transform on hover. Add a class to each inner row and apply the pop there. Reserve whole-card lift for self-contained units (KPI cards, brief cards, opportunity cards).
-
-## Session Log — POC Deployment to Vercel (2026-05-15)
-
-### Repo & deploy setup completed
-1. **`.gitignore` extended** — added `.env*`, `.claude/`, `__pycache__/`, `*.pyc`, `.venv/` (was missing `.env*` — would have leaked `.env.local`)
-2. **Git init + first push** — initial commit `5fad664` (then amended to `6135ca9` after secret removal)
-3. **Secret scrubbing** — GitHub blocked the first push (secret scanner caught hardcoded Supabase service-role key + Apify token in 4 Python files + 1 markdown doc):
-   - `scripts/pipeline/count_rows.py:5`
-   - `scripts/pipeline/fix_missing_data.py:18,21`
-   - `scripts/pipeline/scrape_may15.py:20,23`
-   - `scripts/pipeline/apify_to_supabase.py:45,49`
-   - `docs/WHERE_WE_LEFT_OFF.md:62,64`
-4. **Patched all 4 Python scripts** to read from `os.environ` with optional `python-dotenv` loader:
-   ```python
-   import os
-   try:
-       from dotenv import load_dotenv
-       load_dotenv(); load_dotenv("scripts/.env")
-   except ImportError:
-       pass
-   SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-   APIFY_TOKEN  = os.environ["APIFY_TOKEN"]
-   ```
-5. **Created `scripts/.env`** (gitignored) with the original values so scripts keep running locally
-6. **Created `scripts/.env.example`** as template (committed) with placeholder values
-7. **Vercel import** — connected GitHub repo, pasted 3 env vars via "paste .env contents" option, deployed
-8. **Verified live** at https://saas-joola-intel.vercel.app/v2/reddit
-
-### Commit author identity
-Used inline env vars (not `git config`) since Git safety protocol forbids modifying git config:
-```bash
-GIT_AUTHOR_NAME="Gyanendu Rout" GIT_AUTHOR_EMAIL="gyanendu1197@gmail.com" \
-GIT_COMMITTER_NAME="Gyanendu Rout" GIT_COMMITTER_EMAIL="gyanendu1197@gmail.com" \
-git commit -m "..."
-```
-
-### Local dev workflow going forward
-```bash
-# Code change → push → Vercel auto-deploys
-git add . && git commit -m "..." && git push
-
-# Data refresh → run local Python (writes to Supabase, no redeploy needed)
-cd c:\Workspace\joola-intel-nextjs
-pip install python-dotenv requests  # one-time
-python scripts/pipeline/run_resumable.py
-```
-
-### Architecture clarification (asked + answered this session)
-- **Single deployable Next.js app** — frontend + API routes bundled, deployed to Vercel
-- **Supabase** = managed Postgres, browser reads directly via anon key (no custom API layer)
-- **Python scripts** = run locally on laptop, write to Supabase via service-role key, NOT deployed with Next.js
-- Vercel auto-ignores `scripts/`, `design/`, `docs/`, `migrations/`, `_legacy/` since they're outside the Next.js dep graph
-
----
-
-## Session Log — Brand Filter UX + QA Bug Fixes (2026-05-16)
-
-### Brand filter panel UX overhaul
-- **Sidebar.tsx**: Moved `<BrandFilter />` from bottom of sidebar to **top** (above nav links), defaulting to open (`useState(true)`). Previously it was invisible because 10 nav links pushed it off-screen.
-- **BrandFilterContext.tsx**: Added `useEffect` to auto-fetch brands on mount — filter panel now populates independently of page loading (no more empty panel on first visit).
-- **v2.css**: `.bf-wrap` border moved from top to bottom; `.bf-list` max-height reduced to `180px` to fit at top of sidebar.
-
-### 7 QA bugs fixed (commit `054757f`)
-
-| Bug | File | Fix |
-|-----|------|-----|
-| BUG-01 | `ads/page.tsx` | SoV KPI + rank + bar chart + bar % all now computed from `displayAds` (filtered). DB `share` field is global — recomputed as `d.total / totalAds * 100` |
-| BUG-02 | `promotions/page.tsx` | Eyebrow brand count: `brandsWithPromos` → `displayPromos.length` |
-| BUG-03 | `promotions/page.tsx` | Sub text brand count: `promos.length` → `displayPromos.length` |
-| BUG-04 | `promotions`, `comments`, `youtube` | "across all brands" → `` `across ${displayXxx.length} brands` `` |
-| BUG-05 | `reddit`, `comments`, `ads` | "All brands" dropdown → `All ${displayXxx.length} brands` |
-| BUG-06 | `BrandFilterContext.tsx` | `isFiltered` was `selectedSlugs.length > 0` — showed yellow banner even when all brands manually re-selected. Fixed: `selectedSlugs.length > 0 && selectedSlugs.length < allBrands.length` |
-| BUG-07 | `Sidebar.tsx` | Last-brand tooltip updated to warn that removing it resets to all brands |
-
-### Key invariant: Share of Voice recalculation
-The DB `share` field on `v2_ads` rows is pre-computed across all 11 brands. **Never use it for KPIs when a brand filter is active.** Always recompute dynamically:
 ```ts
 const totalAds = displayAds.reduce((s, a) => s + a.total, 0)
-// SoV for JOOLA:
-const joolaSOV = (joolaAd.total / totalAds * 100).toFixed(1) + '%'
-// Bar chart share for any brand:
-const barShare = (totalAds > 0 ? d.total / totalAds * 100 : 0).toFixed(1) + '%'
+const sov = totalAds > 0 ? (d.total / totalAds * 100) : 0
 ```
 
-### `isFiltered` contract (never break this)
+### 2. `isFiltered` contract
+
+In `frontend/lib/v2/BrandFilterContext.tsx`:
+
 ```ts
-// In BrandFilterContext.tsx
 isFiltered: selectedSlugs.length > 0 && selectedSlugs.length < allBrands.length
-// true  → filter is active, FilterBanner shown, displayXxx arrays are sliced
-// false → show all brands (either nothing selected OR all selected)
 ```
+
+`true` → filter active, banner shown, `displayXxx` arrays are sliced.
+`false` → show everything (nothing selected **or** everything selected).
+Never simplify this to `selectedSlugs.length > 0`.
+
+### 3. Engagement-rate outliers
+
+Filter `followers >= 50` before any ER ranking, chart, or "top performer" list.
+Scraping artifacts with 1 follower produce ~69,000% ER and destroy every axis.
+
+### 4. Brand display names
+
+Render brand labels through `pgName(slug, brands)` from
+`frontend/components/v2/PageShell.tsx`. It looks the name up and then applies
+`displayBrandName()`, which owns the rename map (Franklin → Franklin
+Pickleball). Call `displayBrandName(slug, name)` directly only when you already
+have the raw name and no `brands` array.
+
+**Known bypass:** `productIntel.ts` and `campaignOfferIntel.ts` build a
+`brandName` field straight from `brands.name`, and Product / Sales / Campaign
+& Offer Intel render it unmodified — so the override does not apply there. Do
+not copy that pattern into new code; the fix is tracked in TODO.md.
+
+### 5. Scraper targets live in the database, not in Python
+
+Handles for Instagram / X / TikTok / YouTube and the influencer roster are
+seeded via `migrations/`. To change what gets scraped, update the DB row — never
+hardcode a handle in a scraper.
 
 ---
 
-## Session Log — QA Infra + Audit Fixes + Project Reorg (2026-05-19)
+## Conventions
 
-Commit `755681f` (pushed alongside the prior unpushed `ed16631`).
+- **v2 pages are all `'use client'`.** Supabase reads are filtered by
+  user-selected brand state, so server components don't fit.
+- **v2 uses custom CSS, not Tailwind.** All styles live in
+  `frontend/app/v2.css`. Tailwind is installed but unused by `app/v2/*`.
+- **`Array.from(new Set(...))`**, not `[...new Set(...)]` — the spread form
+  raises TS2802 under this tsconfig.
+- **No "Export brief" button.** It was removed from every page and should not
+  return.
+- **Card hover:** if a card contains a list / table / heatmap, the card itself
+  must not transform on hover — put the pop on the inner row class. Whole-card
+  lift is reserved for self-contained units (KPI cards, brief cards).
+- **Direct Supabase reads.** Browser components call Supabase via the anon key;
+  there is no custom read API layer. Only `frontend/app/api/*` routes are
+  server-side.
 
-### Files touched
+---
 
-**Source code (9 fixes from the senior-QA audit):**
-- `app/v2.css` — `.section-nav` now `flex-wrap: wrap` (B1)
-- `app/v2/page.tsx` — ER outlier filter (D2), promo-% rounding (D1), sentiment caveat (D3), briefing-card grammar (M4)
-- `app/v2/instagram/page.tsx` — heading "by likes" → "by engagement rate" (D5)
-- `app/v2/youtube/page.tsx` — Pending KPI no fake spark (B4); "1 videos" → "1 video" (B3)
-- `app/v2/products/page.tsx`, `app/v2/market/page.tsx` — `document.title` set (M1)
+## Product rules that are also code rules
 
-**QA infrastructure (new):**
-- `playwright.config.ts`, `e2e/smoke.spec.ts` — 12 v2 routes + 4 API routes + nav + 404
-- `qa/regression.ps1` — 4-stage gate (typecheck → build → routes → playwright); writes `c:\tmp\joola-intel-qa-passed.flag`
-- `qa/.gitignore` — excludes `playwright-report/`, `test-results/`
-- `.husky/pre-push` — secondary gate calling regression.ps1
-- `scripts/deploy.ps1` — QA-gated deploy command (required `-Message`, `-SkipQa` override)
-- `.claude/agents/{qa-runner, backup-curator, session-archivist, brd-curator}.md` — portable agent team
-- `.claude/commands/end-session.md` — orchestrator
-- `.claude/settings.json` — PostToolUse Write/Edit → `c:\tmp\joola-intel-session-changes.log`; PreToolUse `git push` → warns if QA flag missing
+These are specified in [BRD.md](BRD.md) §10 and enforced at review time. Listed
+here only as a checklist — the spec is in BRD.md:
 
-**Project reorg:**
-- Deleted `docs/` (4 files: `BUSINESS_REQUIREMENTS.md`, `CODE_ARCHITECTURE.md`, `DESIGN_SYSTEM.md`, `WHERE_WE_LEFT_OFF.md` — duplicates of `backup/` or obsolete)
-- Moved 14 Python pipeline scripts + 2 markdown logs to `scripts/pipeline/`
-- Bulk sed rewrite: `scripts/X.py` → `scripts/pipeline/X.py` across `CLAUDE.md` + 8 `backup/*.md` + `.claude/agents/` + `app/v2/{twitter,tiktok}/page.tsx`
-- New: `backup/code-architecture.md` (at-a-glance reference doc)
+- Every KPI, section heading, and table column header carries a layman tooltip
+- No duplicate KPI rows (the compact summary strip is canonical)
+- No page-level global filter bars
+- Every multi-point chart has a floating React-state hover tooltip — SVG
+  `<title>` alone is not enough
+- Quadrant charts split by **median**, with tinted quadrants and corner labels
+- JOOLA renders `#22c55e`; accent is `#F5E625`
 
-**Config:**
-- `package.json` — added `@playwright/test ^1.49`, `husky ^9`; added scripts `test:e2e`, `test:e2e:ui`, `qa`, `qa:fast`, `deploy`, `prepare`
-- `.gitignore` — un-ignored `.claude/{agents,commands,settings.json}`; ignore `**/pipeline_state.json` (covers any cwd)
-- `tsconfig.json` — exclude `e2e/`, `playwright.config.ts`, `qa/playwright-report`, `qa/test-results` (keeps typecheck green until `npm install`)
-- `backup/README.md` — index row 10 added for `code-architecture.md`
+---
 
-### Bugs fixed
+## Before you push
 
-| ID | Severity | File | Fix |
-|---|---|---|---|
-| B1 | P1 | `app/v2.css:545` | `.section-nav` `flex-wrap: wrap`; removed hidden-scrollbar rules; removed `::after` fade. All 10 nav anchors visible without overflow scroll. |
-| D2 | P1 | `app/v2/page.tsx` | Filter `r.followers >= 50` in `EngagementMatrix`, `MoversAndSignals` engRanked, `Briefing` engagement-gap card, `Opportunities` content card. Paddletek (1 follower, 69708% ER) no longer skews charts. |
-| B4 | P1 | `app/v2/youtube/page.tsx:126` | `spark={joolaYT && joolaYT.subs > 0 ? (displayTrend['joola'] \|\| []) : undefined}` — no fake sparkline when "Pending". |
-| D5 | P2 | `app/v2/instagram/page.tsx:191` | "Top performing posts · by likes" → "Top performing posts · by engagement rate" (matches actual sort). |
-| D1 | P2 | `app/v2/page.tsx` (4 places) | Promo % standardized to `toFixed(1)` in Briefing body, price-war text, bar-row `delta-mini`, Opportunities body + why. |
-| D3 | P2 | `app/v2/page.tsx:451` | `CommunitySection` checks `rd.every(r => r.positive===0 && r.negative===0)` and renders a yellow "Sentiment classifier in calibration" caveat when true. |
-| B3 | P3 | `app/v2/youtube/page.tsx:211` | `{d.videos} {d.videos === 1 ? 'video' : 'videos'}` — proper pluralization. |
-| M4 | P3 | `app/v2/page.tsx:81` | Briefing card grammar: "beats JOOLA at N× the audience" → "is N× JOOLA's (X%) on a smaller audience" (semantically correct ER-ratio + grammatical). |
-| M1 | P4 | `products/page.tsx`, `market/page.tsx` | Added `useEffect(() => { document.title = 'JOOLA INTEL — Product Catalog' / 'Market Intel' }, [])`. |
+Run from `frontend/`:
 
-**Not addressed** (out of code scope): B2 intermittent render lag, UX5 "Assign" button no-op (needs task backend), CP1–CP4 brand-color audit (needs design review), most M5 table-header naming (largely covered by earlier `displayBrandName()` work).
+| Gate | Command |
+|---|---|
+| Typecheck | `npm run type-check` |
+| Typecheck + lint | `npm run validate` |
+| Fast regression (skip build) | `npm run qa:fast` |
+| Full regression | `npm run qa` |
+| QA-gated deploy | `npm run deploy -- -Message "..."` |
 
-### Decisions made
+`.husky/pre-push` runs `frontend/qa/regression.ps1`. On a fresh clone, enable it
+with `git config core.hooksPath .husky`.
 
-- **Single Next.js app, no `frontend/`/`backend/` split** — applied the SaaS_Joola_pulse blueprint with adaptations. Python scrapers in `scripts/pipeline/` are NOT a long-running API; skipped the backend pytest stage. Next.js API routes (`/api/{generate-content,keyword-research,content-brief,seo-analyzer}`) tested inline via Playwright's `request` fixture.
-- **No staging repo** — per project convention, `main` IS the Vercel deploy branch. `scripts/deploy.ps1` collapses to QA → commit → push.
-- **Refresh `backup/` in place** — existing 9-doc recovery package is solid; added `code-architecture.md` rather than rewriting.
-- **Tier A + B cleanup, deferred Tier C** — `utils/`, `hooks/`, `constants/`, `types/` stay at root for now. Collapse into `lib/` would require ~10–20 import path changes and deserves its own focused commit + run-time smoke.
-- **`flex-wrap` for nav over JS scroll arrows** — CSS-only fix is portable, doesn't require a state hook or scroll detection.
-- **`followers >= 50` threshold for ER outliers** — 1-follower accounts are unambiguously scraping artifacts. Real micro-influencers will still appear; a brand with truly < 50 followers isn't a meaningful competitor.
+---
 
-### Next steps (one-time setup on dev machine)
+## Known soft spots
 
-```powershell
-npm install                     # installs @playwright/test + husky; husky wires .husky/pre-push via "prepare" script
-npx playwright install chromium # ~130 MB browser binary
-```
+- **`/v2` redirects to `/v2/overview`, not `/v2/ask-intel`.** The comment at the
+  top of `frontend/app/v2/page.tsx` still says otherwise — Executive Overview
+  was retired in May 2026 and later reinstated as the home page. Trust the
+  `redirect()` call, not the comment.
 
-Then `npm run qa` runs the full local regression, `npm run deploy -- -Message "..."` is the standard ship path. The `.husky/pre-push` hook fires automatically on every direct `git push` once husky is installed.
-
-### Notes / known soft spots
-
-- `.claude/settings.local.json` (gitignored) still holds permission grants like `Bash(python scripts/X.py)` from before the reorg. Will silently re-prompt the next time the user runs `python scripts/pipeline/X.py`. Harmless.
-- `scripts/pipeline_state.json` exists at the OLD location (sibling to `pipeline/`); future `run_resumable.py` runs from repo root will write `./pipeline_state.json` at the repo root. Both are gitignored via the new `**/pipeline_state.json` rule.
-- The `c:\tmp\joola-intel-session-changes.log` for THIS session is empty — the PostToolUse hook only activates from the next session onward (settings.json was authored mid-session, after the agent had already started).
-
+- **`docs/DATABASE_RECOVERY.md`, `docs/FRONTEND_REBUILD.md`, `docs/RUNBOOK.md`,
+  `docs/DEPLOYMENT.md`** still carry some pre-split paths in their command
+  blocks. Trust `backend/README.md` and `docs/ARCHITECTURE.md` over them.
+- **`docs/DATABASE.md`** row counts are last-observed values, not live. Run
+  `python scripts/db_verify.py` for current state.
+- `.claude/settings.local.json` (gitignored) holds permission grants using
+  pre-split script paths; expect re-prompts.
+- Node is unreliable on the build host — `bunx tsc --noEmit` is the working
+  typecheck fallback.

@@ -1,4 +1,4 @@
-# 08 — Runbook
+# Runbook
 
 > **Goal.** Day-to-day operations. Weekly cadence checklist + troubleshooting for the failures we've actually seen.
 
@@ -17,14 +17,14 @@ Target window: **07:00 IST Monday**. Full cycle is ~60–120 min.
        SELECT count(*) FROM reddit_mentions WHERE posted_at > now() - interval '7 days';
 ☐ 3. Pull latest code:    git pull origin main
 ☐ 4. Activate env:        confirm scripts/.env present, APIFY_TOKEN has credit
-☐ 5. Run scrape:          python scripts/pipeline/apify_to_supabase.py
-       (or `python scripts/pipeline/run_resumable.py` if last week was incomplete)
+☐ 5. Run scrape:          python -m backend.scraping.run --module all
+       (or `python scripts/weekly_run.py` if last week was incomplete)
        Watch the console; expect 13 steps to print SUCCEEDED.
-☐ 6. Verify row growth:   python scripts/pipeline/count_rows.py
-☐ 7. Run enrichment:      python scripts/pipeline/enrich_with_ai.py
+☐ 6. Verify row growth:   python -m backend.scraping.maintenance.count_rows
+☐ 7. Run enrichment:      python -m backend.scraping.run --module enrichment
        (~5-20 min depending on backlog)
-☐ 8. Populate facts:      python scripts/pipeline/populate_mention_facts.py
-☐ 9. Populate topics:     python scripts/pipeline/populate_topic_lifecycle.py
+☐ 8. Populate facts:      python -m backend.scraping.run --module facts
+☐ 9. Populate topics:     python -m backend.scraping.run --module facts
 ☐ 10. Smoke-test live URL: open /v2 → KPIs updated? /v2/reddit → new posts?
 ☐ 11. Note any anomalies in scripts/SCRAPE_PROGRESS.md
 ☐ 12. Send the team a "data refreshed" ping (Slack/email — TODO: define channel)
@@ -96,7 +96,7 @@ The scraper already retries 80× with 30 s backoff via `http_request()` in `apif
    - **No credit.** Top up.
    - **Input schema changed.** Compare the actor's current `INPUT_SCHEMA.json` with the input dict in `run_*()`.
    - **Target site changed structure.** For `apify/playwright-scraper` (used by `run_products` + `run_homepage_promos`), the `pageFunction` may need updating.
-   - **Rate-limited / IP-blocked.** Wait an hour and rerun the single step (e.g. `python scripts/pipeline/test_products_only.py`).
+   - **Rate-limited / IP-blocked.** Wait an hour and rerun the single step (e.g. `python -m backend.scraping.run --module products`).
 3. `_safe_step()` ensures the rest of the pipeline continues even if one step fails — so you can rerun just the broken step afterwards.
 
 ---
@@ -121,7 +121,7 @@ Symptom: `enrich_with_ai.py` logs `rate-limited, waiting 20s` repeatedly.
 If a row keeps failing all 3 attempts, the worker leaves `enriched_at` NULL → it gets retried next run. Run a mop-up:
 
 ```bash
-python scripts/pipeline/enrich_with_ai.py     # second pass picks up nulls only
+python -m backend.scraping.run --module enrichment     # second pass picks up nulls only
 ```
 
 ---
@@ -173,7 +173,7 @@ where coalesce(is_removed, false) = false
 | Vercel deploy stuck "Building…" | Cancel + redeploy from dashboard. If still stuck, check Vercel status page. |
 | Vercel deploy succeeded but `/v2` returns 500 | Open Vercel function logs. Most often an env var is missing — verify all 3 `NEXT_PUBLIC_*` exist. |
 | Supabase project suspended (free-tier inactivity) | Log in to Supabase, restore the project. No data loss within suspension window. |
-| Supabase project deleted | See `02_DATABASE_RECOVERY.md`. Apify dataset history is **not** recoverable beyond 30 days. |
+| Supabase project deleted | See `DATABASE_RECOVERY.md`. Apify dataset history is **not** recoverable beyond 30 days. |
 | Apify account locked / banned | Create a new account; only the token in `scripts/.env` needs updating. No code changes. |
 | OpenAI key revoked | New key from OpenAI dashboard → update `scripts/.env` (and Vercel `NEXT_PUBLIC_OPENAI_KEY` if `/api/generate-content` is being used). |
 | Laptop dies mid-week | `pipeline_state.json` lets `run_resumable.py` pick up where it stopped on a new machine after `git clone + .env restore`. |

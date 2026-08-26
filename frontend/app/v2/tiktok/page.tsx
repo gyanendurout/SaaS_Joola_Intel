@@ -17,6 +17,7 @@ import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { useReveal } from '@/lib/v2/animations'
+import { tipFor } from '@/lib/v2/tooltips'
 
 /** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
 function relativeLabel(days: number): string {
@@ -243,14 +244,14 @@ export default function TikTokPage() {
             <table className="data" style={{ width: '100%' }}>
               <thead><tr>
                 <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
-                <SortTh col="brand"       label="Brand"        sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
-                <SortTh col="followers"   label="Followers"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
-                <SortTh col="delta"       label="Flw Δ (wk)"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
-                <SortTh col="videos"      label="Videos"       sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} />
-                <SortTh col="totalHearts" label="Total Hearts" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
-                <SortTh col="avgViews"    label="Avg Views"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 90 }} />
-                <th style={{ minWidth: 180 }}>Top Video</th>
-                <th style={{ width: 70, textAlign: 'center' }}>Profile</th>
+                <SortTh col="brand"       label="Brand"        sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} title={tipFor('Brand')} />
+                <SortTh col="followers"   label="Followers"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} title={tipFor('Followers')} />
+                <SortTh col="delta"       label="Flw Δ (wk)"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} title={tipFor('Flw Δ (wk)')} />
+                <SortTh col="videos"      label="Videos"       sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} title={tipFor('Videos')} />
+                <SortTh col="totalHearts" label="Total Hearts" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} title={tipFor('Total Hearts')} />
+                <SortTh col="avgViews"    label="Avg Views"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 90 }} title={tipFor('Avg Views')} />
+                <th style={{ minWidth: 180 }} title={tipFor('Top Video')}>Top Video</th>
+                <th style={{ width: 70, textAlign: 'center' }} title={tipFor('Profile')}>Profile</th>
               </tr></thead>
               <tbody>
                 {sortedBrandOverview.map((d, i) => {
@@ -322,7 +323,7 @@ export default function TikTokPage() {
                   TikTok comment sentiment · by brand
                   <SectionInfo
                     title="TikTok comment sentiment"
-                    description="Positive vs negative vs neutral TikTok comment counts per brand. Pulled from the tiktok_comments table (migration 014) and its sentiment_label column."
+                    description="How many TikTok comments about each brand were positive, negative or neutral. Comment sentiment skews positive across the whole category, so compare brands against each other rather than against a 50/50 split."
                     source="tiktok_comments · sentiment_label · GROUP BY brand_id"
                   />
                 </h2>
@@ -572,10 +573,10 @@ export default function TikTokPage() {
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
                 <thead>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 110 }} />
-                    <SortTh col="followers" label="Followers" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="brand" label="Brand" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 110 }} title={tipFor('Brand')} />
+                    <SortTh col="followers" label="Followers" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ textAlign: 'right' }} title={tipFor('Followers')} />
                     <SortTh col="followers" label="" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 80, textAlign: 'right' }} />
-                    <SortTh col="videos" label="Videos" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 60, textAlign: 'right' }} />
+                    <SortTh col="videos" label="Videos" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 60, textAlign: 'right' }} title={tipFor('Videos')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={followerBrandFilter} onChange={setFollowerBrandFilter} placeholder="brand…" /></th>
@@ -629,10 +630,10 @@ export default function TikTokPage() {
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
                 <thead>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 110 }} />
-                    <SortTh col="avgViews" label="Avg views" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="brand" label="Brand" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 110 }} title={tipFor('Brand')} />
+                    <SortTh col="avgViews" label="Avg views" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ textAlign: 'right' }} title={tipFor('Avg views')} />
                     <SortTh col="avgViews" label="" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 80, textAlign: 'right' }} />
-                    <SortTh col="videos" label="Videos" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 60, textAlign: 'right' }} />
+                    <SortTh col="videos" label="Videos" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 60, textAlign: 'right' }} title={tipFor('Videos')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={vpvBrandFilter} onChange={setVpvBrandFilter} placeholder="brand…" /></th>
@@ -706,13 +707,13 @@ export default function TikTokPage() {
               <table className="data">
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                    <SortTh col="text" label="Caption" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />
-                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="shares" label="Shares" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
+                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Brand')} />
+                    <SortTh col="text" label="Caption" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} title={tipFor('Caption')} />
+                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Views')} />
+                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Likes')} />
+                    <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Comments')} />
+                    <SortTh col="shares" label="Shares" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Shares')} />
+                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Posted')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={colFilter.brand} onChange={v => setColFilter(p => ({ ...p, brand: v }))} placeholder="brand…" /></th>

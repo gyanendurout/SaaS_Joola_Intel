@@ -16,6 +16,7 @@ import {
   fetchDefectionSignals,
   fetchTopicLifecycle,
   fetchBrandReplies,
+  computeTrend,
   communityChannelLabel,
   communityChannelColor,
   type CommunityIntelData,
@@ -32,6 +33,7 @@ import {
   type BrandReplyRow,
 } from '@/lib/v2/communityIntel'
 import { formatCalendarDate } from '@/lib/v2/format'
+import { tipFor } from '@/lib/v2/tooltips'
 
 type ChannelKey = 'all' | 'ig' | 'yt' | 'reddit' | 'tiktok' | 'x'
 type SentimentKey = 'all' | 'positive' | 'neutral' | 'negative'
@@ -214,35 +216,17 @@ export default function CommunityIntelPage() {
     return applyBrandFilter(data.sentimentStats, filteredBrands, isFiltered)
   }, [data, filteredBrands, isFiltered])
 
-  const filteredTrend = useMemo<TrendPoint[]>(() => {
-    if (!data) return []
-    // Trend buckets are already aligned to the date window — just downscale
-    // crisis/joola/negative to the active filter for accuracy.
-    const points = data.trend.map((p) => ({ ...p, total: 0, crisis: 0, joola: 0, negative: 0 }))
-    const pointByDate = new Map(points.map((p) => [p.date, p]))
-    for (const s of filteredSignals) {
-      const p = pointByDate.get(s.date)
-      if (!p) {
-        // Try nearest bucket: snap to the latest bucket that's ≤ s.date.
-        let snapped: TrendPoint | null = null
-        for (const candidate of points) {
-          if (candidate.date <= s.date) snapped = candidate
-          else break
-        }
-        if (!snapped) continue
-        snapped.total += 1
-        if (s.isCrisis) snapped.crisis += 1
-        if (s.brand === 'joola') snapped.joola += 1
-        if (s.sentiment === 'negative') snapped.negative += 1
-        continue
-      }
-      p.total += 1
-      if (s.isCrisis) p.crisis += 1
-      if (s.brand === 'joola') p.joola += 1
-      if (s.sentiment === 'negative') p.negative += 1
-    }
-    return points
-  }, [data, filteredSignals])
+  // Rebuilt from filteredSignals over the *current* window rather than reshaped
+  // from data.trend. data.trend is bucketed to the range that was active when
+  // the fetch ran, so narrowing the date picker used to leave the x-axis
+  // spanning the old, wider period — and the old "snap to the nearest bucket
+  // <= s.date" fallback could push a signal into a bucket outside the window.
+  // computeTrend() derives the buckets from (effectiveFrom, effectiveTo), so the
+  // axis and the counts can no longer disagree.
+  const filteredTrend = useMemo<TrendPoint[]>(
+    () => (data ? computeTrend(filteredSignals, effectiveFrom, effectiveTo) : []),
+    [data, filteredSignals, effectiveFrom, effectiveTo],
+  )
 
   // ─── Section-specific derived data ──────────────────────────────────
 
@@ -509,15 +493,15 @@ export default function CommunityIntelPage() {
           <table className="data" style={{ width: '100%', minWidth: 940 }}>
             <thead>
               <tr>
-                <SortTh col="brand" label="Brand" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'left' }} />
-                <SortTh col="total" label="Total" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
-                <SortTh col="ig" label="IG" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
-                <SortTh col="yt" label="YT" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
-                <SortTh col="reddit" label="Reddit" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
-                <SortTh col="tiktok" label="TikTok" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
-                <SortTh col="x" label="X" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
-                <SortTh col="negativePct" label="Negative %" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
-                <SortTh col="crisis" label="Crisis" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} />
+                <SortTh col="brand" label="Brand" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'left' }} title={tipFor('Brand')} />
+                <SortTh col="total" label="Total" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} title={tipFor('Total')} />
+                <SortTh col="ig" label="IG" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} title={tipFor('IG')} />
+                <SortTh col="yt" label="YT" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} title={tipFor('YT')} />
+                <SortTh col="reddit" label="Reddit" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} title={tipFor('Reddit')} />
+                <SortTh col="tiktok" label="TikTok" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} title={tipFor('TikTok')} />
+                <SortTh col="x" label="X" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} title={tipFor('X')} />
+                <SortTh col="negativePct" label="Negative %" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} title={tipFor('Negative %')} />
+                <SortTh col="crisis" label="Crisis" sortKey={discSort.key} sortDir={discSort.dir} toggle={(k) => toggleSort(discSort, setDiscSort, k)} style={{ textAlign: 'right' }} title={tipFor('Crisis')} />
               </tr>
               <tr className="col-filter-row">
                 <th><ColumnFilter col="brand" value={discBrand} onChange={setDiscBrand} placeholder="search brand…" /></th>
@@ -875,13 +859,13 @@ export default function CommunityIntelPage() {
               <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                 <tr>
                   <th>Status</th>
-                  <SortTh col="brand" label="Brand" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="sourceLabel" label="Channel" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} style={{ textAlign: 'left' }} />
-                  <th>Severity</th>
-                  <SortTh col="sentiment" label="Sentiment" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} />
-                  <SortTh col="summary" label="Summary" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="date" label="First seen" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} />
-                  <SortTh col="days" label="Age" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} />
+                  <SortTh col="brand" label="Brand" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} style={{ textAlign: 'left' }} title={tipFor('Brand')} />
+                  <SortTh col="sourceLabel" label="Channel" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} style={{ textAlign: 'left' }} title={tipFor('Channel')} />
+                  <th title={tipFor('Severity')}>Severity</th>
+                  <SortTh col="sentiment" label="Sentiment" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} title={tipFor('Sentiment')} />
+                  <SortTh col="summary" label="Summary" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} style={{ textAlign: 'left' }} title={tipFor('Summary')} />
+                  <SortTh col="date" label="First seen" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} title={tipFor('First seen')} />
+                  <SortTh col="days" label="Age" sortKey={crisisSort.key} sortDir={crisisSort.dir} toggle={(k) => toggleSort(crisisSort, setCrisisSort, k)} title={tipFor('Age')} />
                   <th>Link</th>
                 </tr>
                 <tr className="col-filter-row">
@@ -989,11 +973,11 @@ export default function CommunityIntelPage() {
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Brand</th>
-                <th style={{ textAlign: 'left' }}>Top complaint topic</th>
-                <th style={{ textAlign: 'right' }}>Crisis</th>
-                <th style={{ textAlign: 'right' }}>Negative %</th>
-                <th style={{ textAlign: 'left' }}>Examples</th>
-                <th style={{ textAlign: 'left' }}>JOOLA opportunity</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('Top complaint topic')}>Top complaint topic</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Crisis')}>Crisis</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Negative %')}>Negative %</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('Examples')}>Examples</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('JOOLA opportunity')}>JOOLA opportunity</th>
               </tr>
             </thead>
             <tbody>
@@ -1064,22 +1048,22 @@ export default function CommunityIntelPage() {
         </div>
         {defection && (
           <div className="kpi-grid" style={{ marginBottom: 10 }}>
-            <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}><MiniKpi label="JOOLA inflow" value={fmt(defection.kpis.joolaInflow)} color="#22c55e" customVs="switches into JOOLA" flavor="joola" /></div>
-            <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}><MiniKpi label="JOOLA outflow" value={fmt(defection.kpis.joolaOutflow)} color={defection.kpis.joolaOutflow > 0 ? '#ef4444' : '#22c55e'} customVs="switches away from JOOLA" /></div>
-            <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}><MiniKpi label="JOOLA net" value={(defection.kpis.joolaNet >= 0 ? '+' : '') + fmt(defection.kpis.joolaNet)} color={defection.kpis.joolaNet >= 0 ? '#22c55e' : '#ef4444'} customVs="inflow − outflow" /></div>
-            <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}><MiniKpi label="Total switches" value={fmt(defection.kpis.totalSwitches)} color="#06b6d4" customVs="all brand-pair moves" /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '160ms' } as React.CSSProperties}><MiniKpi label="JOOLA inflow" value={fmt(defection.kpis.joolaInflow)} color="#22c55e" customVs="switches into JOOLA" flavor="joola" tip="How many people said online that they moved TO JOOLA from another brand. Counted from posts and comments where someone describes switching, so treat it as a directional signal rather than a sales figure." /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '235ms' } as React.CSSProperties}><MiniKpi label="JOOLA outflow" value={fmt(defection.kpis.joolaOutflow)} color={defection.kpis.joolaOutflow > 0 ? '#ef4444' : '#22c55e'} customVs="switches away from JOOLA" tip="How many people said online that they moved AWAY from JOOLA to another brand. Read the individual comments before reacting - a handful of posts can look worse than it is." /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '310ms' } as React.CSSProperties}><MiniKpi label="JOOLA net" value={(defection.kpis.joolaNet >= 0 ? '+' : '') + fmt(defection.kpis.joolaNet)} color={defection.kpis.joolaNet >= 0 ? '#22c55e' : '#ef4444'} customVs="inflow − outflow" tip="Switches into JOOLA minus switches away. Positive means JOOLA is winning more players from rivals than it loses; negative means the reverse." /></div>
+            <div className="ov-kpi" style={{ '--ov-d': '385ms' } as React.CSSProperties}><MiniKpi label="Total switches" value={fmt(defection.kpis.totalSwitches)} color="#06b6d4" customVs="all brand-pair moves" tip="Every brand-to-brand switch we detected, not just those involving JOOLA. It shows how much of the market is changing paddles at all, which gives the JOOLA numbers context." /></div>
           </div>
         )}
         <div className="card" style={{ overflowX: 'auto' }}>
           <table className="data" style={{ width: '100%', minWidth: 920 }}>
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>From</th>
-                <th style={{ textAlign: 'left' }}>To</th>
-                <th style={{ textAlign: 'right' }}>Count</th>
-                <th style={{ textAlign: 'right' }}>Confidence</th>
-                <th style={{ textAlign: 'left' }}>Example</th>
-                <th style={{ textAlign: 'left' }}>Opportunity</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('From')}>From</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('To')}>To</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Count')}>Count</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Confidence')}>Confidence</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('Example')}>Example</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('Opportunity')}>Opportunity</th>
               </tr>
             </thead>
             <tbody>
@@ -1225,11 +1209,11 @@ export default function CommunityIntelPage() {
             <table className="data" style={{ width: '100%', minWidth: 860 }}>
               <thead>
                 <tr>
-                  <th style={{ textAlign: 'left' }}>Brand</th>
-                  <th style={{ textAlign: 'right' }}>Avg response</th>
-                  <th style={{ textAlign: 'right' }}>Complaints replied</th>
-                  <th style={{ textAlign: 'right' }}>Complaints ignored</th>
-                  <th style={{ textAlign: 'center' }}>Rank</th>
+                  <th style={{ textAlign: 'left' }} title={tipFor('Brand')}>Brand</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Avg response')}>Avg response</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Complaints replied')}>Complaints replied</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Complaints ignored')}>Complaints ignored</th>
+                  <th style={{ textAlign: 'center' }} title={tipFor('Rank')}>Rank</th>
                 </tr>
               </thead>
               <tbody>
@@ -1619,7 +1603,7 @@ function BrandChannelHeatmap({
       <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 12, minWidth: '100%' }}>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left', padding: '6px 8px', color: '#8a93a4', fontWeight: 600 }}>Brand</th>
+            <th style={{ textAlign: 'left', padding: '6px 8px', color: '#8a93a4', fontWeight: 600 }} title={tipFor('Brand')}>Brand</th>
             {channels.map((c) => (
               <th key={c} style={{ padding: '6px 8px', color: '#8a93a4', fontWeight: 600, textAlign: 'center' }}>
                 {communityChannelLabel(c)}

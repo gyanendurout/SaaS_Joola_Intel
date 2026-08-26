@@ -61,6 +61,7 @@ import {
   type CompetitorThreatRow,
 } from '@/lib/v2/influencerIntel'
 import { formatCalendarDate } from '@/lib/v2/format'
+import { tipFor } from '@/lib/v2/tooltips'
 
 type PlatformKey = 'all' | IntelPlatform
 type SentimentKey = 'all' | IntelSentiment
@@ -474,13 +475,13 @@ export default function InfluencerIntelPage() {
           <table className="data">
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--surface)' }}>
               <tr>
-                <SortTh col="brandSlug" label="Brand" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <SortTh col="player" label="Player" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <SortTh col="status" label="Status" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <th>IG</th>
-                <th>X</th>
-                <SortTh col="verification" label="Verification" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <SortTh col="lastSeenDays" label="Last seen" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="brandSlug" label="Brand" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Brand')} />
+                <SortTh col="player" label="Player" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Player')} />
+                <SortTh col="status" label="Status" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Status')} />
+                <th title={tipFor('IG')}>IG</th>
+                <th title={tipFor('X')}>X</th>
+                <SortTh col="verification" label="Verification" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Verification')} />
+                <SortTh col="lastSeenDays" label="Last seen" sortKey={rosterSort.key as string | null} sortDir={rosterSort.dir} toggle={(k) => setRosterSort(s => ({ key: k as keyof RosterRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Last seen')} />
               </tr>
               <tr className="col-filter-row">
                 <th><ColumnFilter col="brandSlug" value={rosterColFilter.brandSlug} onChange={v => setRosterColFilter(p => ({ ...p, brandSlug: v }))} /></th>
@@ -550,17 +551,17 @@ export default function InfluencerIntelPage() {
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>#</th>
-                <SortTh col="player" label="Player" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <SortTh col="brandSlug" label="Brand" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <SortTh col="total" label="Total" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="player" label="Player" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Player')} />
+                <SortTh col="brandSlug" label="Brand" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Brand')} />
+                <SortTh col="total" label="Total" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Total')} />
                 <SortTh col="ig" label="IG" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="Instagram posts and mentions" />
                 <SortTh col="yt" label="YT" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="YouTube — data collection pending for most athletes" />
                 <SortTh col="tiktok" label="TikTok" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="TikTok — data collection pending for most athletes" />
                 <SortTh col="x" label="X" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="X (Twitter) — data collection pending for most athletes" />
                 <SortTh col="reddit" label="Reddit" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title="Reddit — data collection pending for most athletes" />
-                <SortTh col="engagement" label="Engagement" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <th>Sentiment</th>
-                <th>Trend</th>
+                <SortTh col="engagement" label="Engagement" sortKey={attentionSort.key as string | null} sortDir={attentionSort.dir} toggle={(k) => setAttentionSort(s => ({ key: k as keyof PlatformAttention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Engagement')} />
+                <th title={tipFor('Sentiment')}>Sentiment</th>
+                <th title={tipFor('Trend')}>Trend</th>
               </tr>
               <tr className="col-filter-row">
                 <th />
@@ -615,16 +616,16 @@ export default function InfluencerIntelPage() {
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>#</th>
-                <SortTh col="name" label="Athlete" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <SortTh col="brandSlug" label="Brand" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <th>Platforms</th>
-                <SortTh col="followers" label="Followers" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="posts" label="Posts" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="avgLikes" label="Avg likes" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="avgComments" label="Avg comments" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="engRate" label="ER" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <th>Tier</th>
-                <th>Status</th>
+                <SortTh col="name" label="Athlete" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Athlete')} />
+                <SortTh col="brandSlug" label="Brand" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Brand')} />
+                <th title={tipFor('Platforms')}>Platforms</th>
+                <SortTh col="followers" label="Followers" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Followers')} />
+                <SortTh col="posts" label="Posts" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Posts')} />
+                <SortTh col="avgLikes" label="Avg likes" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Avg likes')} />
+                <SortTh col="avgComments" label="Avg comments" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Avg comments')} />
+                <SortTh col="engRate" label="ER" sortKey={perfSort.key as string | null} sortDir={perfSort.dir} toggle={(k) => setPerfSort(s => ({ key: k as keyof InfluencerRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('ER')} />
+                <th title={tipFor('Tier')}>Tier</th>
+                <th title={tipFor('Status')}>Status</th>
               </tr>
               <tr className="col-filter-row">
                 <th />
@@ -741,19 +742,19 @@ export default function InfluencerIntelPage() {
           <table className="data">
             <thead>
               <tr>
-                <SortTh col="brandSlug" label="Brand" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <SortTh col="playersTracked" label="Players" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="playersActive" label="Active" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="totalMentions" label="Mentions" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="totalReach" label="Reach" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="avgEngRate" label="Avg ER" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="totalEngagement" label="Engagement" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="ig" label="IG" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="yt" label="YT" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="tiktok" label="TikTok" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="x" label="X" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="reddit" label="Reddit" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="negativePct" label="Negative %" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
+                <SortTh col="brandSlug" label="Brand" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Brand')} />
+                <SortTh col="playersTracked" label="Players" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Players')} />
+                <SortTh col="playersActive" label="Active" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Active')} />
+                <SortTh col="totalMentions" label="Mentions" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Mentions')} />
+                <SortTh col="totalReach" label="Reach" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Reach')} />
+                <SortTh col="avgEngRate" label="Avg ER" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Avg ER')} />
+                <SortTh col="totalEngagement" label="Engagement" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Engagement')} />
+                <SortTh col="ig" label="IG" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('IG')} />
+                <SortTh col="yt" label="YT" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('YT')} />
+                <SortTh col="tiktok" label="TikTok" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('TikTok')} />
+                <SortTh col="x" label="X" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('X')} />
+                <SortTh col="reddit" label="Reddit" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Reddit')} />
+                <SortTh col="negativePct" label="Negative %" sortKey={brandStatsSort.key as string | null} sortDir={brandStatsSort.dir} toggle={(k) => setBrandStatsSort(s => ({ key: k as keyof BrandPlayerStats, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Negative %')} />
               </tr>
             </thead>
             <tbody>
@@ -819,18 +820,18 @@ export default function InfluencerIntelPage() {
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>Platform</th>
-                <SortTh col="athleteName" label="Player" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <SortTh col="brandSlug" label="Brand" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                <th style={{ width: '24%' }}>Caption</th>
-                <th>Type</th>
-                <SortTh col="views" label="Views" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="likes" label="Likes" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="comments" label="Comments" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="shares" label="Shares" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="engagement" label="Engagement" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <SortTh col="engRate" label="ER" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                <th>Sentiment</th>
-                <SortTh col="days" label="Posted" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                <SortTh col="athleteName" label="Player" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Player')} />
+                <SortTh col="brandSlug" label="Brand" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Brand')} />
+                <th style={{ width: '24%' }} title={tipFor('Caption')}>Caption</th>
+                <th title={tipFor('Type')}>Type</th>
+                <SortTh col="views" label="Views" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Views')} />
+                <SortTh col="likes" label="Likes" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Likes')} />
+                <SortTh col="comments" label="Comments" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Comments')} />
+                <SortTh col="shares" label="Shares" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Shares')} />
+                <SortTh col="engagement" label="Engagement" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Engagement')} />
+                <SortTh col="engRate" label="ER" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('ER')} />
+                <th title={tipFor('Sentiment')}>Sentiment</th>
+                <SortTh col="days" label="Posted" sortKey={contentSort.key as string | null} sortDir={contentSort.dir} toggle={(k) => setContentSort(s => ({ key: k as keyof InfluencerPostRow, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Posted')} />
                 <th>Link</th>
               </tr>
               <tr className="col-filter-row">
@@ -894,14 +895,14 @@ export default function InfluencerIntelPage() {
             <table className="data">
               <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
                 <tr>
-                  <SortTh col="player" label="Player" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                  <SortTh col="brandSlug" label="Brand" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
-                  <SortTh col="channelLabel" label="Channel" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                  <SortTh col="player" label="Player" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Player')} />
+                  <SortTh col="brandSlug" label="Brand" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Brand')} />
+                  <SortTh col="channelLabel" label="Channel" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Channel')} />
                   <th style={{ width: '34%' }}>Mention</th>
-                  <th>Sentiment</th>
-                  <th>Product</th>
-                  <SortTh col="engagement" label="Eng." sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} />
-                  <SortTh col="days" label="Date" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} />
+                  <th title={tipFor('Sentiment')}>Sentiment</th>
+                  <th title={tipFor('Product')}>Product</th>
+                  <SortTh col="engagement" label="Eng." sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} style={{ textAlign: 'right' }} title={tipFor('Eng.')} />
+                  <SortTh col="days" label="Date" sortKey={mentionSort.key as string | null} sortDir={mentionSort.dir} toggle={(k) => setMentionSort(s => ({ key: k as keyof CommunityMention, dir: s.key === k ? (s.dir === 'asc' ? 'desc' : 'asc') : 'desc' }))} title={tipFor('Date')} />
                   <th>Link</th>
                 </tr>
                 <tr className="col-filter-row">
@@ -945,18 +946,18 @@ export default function InfluencerIntelPage() {
               <thead>
                 <tr>
                   <th>Player</th>
-                  <th style={{ textAlign: 'right' }}>Signals</th>
-                  <th style={{ textAlign: 'right' }}>IG</th>
-                  <th style={{ textAlign: 'right' }}>YT</th>
-                  <th style={{ textAlign: 'right' }}>TikTok</th>
-                  <th style={{ textAlign: 'right' }}>X</th>
-                  <th style={{ textAlign: 'right' }}>Reddit</th>
-                  <th style={{ textAlign: 'right' }}>Reach</th>
-                  <th style={{ textAlign: 'right' }}>ER</th>
-                  <th>Top content</th>
-                  <th>Sentiment</th>
-                  <th>Related paddle</th>
-                  <th>Trend</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Signals')}>Signals</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('IG')}>IG</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('YT')}>YT</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('TikTok')}>TikTok</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('X')}>X</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Reddit')}>Reddit</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Reach')}>Reach</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('ER')}>ER</th>
+                  <th title={tipFor('Top content')}>Top content</th>
+                  <th title={tipFor('Sentiment')}>Sentiment</th>
+                  <th title={tipFor('Related paddle')}>Related paddle</th>
+                  <th title={tipFor('Trend')}>Trend</th>
                 </tr>
               </thead>
               <tbody>
@@ -1054,13 +1055,13 @@ export default function InfluencerIntelPage() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Player</th>
-                  <th>Brand</th>
-                  <th>Paddle</th>
-                  <th style={{ textAlign: 'right' }}>Mentions</th>
-                  <th>Channel</th>
-                  <th>Sentiment</th>
-                  <th style={{ textAlign: 'right' }}>Attention</th>
+                  <th title={tipFor('Player')}>Player</th>
+                  <th title={tipFor('Brand')}>Brand</th>
+                  <th title={tipFor('Paddle')}>Paddle</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Mentions')}>Mentions</th>
+                  <th title={tipFor('Channel')}>Channel</th>
+                  <th title={tipFor('Sentiment')}>Sentiment</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Attention')}>Attention</th>
                 </tr>
               </thead>
               <tbody>
@@ -1171,16 +1172,16 @@ export default function InfluencerIntelPage() {
             <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
               <tr>
                 <th>#</th>
-                <th>Player</th>
-                <th>Brand</th>
-                <th style={{ textAlign: 'right' }}>Posts (30d)</th>
-                <th style={{ textAlign: 'right' }}>Avg eng</th>
-                <th style={{ textAlign: 'right' }}>Mentions</th>
-                <th style={{ textAlign: 'right' }}>Growth %</th>
-                <th style={{ textAlign: 'right' }}>Product mentions</th>
-                <th style={{ textAlign: 'right' }}>Positive %</th>
-                <th style={{ textAlign: 'right' }}>Impact score</th>
-                <th>Class</th>
+                <th title={tipFor('Player')}>Player</th>
+                <th title={tipFor('Brand')}>Brand</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Posts (30d)')}>Posts (30d)</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Avg eng')}>Avg eng</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Mentions')}>Mentions</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Growth %')}>Growth %</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Product mentions')}>Product mentions</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Positive %')}>Positive %</th>
+                <th style={{ textAlign: 'right' }} title={tipFor('Impact score')}>Impact score</th>
+                <th title={tipFor('Class')}>Class</th>
               </tr>
             </thead>
             <tbody>
@@ -1245,14 +1246,14 @@ export default function InfluencerIntelPage() {
             <table className="data">
               <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
                 <tr>
-                  <th>Player</th>
-                  <th>Brand</th>
-                  <th style={{ textAlign: 'right' }}>Sponsored posts</th>
-                  <th style={{ textAlign: 'right' }}>Organic posts</th>
-                  <th style={{ textAlign: 'right' }}>Sponsored ER</th>
-                  <th style={{ textAlign: 'right' }}>Organic ER</th>
+                  <th title={tipFor('Player')}>Player</th>
+                  <th title={tipFor('Brand')}>Brand</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Sponsored posts')}>Sponsored posts</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Organic posts')}>Organic posts</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Sponsored ER')}>Sponsored ER</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Organic ER')}>Organic ER</th>
                   <th style={{ textAlign: 'right' }}>Δ</th>
-                  <th>Recommendation</th>
+                  <th title={tipFor('Recommendation')}>Recommendation</th>
                 </tr>
               </thead>
               <tbody>
@@ -1315,13 +1316,13 @@ export default function InfluencerIntelPage() {
             <table className="data">
               <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--bg)' }}>
                 <tr>
-                  <th>Player</th>
-                  <th>Brand</th>
-                  <th>Product mentioned</th>
-                  <th style={{ textAlign: 'right' }}>Mentions</th>
-                  <th style={{ textAlign: 'right' }}>Engagement</th>
-                  <th style={{ textAlign: 'right' }}>Sales likelihood</th>
-                  <th>Action</th>
+                  <th title={tipFor('Player')}>Player</th>
+                  <th title={tipFor('Brand')}>Brand</th>
+                  <th title={tipFor('Product mentioned')}>Product mentioned</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Mentions')}>Mentions</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Engagement')}>Engagement</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Sales likelihood')}>Sales likelihood</th>
+                  <th title={tipFor('Action')}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -1375,13 +1376,13 @@ export default function InfluencerIntelPage() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Player</th>
-                  <th>Brand</th>
-                  <th>Top platform</th>
-                  <th style={{ textAlign: 'right' }}>Engagement</th>
-                  <th>Product mentioned</th>
-                  <th style={{ textAlign: 'right' }}>Impact score</th>
-                  <th>Threat level</th>
+                  <th title={tipFor('Player')}>Player</th>
+                  <th title={tipFor('Brand')}>Brand</th>
+                  <th title={tipFor('Top platform')}>Top platform</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Engagement')}>Engagement</th>
+                  <th title={tipFor('Product mentioned')}>Product mentioned</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Impact score')}>Impact score</th>
+                  <th title={tipFor('Threat level')}>Threat level</th>
                 </tr>
               </thead>
               <tbody>

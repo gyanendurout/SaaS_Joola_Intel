@@ -2,6 +2,7 @@
 
 import type { VisualKpiCards } from '@/lib/v2/askIntel/types'
 import { MiniKpi } from '@/components/v2/PageShell'
+import { tipFor } from '@/lib/v2/tooltips'
 
 export function VisualKpiCards({ visual }: { visual: VisualKpiCards }) {
   return (
@@ -20,6 +21,8 @@ export function VisualKpiCards({ visual }: { visual: VisualKpiCards }) {
           <MiniKpi
             key={i}
             label={c.label}
+            // Column set is query-dependent; tipFor() explains the ones it knows.
+            tip={tipFor(c.label)}
             value={c.value}
             color={c.color || '#22c55e'}
             customVs={c.caption}

@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import type { VisualTable } from '@/lib/v2/askIntel/types'
 import { SortTh } from '@/components/v2/PageShell'
 import { fmt } from '@/components/v2/charts'
+import { tipFor } from '@/lib/v2/tooltips'
 
 function formatCell(value: unknown, fmtType?: string): string {
   if (value === null || value === undefined || value === '') return '—'
@@ -62,6 +63,11 @@ export function VisualTable({ visual }: { visual: VisualTable }) {
                   key={c.key}
                   col={c.key}
                   label={c.label}
+                  // Ask Intel renders whatever columns the query returned, so the
+                  // label is only known at runtime. tipFor() supplies a plain-English
+                  // explanation whenever it recognises the metric, and undefined
+                  // otherwise — which React drops, leaving the header clean.
+                  title={tipFor(c.label)}
                   sortKey={sortKey}
                   sortDir={sortDir}
                   toggle={toggle}

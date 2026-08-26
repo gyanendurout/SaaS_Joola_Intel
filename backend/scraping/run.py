@@ -33,6 +33,7 @@ import sys
 import traceback
 from datetime import datetime, timezone
 
+from .core import supabase_client as sb
 from .core.checkpoints import Checkpoint
 from .core.logger import get_logger
 from .core.settings import require_apify, require_supabase
@@ -105,6 +106,16 @@ MODULE_STEPS: dict[str, Module] = {
     #   python -m backend.scraping.run --module reviews-crawl4ai
     "reviews-crawl4ai": [
         [("backend.scraping.sources.products.scrape_reviews_crawl4ai", "run")],
+    ],
+    # Paddle specifications — crawls the 7 in-scope brand sites for core
+    # thickness / dimensions / weight / shape / materials into paddle_specs
+    # (migration 024). Standalone like reviews-crawl4ai rather than part of the
+    # weekly `products` run: specs change rarely, so a weekly re-crawl is wasted
+    # requests against sites we would rather not annoy. Depends on nothing in
+    # the DB — it enumerates from each brand's own catalog.
+    #   python -m backend.scraping.run --module product-specs
+    "product-specs": [
+        [("backend.scraping.sources.products.scrape_specs",           "run")],
     ],
     "news": [
         [("backend.scraping.sources.news.scrape_news",                "run")],
@@ -348,7 +359,8 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="JOOLA Intel Pipeline v2 (parallel runner)")
     parser.add_argument("--module", default="all",
                         help="Module: all | instagram | youtube | reddit | twitter | "
-                             "tiktok | ads | products | reviews | news | seo | enrichment | "
+                             "tiktok | ads | products | product-specs | reviews | "
+                             "reviews-crawl4ai | news | seo | enrichment | "
                              "facts | sales-intelligence | intelligence | maintenance")
     parser.add_argument("--source", default=None,
                         help="Specific sub-source within a module (e.g. scrape-catalog-local)")
@@ -427,6 +439,24 @@ def main(argv: list[str] | None = None) -> None:
                  step_key, entry.get("status", "-"), entry.get("rows", "-"))
     if failed:
         log.warning("Failed steps: %s", ", ".join(failed))
+    if sb.SCHEMA_GAPS or sb.SCHEMA_GAPS_READ:
+        log.error("")
+        log.error("SCHEMA GAPS — columns the pipeline referenced that the live DB "
+                  "does not have:")
+    if sb.SCHEMA_GAPS:
+        log.error("  WRITE — stripped so the rest of each row could land; the data "
+                  "in them is NOT captured until the migration is applied and the "
+                  "module re-run:")
+        for tbl in sorted(sb.SCHEMA_GAPS):
+            log.error("    %-28s %s", tbl, ", ".join(sorted(sb.SCHEMA_GAPS[tbl])))
+    if sb.SCHEMA_GAPS_READ:
+        log.error("  READ — dropped from the select so the remaining columns still "
+                  "loaded; anything derived from them is empty or zero. A stale "
+                  "column NAME in the caller is as likely as a missing migration:")
+        for tbl in sorted(sb.SCHEMA_GAPS_READ):
+            log.error("    %-28s %s", tbl, ", ".join(sorted(sb.SCHEMA_GAPS_READ[tbl])))
+    if sb.SCHEMA_GAPS or sb.SCHEMA_GAPS_READ:
+        log.error("  Find the migration adding them:  grep -rn '<column>' migrations/")
     log.info("=" * 55)
 
 

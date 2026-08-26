@@ -16,6 +16,7 @@
  */
 
 import { supabase } from '@/lib/shared/supabase'
+import { safeQueryAll } from './paged'
 import { type V2Brand } from './data'
 
 // ─── Contextual guard for generic-name brands on Reddit ──────────────
@@ -249,7 +250,16 @@ function normalizeText(t: string): string {
 interface FetchOpts {
   from: Date
   to: Date
-  /** Soft cap per source — guard against runaway payloads. */
+  /**
+   * Soft cap per source — guard against runaway payloads.
+   *
+   * This is a *paging* ceiling, not a PostgREST `.limit()`. Every source below
+   * is read through `safeQueryAll`, which walks 1,000-row pages until the
+   * source is exhausted or this cap is hit (and warns on the console when the
+   * cap bites). Raised from 5,000 to 10,000 because ig_comments alone matches
+   * ~8,700 rows in the default window, and every consumer of these rows is an
+   * aggregate — a truncated read silently under-counts the whole page.
+   */
   perSourceLimit?: number
 }
 
@@ -257,7 +267,7 @@ export async function fetchCommunityIntel(
   brands: V2Brand[],
   opts: FetchOpts,
 ): Promise<CommunityIntelData> {
-  const perSourceLimit = opts.perSourceLimit ?? 5000
+  const perSourceLimit = opts.perSourceLimit ?? 10_000
   const fromIso = opts.from.toISOString()
   const toIso = opts.to.toISOString()
 
@@ -267,6 +277,11 @@ export async function fetchCommunityIntel(
 
   // Fire every source in parallel. Each block traps missing-table errors so
   // a single broken pipeline doesn't black-hole the whole page.
+  //
+  // Every row below feeds an aggregate (brand discussion counts, channel
+  // stats, heatmap, sentiment split, trend), so a truncated read is a wrong
+  // number rather than a shorter list. They are therefore *paged* — PostgREST
+  // caps a single response at 1,000 rows regardless of `.limit()`.
   const [
     igCommentsRes,
     ytCommentsRes,
@@ -275,50 +290,65 @@ export async function fetchCommunityIntel(
     mentionFactsRes,
     mentionFactsCountRes,
   ] = await Promise.all([
-    safeQuery(
-      supabase
+    safeQueryAll(
+      () => supabase
         .from('ig_comments')
         .select('id,brand_id,post_id,commenter_username,comment_text,comment_likes,posted_at,sentiment_label')
         .gte('posted_at', fromIso)
         .lte('posted_at', toIso)
         .order('posted_at', { ascending: false })
-        .limit(perSourceLimit),
+        // `id` tiebreak keeps range-paging stable when timestamps collide.
+        .order('id', { ascending: true }),
+      { maxRows: perSourceLimit, label: 'communityIntel.igComments' },
     ),
-    safeQuery(
-      supabase
+    safeQueryAll(
+      () => supabase
         .from('yt_comments')
         .select('id,brand_id,video_id,commenter_username,comment_text,comment_likes,posted_at,sentiment_label')
         .gte('posted_at', fromIso)
         .lte('posted_at', toIso)
         .order('posted_at', { ascending: false })
-        .limit(perSourceLimit),
+        // `id` tiebreak keeps range-paging stable when timestamps collide.
+        .order('id', { ascending: true }),
+      { maxRows: perSourceLimit, label: 'communityIntel.ytComments' },
     ),
-    safeQuery(
-      supabase
+    safeQueryAll(
+      () => supabase
         .from('reddit_mentions')
         .select('id,brand_id,subreddit,title,body,score,num_comments,url,posted_at,sentiment:sentiment_label')
         .gte('posted_at', fromIso)
         .lte('posted_at', toIso)
         .order('posted_at', { ascending: false })
-        .limit(perSourceLimit),
+        // `id` tiebreak keeps range-paging stable when timestamps collide.
+        .order('id', { ascending: true }),
+      { maxRows: perSourceLimit, label: 'communityIntel.redditMentions' },
     ),
-    safeQuery(
-      supabase
+    safeQueryAll(
+      () => supabase
         .from('reddit_comments')
         .select('id,brand_id,parent_post_id,subreddit,author,comment_text,upvotes,posted_at,sentiment_label')
         .gte('posted_at', fromIso)
         .lte('posted_at', toIso)
         .order('posted_at', { ascending: false })
-        .limit(perSourceLimit),
+        // `id` tiebreak keeps range-paging stable when timestamps collide.
+        .order('id', { ascending: true }),
+      { maxRows: perSourceLimit, label: 'communityIntel.redditComments' },
     ),
-    safeQuery(
-      supabase
+    // mention_facts is the largest table in the schema (~46k rows). The
+    // `from`/`to` window is the real control here; the 2× cap is a deliberate
+    // browser-payload ceiling so a wide date range cannot pull the whole table
+    // into memory. Newest-first ordering means a capped read keeps the most
+    // recent slice, and `fetchPagedResult` logs a warning naming this label
+    // when the cap actually bites.
+    safeQueryAll(
+      () => supabase
         .from('mention_facts')
         .select('id,channel,source_table,source_id,brand_id,sentiment_score,sentiment_label,is_crisis,text_snippet,posted_at')
         .gte('posted_at', fromIso)
         .lte('posted_at', toIso)
         .order('posted_at', { ascending: false })
-        .limit(perSourceLimit * 2),
+        .order('id', { ascending: true }),
+      { maxRows: perSourceLimit * 2, label: 'communityIntel.mentionFacts' },
     ),
     safeQuery(
       supabase
@@ -697,7 +727,14 @@ function computeRisk(crisis: number, negPct: number, total: number): SentimentSt
   return 'low'
 }
 
-function computeTrend(
+/**
+ * Bucket signals into a trend series spanning [from, to].
+ *
+ * Exported so the page can rebuild the series from its *filtered* signal list
+ * and its *current* date window. Reusing this instead of re-deriving buckets in
+ * the component is what keeps the x-axis aligned to the window the user picked.
+ */
+export function computeTrend(
   signals: CommunitySignal[],
   from: Date,
   to: Date,

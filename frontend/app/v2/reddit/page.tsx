@@ -16,6 +16,7 @@ import { redditPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
+import { tipFor } from '@/lib/v2/tooltips'
 
 /** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
 function relativeLabel(days: number): string {
@@ -210,13 +211,13 @@ export default function RedditPage() {
             <table className="data" style={{ width: '100%' }}>
               <thead><tr>
                 <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
-                <SortTh col="brand"    label="Brand"      sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
-                <SortTh col="mentions" label="Mentions"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
-                <SortTh col="delta"    label="Δ Mentions" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
-                <th style={{ minWidth: 160 }}>Sentiment</th>
-                <SortTh col="positive" label="Pos%" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 60 }} />
-                <SortTh col="negative" label="Neg%" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 60 }} />
-                <th style={{ minWidth: 200 }}>Top Post</th>
+                <SortTh col="brand"    label="Brand"      sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} title={tipFor('Brand')} />
+                <SortTh col="mentions" label="Mentions"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} title={tipFor('Mentions')} />
+                <SortTh col="delta"    label="Δ Mentions" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} title={tipFor('Δ Mentions')} />
+                <th style={{ minWidth: 160 }} title={tipFor('Sentiment')}>Sentiment</th>
+                <SortTh col="positive" label="Pos%" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 60 }} title={tipFor('Pos%')} />
+                <SortTh col="negative" label="Neg%" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 60 }} title={tipFor('Neg%')} />
+                <th style={{ minWidth: 200 }} title={tipFor('Top Post')}>Top Post</th>
                 <th style={{ width: 70, textAlign: 'center' }}>Detail</th>
               </tr></thead>
               <tbody>
@@ -524,12 +525,12 @@ export default function RedditPage() {
               <table className="data">
                 <thead>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                    <SortTh col="subreddit" label="Subreddit" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                    <SortTh col="title" label="Title" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '40%' }} />
-                    <SortTh col="score" label="Score" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
+                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Brand')} />
+                    <SortTh col="subreddit" label="Subreddit" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Subreddit')} />
+                    <SortTh col="title" label="Title" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '40%' }} title={tipFor('Title')} />
+                    <SortTh col="score" label="Score" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Score')} />
+                    <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Comments')} />
+                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Posted')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={colFilter.brand} onChange={v => setColFilter(p => ({ ...p, brand: v }))} placeholder="brand…" /></th>

@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { pgColor, pgName } from '@/components/v2/PageShell'
+import { pgColor, pgName, SectionInfo } from '@/components/v2/PageShell'
 import { fmt } from '@/components/v2/charts'
 import type { V2Brand } from '@/lib/v2/data'
 import type { CatalogStat, AttentionDailyRow, CuratedProduct, RawCatalogProduct } from '@/lib/v2/productIntel'
+import { tipFor } from '@/lib/v2/tooltips'
 
 interface Props {
   catalogStats: CatalogStat[]
@@ -59,7 +60,7 @@ export function BrandSummaryTable({ catalogStats, daily, brands, curatedProducts
     <section>
       <div className="section-head">
         <div>
-          <h2>Brand product overview</h2>
+          <h2>Brand product overview<SectionInfo title="Brand Product Overview" description="A side-by-side summary of every tracked brand: how many paddles they sell, how they price them, and how much attention those paddles get. Click a row for that brand in detail." source="products_catalog - product_snapshots - product_attention_summary" /></h2>
           <div className="sub">Click any row to view full brand product details</div>
         </div>
       </div>
@@ -67,9 +68,9 @@ export function BrandSummaryTable({ catalogStats, daily, brands, curatedProducts
         <table className="data" style={{ width: '100%', minWidth: 820 }}>
           <thead>
             <tr>
-              <th style={{ textAlign: 'left' }}>Brand</th>
-              <th style={{ textAlign: 'right' }}>Number of Products</th>
-              <th style={{ textAlign: 'right' }}>Avg Price</th>
+              <th style={{ textAlign: 'left' }} title={tipFor('Brand')}>Brand</th>
+              <th style={{ textAlign: 'right' }} title={tipFor('Number of Products')}>Number of Products</th>
+              <th style={{ textAlign: 'right' }} title={tipFor('Avg Price')}>Avg Price</th>
             </tr>
           </thead>
           <tbody>

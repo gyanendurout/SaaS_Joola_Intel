@@ -3,6 +3,7 @@
 import type { PlaybookFinding } from '@/lib/v2/playbook'
 import type { V2Brand } from '@/lib/v2/data'
 import { pgColor, SectionInfo } from '@/components/v2/PageShell'
+import { tipFor } from '@/lib/v2/tooltips'
 
 interface PlatformPlaybookProps {
   /** Title rendered in the section head — e.g. "Instagram Playbook". */
@@ -52,11 +53,11 @@ export function PlatformPlaybook({ title, sub, findings, brands }: PlatformPlayb
             <table className="data" style={{ width: '100%' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '25%' }}>Finding</th>
-                  <th>Competitor</th>
-                  <th style={{ width: '22%' }}>Evidence</th>
-                  <th style={{ width: '20%' }}>JOOLA gap</th>
-                  <th style={{ width: '22%' }}>Recommended action</th>
+                  <th style={{ width: '25%' }} title={tipFor('Finding')}>Finding</th>
+                  <th title={tipFor('Competitor')}>Competitor</th>
+                  <th style={{ width: '22%' }} title={tipFor('Evidence')}>Evidence</th>
+                  <th style={{ width: '20%' }} title={tipFor('JOOLA gap')}>JOOLA gap</th>
+                  <th style={{ width: '22%' }} title={tipFor('Recommended action')}>Recommended action</th>
                 </tr>
               </thead>
               <tbody>

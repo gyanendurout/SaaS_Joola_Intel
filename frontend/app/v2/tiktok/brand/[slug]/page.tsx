@@ -10,7 +10,7 @@ import {
 } from '@/lib/v2/data'
 import { useReveal, revealCls } from '@/lib/v2/animations'
 import { fmt, LineChart } from '@/components/v2/charts'
-import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
+import { LoadingPage, pgColor, pgName, SectionInfo } from '@/components/v2/PageShell'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
 import { StatCard } from '@/components/v2/StatCard'
@@ -155,7 +155,7 @@ export default function TikTokBrandPage() {
       {/* Trend */}
       {trendSeries.length > 0 && (
         <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
-          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Follower growth trend</h2><div className="sub">{trend.length} weekly snapshots</div></div>
+          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Follower growth trend<SectionInfo title="Follower Growth" description="How this account’s audience has grown week by week. On TikTok, view counts often move independently of followers, so read both together." source="tiktok_profiles_weekly" /></h2><div className="sub">{trend.length} weekly snapshots</div></div>
           <div className="card"><div className="card-pad"><LineChart series={trendSeries} xLabels={trendLabels} h={180} /></div></div>
         </section>
       )}
@@ -163,7 +163,7 @@ export default function TikTokBrandPage() {
       {/* Top performers */}
       {videos.length > 0 && (
         <section style={{ marginBottom: 32 }}>
-          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Top performers</h2></div>
+          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Top performers<SectionInfo title="Top Performing Videos" description="The videos that pulled the most views and engagement. Look for the shared format or hook rather than treating each as a one-off." source="tiktok_videos" /></h2></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
             {[
               { label: '👁 Most Viewed', video: topByViews, val: fmt(topByViews?.views), c: '#F5E625' },
@@ -227,7 +227,7 @@ export default function TikTokBrandPage() {
       <section ref={sec3.ref} className={revealCls(sec3.vis)}>
         <div className="section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Videos · {videos.length} tracked</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Videos · {videos.length} tracked<SectionInfo title="Tracked Videos" description="Every video from this account that we have collected, newest first." source="tiktok_videos" /></h2>
             <div className="sub">Sorted by {sortKey} · click a card to open on TikTok</div>
           </div>
           <div style={{ display: 'flex', gap: 4, background: 'var(--wb-5)', borderRadius: 8, padding: 3 }}>

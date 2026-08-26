@@ -4,10 +4,13 @@ The analytical brain that sits on top of the scraping pipeline. It turns the
 raw scraped rows into a dense daily time-series mart, then runs statistical
 tests for lead/lag relationships, predictive causality, and regime shifts.
 
+**Sole owner of the marts + statistics layer.** Scraping lives in
+[`../backend/README.md`](../backend/README.md); repo-wide layout in
+[`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+
 ```
-scripts/
-├── scraping/           ← scraping pipeline (Phase 1-4 of weekly_run.py)
-└── analytics_backend/  ← this folder (Phase 5+: marts + statistics)
+backend/scraping/       ← scraping pipeline (Phases 1-4 of weekly_run.py)
+analytics_backend/      ← this folder (Phase 5+: marts + statistics)
     ├── README.md
     ├── run.py                  CLI entry point (mirrors scraping/run.py)
     ├── requirements.txt        scipy, statsmodels, ruptures, scikit-learn

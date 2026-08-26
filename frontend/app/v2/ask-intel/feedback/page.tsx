@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { PageHead } from '@/components/v2/PageShell'
+import { tipFor } from '@/lib/v2/tooltips'
 
 type QaLogRow = {
   id: string
@@ -128,12 +129,12 @@ export default function AskIntelFeedbackPage() {
           <table className="data" style={{ width: '100%', fontSize: 12 }}>
             <thead>
               <tr>
-                <th style={{ width: 60 }}>Feedback</th>
-                <th>Question</th>
-                <th style={{ width: 70 }}>Confidence</th>
-                <th style={{ width: 60 }}>Visuals</th>
-                <th style={{ width: 70 }}>Latency</th>
-                <th style={{ width: 120 }}>When</th>
+                <th style={{ width: 60 }} title={tipFor('Feedback')}>Feedback</th>
+                <th title={tipFor('Question')}>Question</th>
+                <th style={{ width: 70 }} title={tipFor('Confidence')}>Confidence</th>
+                <th style={{ width: 60 }} title={tipFor('Visuals')}>Visuals</th>
+                <th style={{ width: 70 }} title={tipFor('Latency')}>Latency</th>
+                <th style={{ width: 120 }} title={tipFor('When')}>When</th>
                 <th style={{ width: 60 }}>Expand</th>
               </tr>
             </thead>

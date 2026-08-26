@@ -231,7 +231,7 @@ def _compute_promotion_daily(allowed_brand_ids: set[str]) -> list[dict]:
             "promo_count": int(cell["count"]),
             "source_run_ok": True,
         })
-    log.info("promotion_daily: %d (brand × product × day) rows computed.", len(out))
+    log.info("promotion_daily: %d (brand × day) rows computed.", len(out))
     return out
 
 
@@ -329,11 +329,22 @@ def _compute_availability_daily(allowed_brand_ids: set[str]) -> list[dict]:
         lambda: {"in_stock": 0, "total": 0}
     )
 
+    # product_id is part of this table's primary key, and a PK column is NOT NULL
+    # in PostgreSQL even where the DDL says otherwise — migration 013 declares
+    # `product_id UUID NULL` but PRIMARY KEY (metric_date, brand_id, product_id)
+    # overrides it. Most product_snapshots rows are not variant-linked (see
+    # TODO.md: ~3.9K of ~29.5K), so unfiltered they put a NULL in every batch and
+    # PostgREST rejects the WHOLE batch — which is why this mart sat at 0 rows.
+    # A NULL product_id is also meaningless at product grain, so drop and count.
+    unlinked = 0
     for r in rows:
         brand_id = r.get("brand_id")
         if not brand_id or brand_id not in allowed_brand_ids:
             continue
         pid = r.get("product_id")
+        if not pid:
+            unlinked += 1
+            continue
         d = _parse_date(r.get("snapshot_time"))
         if d is None:
             continue
@@ -341,6 +352,14 @@ def _compute_availability_daily(allowed_brand_ids: set[str]) -> list[dict]:
         cell["total"] += 1
         if _is_in_stock(r):
             cell["in_stock"] += 1
+
+    if unlinked:
+        log.warning(
+            "availability_daily: skipped %d product_snapshots rows with no "
+            "product_id (not variant-linked). They cannot be keyed at product "
+            "grain. Fixing the snapshot->variant link is the upstream work.",
+            unlinked,
+        )
 
     out: list[dict] = []
     for (brand_id, pid, d), cell in daily.items():
@@ -395,7 +414,11 @@ def run(ctx: dict[str, Any]) -> int:
     # Each task touches a different source table → safe to parallelize.
     jobs = {
         "ad_pressure_daily":   (lambda: _compute_ad_pressure(allowed),    "metric_date,brand_id"),
-        "promotion_daily":     (lambda: _compute_promotion_daily(allowed), "metric_date,brand_id,product_id"),
+        # Brand grain, not product grain: `promotions` has no product dimension,
+        # so product_id is NULL on every row. See migrations/023 — this key only
+        # resolves once 023 is applied; before that PostgREST answers 42P10 and
+        # sb.upsert() raises with the exact remedy.
+        "promotion_daily":     (lambda: _compute_promotion_daily(allowed), "metric_date,brand_id"),
         "price_daily":         (_compute_price_daily,                      "metric_date,product_id"),
         "availability_daily":  (lambda: _compute_availability_daily(allowed), "metric_date,brand_id,product_id"),
     }
@@ -412,9 +435,24 @@ def run(ctx: dict[str, Any]) -> int:
                 computed[name] = []
 
     # Upserts run serially — Supabase REST is the bottleneck, not Python.
+    # Each table is isolated: sb.upsert() now raises when a payload lands nothing
+    # (see core/supabase_client._assert_wrote_something), and letting that
+    # propagate mid-loop would skip every table after the failure. promotion_daily
+    # failing must not cost us price_daily and availability_daily.
     total = 0
+    failures: dict[str, str] = {}
     for table, (_fn, pk) in jobs.items():
-        total += _upsert(table, computed.get(table, []), pk)
+        try:
+            total += _upsert(table, computed.get(table, []), pk)
+        except Exception as exc:
+            failures[table] = str(exc)[:300]
+            log.error("%s upsert failed: %s", table, exc)
 
     log.info("Helper marts done — %d total rows upserted.", total)
+    if failures:
+        raise RuntimeError(
+            "helper marts incomplete — " + ", ".join(sorted(failures)) +
+            " wrote nothing. Details: " +
+            " | ".join(f"{t}: {m}" for t, m in sorted(failures.items()))
+        )
     return total

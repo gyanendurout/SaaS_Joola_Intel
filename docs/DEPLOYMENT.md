@@ -193,10 +193,10 @@ No deploy needed. Just run the pipeline:
 
 ```bash
 cd c:\Workspace\joola-intel-nextjs
-python scripts/pipeline/run_resumable.py            # or: python scripts/pipeline/apify_to_supabase.py
-python scripts/pipeline/enrich_with_ai.py
-python scripts/pipeline/populate_mention_facts.py
-python scripts/pipeline/populate_topic_lifecycle.py
+python scripts/weekly_run.py            # or: python -m backend.scraping.run --module all
+python -m backend.scraping.run --module enrichment
+python -m backend.scraping.run --module facts
+python -m backend.scraping.run --module facts
 ```
 
 Refresh the live URL — new data appears.
@@ -211,7 +211,7 @@ Already listed in CLAUDE.md but **must be done before declaring production**:
 - [ ] **Rotate Apify token.** Same exposure event.
 - [ ] **Rotate OpenAI key.** It was shared in chat transcripts on 2026-05-15.
 - [ ] **Rename `NEXT_PUBLIC_OPENAI_KEY` → `OPENAI_API_KEY` (server-only).** Currently shipped to the browser bundle via the `NEXT_PUBLIC_` prefix. Fix in `app/api/generate-content/route.ts`.
-- [ ] **Enable RLS on every Supabase table.** Anon role gets `SELECT` only; everything else is `service_role` only. See `02_DATABASE_RECOVERY.md` step 4.
+- [ ] **Enable RLS on every Supabase table.** Anon role gets `SELECT` only; everything else is `service_role` only. See `DATABASE_RECOVERY.md` step 4.
 - [ ] **`scripts/requirements.txt`** — pip freeze for Python reproducibility (currently scripts assume `requests`, `python-dotenv` are installed manually).
 - [ ] **GitHub Actions cron** for the Monday-morning pipeline run (currently runs on a laptop, brittle).
 - [ ] **Custom domain** — currently on default `*.vercel.app`. Add a real DNS name + TLS.
@@ -251,7 +251,7 @@ If GitHub is lost:
 3. `git push -u origin main`.
 4. Import to Vercel, set env vars.
 
-If Supabase is lost: see `02_DATABASE_RECOVERY.md`.
+If Supabase is lost: see `DATABASE_RECOVERY.md`.
 
 ---
 

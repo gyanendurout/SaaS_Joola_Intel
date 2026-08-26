@@ -1,12 +1,24 @@
 # JOOLA Intel — Scraping Pipeline
 
-Everything that turns the public web into rows in our Supabase database lives here.
+Everything that turns the public web into rows in our Supabase database lives
+here. **This file is the sole owner of pipeline operation** — running it,
+extending it, debugging it. Product spec: [`../BRD.md`](../BRD.md). Where these
+files sit in the wider repo: [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
 
 ```
-scripts/pipeline/
+backend/
 ├── README.md          ← you are here
-├── v2/                ← the live pipeline (everything below)
-└── _legacy/           ← v1 scripts kept for reference only; not executed
+├── requirements.txt
+└── scraping/
+    ├── run.py             CLI entry point — phases, modules, thread pool
+    ├── scheduler.py       cron-facing wrapper
+    ├── config/            actors.yaml, brands.yaml, sales_sources.yaml, …
+    ├── core/              apify/crawl4ai/openai/supabase clients, checkpoints
+    ├── sources/           one package per channel (9 channels)
+    ├── enrichment/        phase 2 — GPT-4o-mini workers
+    ├── facts/             phase 3 — cross-channel fact tables
+    ├── sales_intelligence/ phase 4 — inventory → revenue
+    └── maintenance/       row counts, validation, cleanup, backfills
 ```
 
 ## TL;DR — run it
@@ -191,16 +203,15 @@ scraped, update the DB — never the Python file.
 
 ```bash
 # Python deps
-pip install -r requirements.txt          # if requirements.txt exists, else:
-pip install requests supabase python-dotenv playwright playwright-stealth openai
+pip install -r backend/requirements.txt
 
 # Chromium for local Playwright scrapers
 python -m playwright install chromium
 
-# Credentials — copy and fill in
-cp scripts/.env.example scripts/.env
+# Credentials — copy and fill in (repo root, gitignored)
+cp .env.example .env
 # Required: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, APIFY_TOKEN
-# Optional: OPENAI_API_KEY (for enrichment phase)
+# Optional: OPENAI_API_KEY (for the enrichment phase)
 ```
 
 ---
@@ -240,10 +251,14 @@ cp scripts/.env.example scripts/.env
 
 ---
 
-## Why _legacy/ exists
+## The retired v1 pipeline
 
-`_legacy/` holds the v1 pipeline scripts (`run_resumable.py`, `apify_to_supabase.py`,
-`enrich_with_ai.py`, etc.) from before the v2 refactor. Nothing references
-them anymore — the modular v2 pipeline supersedes everything in there. They're
-kept on disk because some backup/runbook docs in `backup/` still reference
-them by path, and deleting would break those historical links.
+Before the v2 refactor the whole pipeline was one monolith,
+`scripts/pipeline/apify_to_supabase.py`, plus `run_resumable.py`,
+`enrich_with_ai.py`, `populate_mention_facts.py`, and
+`populate_topic_lifecycle.py`. **None of those files exist any more** — the
+modular pipeline documented above replaced them, and `scripts/pipeline/` was
+deleted in the 2026-05-24 split.
+
+Older docs and session logs still name those paths. When one conflicts with
+this file, this file wins.

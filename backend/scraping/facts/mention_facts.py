@@ -15,10 +15,11 @@ Idempotent via clear-before-insert per channel.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 from ..core import supabase_client as sb
 from ..core.logger import get_logger
+from ..sources.products import product_alias_matcher as alias_matcher
 from ..core.network import http_request
 from ..core.settings import require_supabase
 
@@ -27,11 +28,39 @@ log = get_logger("facts.mentions")
 PURCHASE_INTENT_THRESHOLD = 0.6
 
 
+class Source(NamedTuple):
+    """One channel feeding mention_facts.
+
+    The first eight fields are positional for historical reasons — the entries
+    below are still written as plain tuples and widened via Source(*t). The
+    trailing fields have defaults so only the channels that need them say so.
+    """
+    channel:        str
+    table:          str
+    select:         str
+    ts_col:         str
+    country_col:    str | None
+    snippet_fn:     Callable[[dict], str]
+    engagement_col: str | None
+    link_col:       str | None
+
+    # Rows counted as ready. Every native channel is gated on the AI enrichment
+    # stamp; paddle_reviews arrives pre-enriched from outside this repo and has
+    # no enriched_at column, so it gates on sentiment_label instead.
+    ready_filter:   str = "enriched_at=not.is.null"
+
+    # When set, products are resolved by alias-matching THIS column's text
+    # rather than trusting a native product_id. Required whenever the source's
+    # product_id references something other than products_catalog — passing
+    # such an id straight through violates mention_facts' FK.
+    product_text_col: str | None = None
+
+
 # (channel, table, select_cols, ts_col, country_col, snippet_fn)
 # Each tuple: (channel, table, select_cols, ts_col, country_col, snippet_fn, engagement_col, link_col)
 # engagement_col: column name for likes/upvotes/score (or None)
 # link_col:       column name for the direct post/comment URL (or None)
-SOURCES: list[tuple] = [
+_RAW_SOURCES: list[tuple] = [
     ("reddit", "reddit_mentions",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
@@ -60,10 +89,15 @@ SOURCES: list[tuple] = [
     ("yt_comment", "yt_comments",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "comment_text,like_count,video_url,posted_at,enriched_at",
+     # yt_comments stores video_id, not a URL — there is no video_url column
+     # (probe 2026-08-18). Asking for one made PostgREST 42703 the whole fetch.
+     # Engagement is comment_likes, matching ig_comments/tiktok_comments. The
+     # yt_comments table also has a like_count column, but the scraper has never
+     # written it — it is 0 on every row (probe 2026-08-18).
+     "comment_text,comment_likes,video_id,posted_at,enriched_at",
      "posted_at", None,
      lambda r: (r.get("comment_text") or "")[:280],
-     "like_count", "video_url"),
+     "comment_likes", None),
 
     ("x", "x_posts",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
@@ -78,20 +112,20 @@ SOURCES: list[tuple] = [
     ("tiktok", "tiktok_videos",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "text,play_count,video_url,posted_at,enriched_at",
+     "text,view_count,video_url,posted_at,enriched_at",
      "posted_at", None,
      lambda r: (r.get("text") or "")[:280],
-     "play_count", "video_url"),
+     "view_count", "video_url"),
 
     # tiktok_comments table added by migration 014; mirrors ig_comments/yt_comments
     # shape so the existing enrichment pipeline ingests it without schema work.
     ("tiktok_comment", "tiktok_comments",
      "id,brand_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
      "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "comment_text,like_count,posted_at,enriched_at",
+     "comment_text,comment_likes,posted_at,enriched_at",
      "posted_at", None,
      lambda r: (r.get("comment_text") or "")[:280],
-     "like_count", None),
+     "comment_likes", None),
 
     ("x_influencer", "influencer_x_posts",
      "id,brand_id,influencer_id,sentiment_score,sentiment_label,is_crisis,"
@@ -101,30 +135,43 @@ SOURCES: list[tuple] = [
      lambda r: (r.get("text") or "")[:280],
      "like_count", "post_url"),
 
-    # product_reviews — added by migration 016. Unlike other channels, the
-    # product_id is already known at scrape time (we know which product the
-    # review is for) so it's read directly from the row in _build_for_channel.
-    # The base brand_id + AI-detected brands_mentioned/products_mentioned still
-    # flow through the standard expansion logic.
-    ("product_review", "product_reviews",
-     "id,brand_id,product_id,sentiment_score,sentiment_label,is_crisis,is_opportunity,"
-     "purchase_intent_score,brands_mentioned,players_mentioned,products_mentioned,"
-     "review_text,review_title,review_url,posted_at,enriched_at",
+    # product_review reads paddle_reviews, NOT product_reviews.
+    #
+    # migrations/016 created product_reviews for a per-brand widget scraper that
+    # never got credentials — it still holds 0 rows (probe 2026-08-24). Meanwhile
+    # paddle_reviews holds 22,210 retail reviews, already enriched (sentiment on
+    # 100% of rows), brand-linked on 100% and product-linked on 99.8%, gathered
+    # retailer-side across yotpo / okendo / judgeme / bazaarvoice.
+    #
+    # Two shape differences drive the trailing fields:
+    #   ready_filter     — no enriched_at column; sentiment_label is the stamp.
+    #   product_text_col — paddle_reviews.product_id references paddle_products,
+    #                      not products_catalog, so it must NOT be passed through.
+    #                      canonical_name is alias-matched instead (~69% resolve;
+    #                      the rest still yield brand-level facts).
+    ("product_review", "paddle_reviews",
+     "id,brand_id,canonical_name,sentiment_score,sentiment_label,is_crisis,"
+     "is_opportunity,title,body,helpful_count,posted_at",
      "posted_at", None,
-     lambda r: ((r.get("review_title") or "") + " — " + (r.get("review_text") or ""))[:280],
-     None, "review_url"),
+     lambda r: ((r.get("title") or "") + " — " + (r.get("body") or "")).strip(" —")[:280],
+     "helpful_count", None,
+     "sentiment_label=not.is.null",
+     "canonical_name"),
 ]
 
+SOURCES: list[Source] = [Source(*t) for t in _RAW_SOURCES]
 
-def _fetch_enriched(table: str, select: str, page_size: int = 500) -> list[dict]:
-    """Paginated fetch of enriched rows."""
+
+def _fetch_enriched(table: str, select: str, ready_filter: str,
+                    page_size: int = 500) -> list[dict]:
+    """Paginated fetch of rows this channel considers ready to fact-ify."""
     out: list[dict] = []
     offset = 0
     while True:
         try:
             page = sb.get_filtered(
                 table, select,
-                f"enriched_at=not.is.null&limit={page_size}&offset={offset}",
+                f"{ready_filter}&limit={page_size}&offset={offset}",
             )
         except Exception as e:
             log.warning("fetch %s failed: %s", table, str(e)[:200])
@@ -168,15 +215,17 @@ def _insert_switch_events(rows: list[dict]) -> int:
 
 
 def _build_for_channel(
-    channel: str, table: str, select: str, ts_col: str, country_col: str | None,
-    snippet_fn: Callable[[dict], str],
+    src: Source,
     brand_map: dict[str, str], product_map: dict[str, str], athlete_map: dict[str, str],
     brand_filter_ids: set[str] | None,
-    engagement_col: str | None = None,
-    link_col: str | None = None,
 ) -> tuple[int, int]:
+    channel, table = src.channel, src.table
+    ts_col, country_col = src.ts_col, src.country_col
+    snippet_fn = src.snippet_fn
+    engagement_col, link_col = src.engagement_col, src.link_col
+
     _clear_channel_facts(channel)
-    rows = _fetch_enriched(table, select)
+    rows = _fetch_enriched(table, src.select, src.ready_filter)
 
     facts: list[dict] = []
     switches: list[dict] = []
@@ -206,11 +255,19 @@ def _build_for_channel(
 
         # Resolve products via alias map (lowercase display_name OR alias text → product_id)
         product_ids: set[str | None] = set()
-        # Channel-native product_id wins when present (e.g. product_reviews
-        # already knows which product the review is about — no alias dance).
-        native_pid = r.get("product_id")
-        if native_pid:
-            product_ids.add(native_pid)
+        if src.product_text_col:
+            # This channel's native product_id points at a different table, so
+            # alias-match the product NAME against products_catalog instead.
+            # brand_id narrows ambiguous aliases (e.g. "Pro IV" across brands).
+            for hit in alias_matcher.match(r.get(src.product_text_col),
+                                           hint_brand_id=base_brand_id):
+                product_ids.add(hit["product_id"])
+        else:
+            # Channel-native product_id wins when it already references
+            # products_catalog — no alias dance needed.
+            native_pid = r.get("product_id")
+            if native_pid:
+                product_ids.add(native_pid)
         for p in (r.get("products_mentioned") or []):
             pid = product_map.get((p or "").lower())
             if pid:
@@ -316,18 +373,16 @@ def run(ctx: dict[str, Any]) -> int:
         return 0
 
     total_facts = total_switches = 0
-    for channel, table, select, ts_col, country_col, snippet_fn, engagement_col, link_col in SOURCES:
+    for source in SOURCES:
         try:
             f, s = _build_for_channel(
-                channel, table, select, ts_col, country_col, snippet_fn,
-                brand_map, product_map, athlete_map, brand_filter_ids,
-                engagement_col, link_col,
+                source, brand_map, product_map, athlete_map, brand_filter_ids,
             )
-            log.info("[%s] %d facts, %d switch_events", channel, f, s)
+            log.info("[%s] %d facts, %d switch_events", source.channel, f, s)
             total_facts += f
             total_switches += s
         except Exception as e:
-            log.warning("channel %s failed: %s", channel, str(e)[:200])
+            log.warning("channel %s failed: %s", source.channel, str(e)[:200])
 
     log.info("✓ %d total mention_facts, %d competitor_switch_events upserted",
              total_facts, total_switches)

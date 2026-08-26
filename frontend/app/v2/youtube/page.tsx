@@ -16,6 +16,7 @@ import { youtubePlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
+import { tipFor } from '@/lib/v2/tooltips'
 
 /** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
 function relativeLabel(days: number): string {
@@ -262,14 +263,14 @@ export default function YouTubePage() {
               <thead>
                 <tr>
                   <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
-                  <SortTh col="brand"    label="Brand"         sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
-                  <SortTh col="subs"     label="Subscribers"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="delta"    label="Sub Δ"         sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} />
-                  <SortTh col="videos"   label="Videos"        sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} />
-                  <SortTh col="views"    label="Total Views"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
-                  <SortTh col="avgViews" label="Avg Views/Vid" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
-                  <th style={{ minWidth: 200 }}>Top Video</th>
-                  <th style={{ width: 72, textAlign: 'center' }}>Channel</th>
+                  <SortTh col="brand"    label="Brand"         sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} title={tipFor('Brand')} />
+                  <SortTh col="subs"     label="Subscribers"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} title={tipFor('Subscribers')} />
+                  <SortTh col="delta"    label="Sub Δ"         sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} title={tipFor('Sub Δ')} />
+                  <SortTh col="videos"   label="Videos"        sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} title={tipFor('Videos')} />
+                  <SortTh col="views"    label="Total Views"   sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} title={tipFor('Total Views')} />
+                  <SortTh col="avgViews" label="Avg Views/Vid" sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} title={tipFor('Avg Views/Vid')} />
+                  <th style={{ minWidth: 200 }} title={tipFor('Top Video')}>Top Video</th>
+                  <th style={{ width: 72, textAlign: 'center' }} title={tipFor('Channel')}>Channel</th>
                   <th style={{ width: 36, textAlign: 'center' }}>★</th>
                 </tr>
               </thead>
@@ -369,7 +370,7 @@ export default function YouTubePage() {
               Why competitor videos worked · top performers
               <SectionInfo
                 title="Performance thesis from yt_video_analysis"
-                description="One AI-generated row per top competitor video explaining WHY it performed (content type + thesis + product mentions). Pulled from the intelligence layer added in migration 012."
+                description="For each top competitor video, an AI read of why it performed the way it did: what kind of content it is, the likely reason it worked, and which paddles it mentions. Use it to spot the format worth copying, and sanity-check it against the video itself."
                 source="yt_video_analysis (mig 012) JOIN yt_videos · ordered by view_count_at_analysis"
               />
             </h2>
@@ -386,12 +387,12 @@ export default function YouTubePage() {
               <table className="data" style={{ width: '100%' }}>
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <th>Brand</th>
-                    <th style={{ width: '25%' }}>Video</th>
-                    <th style={{ textAlign: 'right' }}>Views</th>
-                    <th>Content type</th>
-                    <th style={{ width: '28%' }}>Performance thesis</th>
-                    <th>Product mentioned</th>
+                    <th title={tipFor('Brand')}>Brand</th>
+                    <th style={{ width: '25%' }} title={tipFor('Video')}>Video</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Views')}>Views</th>
+                    <th title={tipFor('Content type')}>Content type</th>
+                    <th style={{ width: '28%' }} title={tipFor('Performance thesis')}>Performance thesis</th>
+                    <th title={tipFor('Product mentioned')}>Product mentioned</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -441,10 +442,10 @@ export default function YouTubePage() {
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
                 <thead>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={subSortKey} sortDir={subSortDir} toggle={toggleSubSort} style={{ width: 110 }} />
-                    <SortTh col="subs" label="Subscribers" sortKey={subSortKey} sortDir={subSortDir} toggle={toggleSubSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="brand" label="Brand" sortKey={subSortKey} sortDir={subSortDir} toggle={toggleSubSort} style={{ width: 110 }} title={tipFor('Brand')} />
+                    <SortTh col="subs" label="Subscribers" sortKey={subSortKey} sortDir={subSortDir} toggle={toggleSubSort} style={{ textAlign: 'right' }} title={tipFor('Subscribers')} />
                     <SortTh col="subs" label="" sortKey={subSortKey} sortDir={subSortDir} toggle={toggleSubSort} style={{ width: 80, textAlign: 'right' }} />
-                    <SortTh col="videos" label="Videos" sortKey={subSortKey} sortDir={subSortDir} toggle={toggleSubSort} style={{ width: 60, textAlign: 'right' }} />
+                    <SortTh col="videos" label="Videos" sortKey={subSortKey} sortDir={subSortDir} toggle={toggleSubSort} style={{ width: 60, textAlign: 'right' }} title={tipFor('Videos')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={subBrandFilter} onChange={setSubBrandFilter} placeholder="brand…" /></th>
@@ -498,10 +499,10 @@ export default function YouTubePage() {
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
                 <thead>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 110 }} />
-                    <SortTh col="subs" label="Subs" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 70, textAlign: 'right' }} />
-                    <SortTh col="videos" label="Videos" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 60, textAlign: 'right' }} />
-                    <SortTh col="avgViews" label="Avg views" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="brand" label="Brand" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 110 }} title={tipFor('Brand')} />
+                    <SortTh col="subs" label="Subs" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 70, textAlign: 'right' }} title={tipFor('Subs')} />
+                    <SortTh col="videos" label="Videos" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 60, textAlign: 'right' }} title={tipFor('Videos')} />
+                    <SortTh col="avgViews" label="Avg views" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ textAlign: 'right' }} title={tipFor('Avg views')} />
                     <SortTh col="avgViews" label="" sortKey={vpvSortKey} sortDir={vpvSortDir} toggle={toggleVpvSort} style={{ width: 80, textAlign: 'right' }} />
                   </tr>
                   <tr className="col-filter-row">
@@ -581,14 +582,14 @@ export default function YouTubePage() {
               <table className="data">
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                    <SortTh col="title" label="Title" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />
-                    <SortTh col="is_short" label="Short?" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: 70, textAlign: 'center' }} />
-                    <SortTh col="duration" label="Duration" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
+                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Brand')} />
+                    <SortTh col="title" label="Title" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} title={tipFor('Title')} />
+                    <SortTh col="is_short" label="Short?" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: 70, textAlign: 'center' }} title={tipFor('Short?')} />
+                    <SortTh col="duration" label="Duration" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Duration')} />
+                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Views')} />
+                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Likes')} />
+                    <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Comments')} />
+                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Posted')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={colFilter.brand} onChange={v => setColFilter(p => ({ ...p, brand: v }))} placeholder="brand…" /></th>

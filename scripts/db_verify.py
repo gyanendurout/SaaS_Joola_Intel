@@ -56,6 +56,7 @@ REMEDIATION: dict[str, str] = {
     "topic_lifecycle":    "python scripts/weekly_run.py --module facts",
     "sales_estimates":    "python scripts/weekly_run.py --module sales-intelligence",
     "sales_facts_daily":  "python scripts/weekly_run.py --module sales-intelligence",
+    "paddle_specs":       "python scripts/weekly_run.py --module product-specs",
 }
 
 # Structural notes for tables that are stale due to data dependencies, not missing scrapers
@@ -210,6 +211,22 @@ inf("latest event_time", latest)
 # Products catalog
 total = row_count("products_catalog")
 inf("products_catalog total", str(total))
+
+# Paddle specs (migration 024) — crawled manufacturer specifications.
+# Grain is brand x source_handle x variant_key, so the row count is expected to
+# EXCEED the product count: multi-shape paddles contribute one row per shape.
+# Zero here means the spec crawler has never run, which blanks the technology
+# comparison on Product Intel rather than failing loudly anywhere else.
+total = row_count("paddle_specs")
+chk("paddle_specs total", total, want_positive=True)
+inf("latest scraped_at", max_val("paddle_specs", "scraped_at"))
+
+# Retail reviews — written by a pipeline OUTSIDE this repo. Nothing in here
+# guarantees it keeps refreshing, so surface it: a stale paddle_reviews silently
+# freezes the Product Intel top-10 ranking.
+total = row_count("paddle_reviews")
+chk("paddle_reviews total", total, want_positive=True)
+inf("latest scraped_at", max_val("paddle_reviews", "scraped_at"))
 
 # ════════════════════════════════════════════════════════════════════
 hdr("P2 -- ENRICHMENT  (AI sentiment / NER / crisis flags)")

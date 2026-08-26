@@ -9,7 +9,7 @@ import {
   type V2RedditViral, type V2RedditCrisisCluster,
 } from '@/lib/v2/data'
 import { fmt, LineChart } from '@/components/v2/charts'
-import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
+import { LoadingPage, pgColor, pgName, SectionInfo } from '@/components/v2/PageShell'
 import { useReveal, revealCls } from '@/lib/v2/animations'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
@@ -147,7 +147,7 @@ export default function RedditBrandPage() {
       {/* Trend */}
       {trendSeries.length > 0 && (
         <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
-          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Mention trend</h2><div className="sub">{trend.length} weekly snapshots</div></div>
+          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Mention trend<SectionInfo title="Mention Trend" description="How often this brand came up in Reddit conversation, week by week. A rising line means growing word-of-mouth; a spike usually traces back to one popular thread." source="reddit_mentions - weekly counts" /></h2><div className="sub">{trend.length} weekly snapshots</div></div>
           <div className="card"><div className="card-pad"><LineChart series={trendSeries} xLabels={trendLabels} h={180} /></div></div>
         </section>
       )}
@@ -155,7 +155,7 @@ export default function RedditBrandPage() {
       {/* Sentiment bar */}
       {redditRow && redditRow.mentions > 0 && (
         <section style={{ marginBottom: 32 }}>
-          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Sentiment breakdown</h2></div>
+          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Sentiment breakdown<SectionInfo title="Sentiment Breakdown" description="The split between positive, neutral and negative posts about this brand. Judge it against the other brands rather than against zero, since review and forum talk skews positive everywhere." source="reddit_mentions - AI sentiment scoring" /></h2></div>
           <div className="card"><div className="card-pad">
             <div style={{ height: 24, display: 'flex', borderRadius: 8, overflow: 'hidden', marginBottom: 12 }}>
               <div style={{ width: `${posPct}%`, background: '#22c55e' }} title={`Positive ${posPct}%`} />
@@ -222,7 +222,7 @@ export default function RedditBrandPage() {
       {/* Viral posts */}
       {viral.length > 0 && (
         <section ref={sec3.ref} className={revealCls(sec3.vis)} style={{ marginBottom: 32 }}>
-          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Viral posts · last 30 days</h2><div className="sub">{viral.length} high-velocity posts</div></div>
+          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Viral posts · last 30 days<SectionInfo title="Viral Posts" description="The posts that gained upvotes and comments fastest in the last 30 days. These shape opinion far more than the average post, so they are worth reading in full." source="reddit_mentions - velocity ranking" /></h2><div className="sub">{viral.length} high-velocity posts</div></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {viral.slice(0, 5).map((v, i) => (
               <a key={i} href={v.url} target="_blank" rel="noopener noreferrer"
@@ -245,7 +245,7 @@ export default function RedditBrandPage() {
       <section>
         <div className="section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Posts · {mentions.length} tracked</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Posts · {mentions.length} tracked<SectionInfo title="Tracked Posts" description="Every Reddit post about this brand that we have collected, newest first. Use the column filters to narrow by community or wording." source="reddit_mentions" /></h2>
             <div className="sub">Sorted by {sortKey} · click a card to open on Reddit</div>
           </div>
           <div style={{ display: 'flex', gap: 4, background: 'var(--wb-5)', borderRadius: 8, padding: 3 }}>

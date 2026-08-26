@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { fetchBrands, fetchX, fetchTopXPosts, type V2Brand, type V2XRow, type V2XPost } from '@/lib/v2/data'
 import { fmt, LineChart } from '@/components/v2/charts'
-import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
+import { LoadingPage, pgColor, pgName, SectionInfo } from '@/components/v2/PageShell'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { Breadcrumb } from '@/components/v2/Breadcrumb'
 import { StatCard } from '@/components/v2/StatCard'
@@ -135,7 +135,7 @@ export default function TwitterBrandPage() {
       {/* Trend */}
       {trendSeries.length > 0 && (
         <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
-          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Follower growth trend</h2><div className="sub">{xRow!.trend.length} weekly snapshots</div></div>
+          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Follower growth trend<SectionInfo title="Follower Growth" description="How this account’s audience has grown week by week." source="x_profiles_weekly" /></h2><div className="sub">{xRow!.trend.length} weekly snapshots</div></div>
           <div className="card"><div className="card-pad"><LineChart series={trendSeries} xLabels={trendLabels} h={180} /></div></div>
         </section>
       )}
@@ -143,7 +143,7 @@ export default function TwitterBrandPage() {
       {/* Top performer highlight */}
       {topPost && (
         <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 32 }}>
-          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Best performing post</h2></div>
+          <div className="section-head"><h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Best performing post<SectionInfo title="Best Performing Post" description="The post that earned the most engagement in this period." source="x_posts" /></h2></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
             {[{ label: '♥ Total Likes', val: fmt(totalLikes), c: '#f97316' }, { label: '🔁 Total Retweets', val: fmt(totalRetweets), c: '#22c55e' }, { label: '💬 Total Replies', val: fmt(totalReplies), c: '#a78bfa' }, { label: '👁 Total Views', val: totalViews > 0 ? fmt(totalViews) : '—', c: '#F5E625' }].map(({ label, val, c }) => (
               <div key={label} style={{ background: 'var(--line-2)', border: `1px solid ${c}22`, borderRadius: 10, padding: '14px 16px' }}>
@@ -159,7 +159,7 @@ export default function TwitterBrandPage() {
       <section ref={sec3.ref} className={revealCls(sec3.vis)}>
         <div className="section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Posts · {posts.length} tracked</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Posts · {posts.length} tracked<SectionInfo title="Tracked Posts" description="Every post from this account that we have collected, newest first." source="x_posts" /></h2>
             <div className="sub">Sorted by {sortKey} · click a card to open on X</div>
           </div>
           <div style={{ display: 'flex', gap: 4, background: 'var(--wb-5)', borderRadius: 8, padding: 3 }}>

@@ -41,7 +41,7 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
               <footer className="foot">
                 <div>
                   <strong style={{ color: 'var(--fg-2)' }}>JOOLA INTEL</strong> · live data ·
-                  <span title="Data is scraped and enriched every Monday at 07:00 IST"> refreshed Mondays 07:00 IST</span>
+                  <span title="Data is collected and refreshed every Monday at 07:00 IST"> refreshed Mondays 07:00 IST</span>
                 </div>
                 <FooterLinks />
               </footer>

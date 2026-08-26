@@ -14,6 +14,7 @@
  */
 
 import { supabase } from '@/lib/shared/supabase'
+import { fetchPaged } from '@/lib/v2/paged'
 import { type V2Brand } from '@/lib/v2/data'
 import { fetchLagScans, type LagScanRow } from '@/lib/v2/analytics'
 import { pgName } from '@/components/v2/PageShell'
@@ -492,26 +493,6 @@ export async function fetchProductIntel(brands: V2Brand[]): Promise<ProductIntel
   }
 }
 
-// ─── Section A: Competitor product attack map ─────────────────────────
-export interface AttackMapRow {
-  productId: string
-  productName: string
-  brandSlug: string
-  brandName: string
-  attention7d: number
-  attention30d: number
-  growthPct: number | null      // (7d * 30/7) / 30d * 100 - 100
-  mainChannel: string           // 'instagram' | 'youtube' | 'reddit' | 'tiktok' | 'twitter' | 'influencer' | 'ads' | 'promotions' | 'news' | '—'
-  closestJoolaName: string
-  closestJoolaId: string | null
-  gap: number | null            // attention gap vs joola comparable in 30d
-  recommendedResponse: string
-  category: string | null
-  salePrice: number | null
-  listPrice: number | null
-  inStock: boolean | null
-}
-
 const ATTENTION_CHANNELS: { col: string; label: string }[] = [
   { col: 'mentions_instagram', label: 'Instagram' },
   { col: 'mentions_youtube', label: 'YouTube' },
@@ -585,425 +566,6 @@ function findClosestJoola(
   return top ? { id: top.id, name: top.name } : null
 }
 
-export async function fetchCompetitorAttackMap(brands: V2Brand[], topN = 20): Promise<AttackMapRow[]> {
-  const joolaBrand = brands.find((b) => b.id === 'joola')
-  const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const nameByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.name]))
-
-  const [summaryRes, catalogRes, curatedRes, channelMap] = await Promise.all([
-    supabase
-      .from('product_attention_summary')
-      .select('product_id,brand_id,period,mentions_total,joola_vs_competitor_gap')
-      .in('period', ['last_7d', 'last_30d'])
-      .limit(5000),
-    supabase
-      .from('products')
-      .select('id,brand_id,name,url,price_usd,sale_price_usd,category,in_stock')
-      .limit(2000),
-    supabase
-      .from('products_catalog')
-      .select('id,brand_id,display_name,category,aliases')
-      .limit(2000),
-    fetchChannelMentions30d(),
-  ])
-
-  type SumRow = { product_id: string; brand_id: string; period: string; mentions_total: number | null; joola_vs_competitor_gap: number | null }
-  const summary = ((summaryRes.data as unknown) || []) as SumRow[]
-  const catalog = ((catalogRes.data as unknown) || []) as RawCatalogProduct[]
-  const curated = ((curatedRes.data as unknown) || []) as CuratedProduct[]
-  const matches = buildProductMatches(catalog, curated)
-
-  // index curated by id for display + category
-  const curatedById: Record<string, CuratedProduct> = {}
-  curated.forEach((c) => { curatedById[c.id] = c })
-
-  // group summary rows by (product_id, period)
-  const perProduct: Record<string, { last_7d: number; last_30d: number; gap30d: number | null; brand_id: string }> = {}
-  for (const s of summary) {
-    if (!s.product_id) continue
-    if (!perProduct[s.product_id]) perProduct[s.product_id] = { last_7d: 0, last_30d: 0, gap30d: null, brand_id: s.brand_id }
-    if (s.period === 'last_7d') perProduct[s.product_id].last_7d = Number(s.mentions_total || 0)
-    if (s.period === 'last_30d') {
-      perProduct[s.product_id].last_30d = Number(s.mentions_total || 0)
-      perProduct[s.product_id].gap30d = s.joola_vs_competitor_gap != null ? Number(s.joola_vs_competitor_gap) : null
-    }
-  }
-
-  // Build JOOLA paddle attention map (for closest-match)
-  const joolaPaddles: { id: string; name: string; category: string | null; attention30d: number }[] = []
-  if (joolaBrand) {
-    for (const c of curated) {
-      if (c.brand_id !== joolaBrand.brand_id) continue
-      joolaPaddles.push({
-        id: c.id,
-        name: c.display_name,
-        category: c.category,
-        attention30d: perProduct[c.id]?.last_30d || 0,
-      })
-    }
-  }
-
-  // Resolve scraped catalog row for a curated id (price/stock context)
-  const catalogById: Record<string, RawCatalogProduct> = {}
-  catalog.forEach((p) => { catalogById[p.id] = p })
-  const catalogForCurated = (curatedId: string): RawCatalogProduct | null => {
-    const catId = matches.curatedToCatalog.get(curatedId)
-    return catId ? catalogById[catId] || null : null
-  }
-
-  const out: AttackMapRow[] = []
-  for (const [pid, agg] of Object.entries(perProduct)) {
-    const slug = slugByBid[agg.brand_id]
-    if (!slug || slug === 'joola') continue
-    if (agg.last_30d <= 0) continue
-    if (agg.last_7d <= 0) continue
-    const cur = curatedById[pid]
-    if (!cur) continue
-    const catRow = catalogForCurated(pid)
-    const closest = findClosestJoola({ category: cur.category }, joolaPaddles)
-    const main = pickMainChannel(channelMap[pid])
-
-    // Growth proxy: (7d * 30/7) vs 30d as a momentum %
-    const projected30 = agg.last_7d * (30 / 7)
-    const growthPct = agg.last_30d > 0 ? ((projected30 - agg.last_30d) / agg.last_30d) * 100 : null
-
-    // Rule-based recommendation
-    const onSale = catRow?.sale_price_usd != null && catRow?.price_usd != null && Number(catRow.sale_price_usd) < Number(catRow.price_usd)
-    const inStock = catRow?.in_stock
-    let rec = 'Content comparison'
-    if (agg.last_30d >= 30 && onSale) rec = 'Match promo or content'
-    else if (inStock === false) rec = 'Push availability'
-    else if (agg.last_30d >= 50) rec = 'Match promo or content'
-
-    out.push({
-      productId: pid,
-      productName: cur.display_name,
-      brandSlug: slug,
-      brandName: nameByBid[agg.brand_id] || slug,
-      attention7d: agg.last_7d,
-      attention30d: agg.last_30d,
-      growthPct: growthPct != null ? Math.round(growthPct) : null,
-      mainChannel: main,
-      closestJoolaName: closest?.name || '—',
-      closestJoolaId: closest?.id || null,
-      gap: agg.gap30d,
-      recommendedResponse: rec,
-      category: cur.category,
-      salePrice: catRow?.sale_price_usd != null ? Number(catRow.sale_price_usd) : null,
-      listPrice: catRow?.price_usd != null ? Number(catRow.price_usd) : null,
-      inStock: catRow?.in_stock ?? null,
-    })
-  }
-  return out.sort((a, b) => b.attention30d - a.attention30d).slice(0, topN)
-}
-
-// ─── Section B: Product attention funnel ──────────────────────────────
-export interface FunnelRow {
-  productId: string
-  productName: string
-  brandSlug: string
-  isJoola: boolean
-  mentions: number
-  positivePct: number          // 0–100
-  purchaseIntent: number
-  salesLikelihood: number      // 0–100
-  inventoryMoves: number       // restocks + sellouts in last 30d
-}
-
-export async function fetchAttentionFunnel(brands: V2Brand[], topN = 10): Promise<FunnelRow[]> {
-  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
-  const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-
-  const [dailyRes, curatedRes, invRes] = await Promise.all([
-    supabase
-      .from('product_attention_daily')
-      .select('product_id,brand_id,attention_date,mentions_total,positive_mentions,purchase_intent_count,sales_likelihood_score')
-      .gte('attention_date', cutoff.slice(0, 10))
-      .limit(20000),
-    supabase
-      .from('products_catalog')
-      .select('id,brand_id,display_name')
-      .limit(2000),
-    supabase
-      .from('inventory_events')
-      .select('product_id,event_type,event_time')
-      .in('event_type', ['restock', 'sellout'])
-      .gte('event_time', cutoff)
-      .limit(5000),
-  ])
-
-  type DailyRow = { product_id: string; brand_id: string; mentions_total: number | null; positive_mentions: number | null; purchase_intent_count: number | null; sales_likelihood_score: number | null }
-  const daily = ((dailyRes.data as unknown) || []) as DailyRow[]
-  type CurRow = { id: string; brand_id: string; display_name: string }
-  const curated = ((curatedRes.data as unknown) || []) as CurRow[]
-  type InvRow = { product_id: string; event_type: string }
-  const inv = ((invRes.data as unknown) || []) as InvRow[]
-
-  const nameById: Record<string, { name: string; brand_id: string }> = {}
-  curated.forEach((c) => { nameById[c.id] = { name: c.display_name, brand_id: c.brand_id } })
-
-  const agg: Record<string, { mentions: number; positive: number; pi: number; sl: number; slN: number; brand_id: string }> = {}
-  for (const r of daily) {
-    if (!r.product_id) continue
-    if (!agg[r.product_id]) agg[r.product_id] = { mentions: 0, positive: 0, pi: 0, sl: 0, slN: 0, brand_id: r.brand_id }
-    agg[r.product_id].mentions += Number(r.mentions_total || 0)
-    agg[r.product_id].positive += Number(r.positive_mentions || 0)
-    agg[r.product_id].pi += Number(r.purchase_intent_count || 0)
-    if (r.sales_likelihood_score != null) {
-      agg[r.product_id].sl += Number(r.sales_likelihood_score)
-      agg[r.product_id].slN += 1
-    }
-  }
-
-  const invMoves: Record<string, number> = {}
-  for (const e of inv) {
-    if (!e.product_id) continue
-    invMoves[e.product_id] = (invMoves[e.product_id] || 0) + 1
-  }
-
-  const rows: FunnelRow[] = Object.entries(agg).map(([pid, a]) => {
-    const meta = nameById[pid]
-    const slug = slugByBid[a.brand_id] || ''
-    return {
-      productId: pid,
-      productName: meta?.name || '— unknown —',
-      brandSlug: slug,
-      isJoola: slug === 'joola',
-      mentions: a.mentions,
-      positivePct: a.mentions > 0 ? Math.round((a.positive / a.mentions) * 100) : 0,
-      purchaseIntent: a.pi,
-      salesLikelihood: a.slN > 0 ? Math.round(a.sl / a.slN) : 0,
-      inventoryMoves: invMoves[pid] || 0,
-    }
-  })
-
-  // Prefer JOOLA paddles first, then top by mentions
-  return rows
-    .filter((r) => r.mentions > 0)
-    .sort((a, b) => {
-      if (a.isJoola !== b.isJoola) return a.isJoola ? -1 : 1
-      return b.mentions - a.mentions
-    })
-    .slice(0, topN)
-}
-
-// ─── Section C: Product channel split (last 30d) ──────────────────────
-export interface ChannelSplitRow {
-  productId: string
-  productName: string
-  brandSlug: string
-  isJoola: boolean
-  total: number
-  instagram: number
-  youtube: number
-  reddit: number
-  tiktok: number
-  twitter: number
-  influencer: number
-  ads: number
-  promotions: number
-  dominantCol: string         // matches one of the column keys above
-}
-
-export async function fetchProductChannelSplit(brands: V2Brand[], topN = 40): Promise<ChannelSplitRow[]> {
-  const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
-
-  const [dailyRes, curatedRes] = await Promise.all([
-    supabase
-      .from('product_attention_daily')
-      .select('product_id,brand_id,mentions_total,mentions_instagram,mentions_youtube,mentions_reddit,mentions_tiktok,mentions_twitter,mentions_influencer,mentions_ads,mentions_promotions')
-      .gte('attention_date', cutoff)
-      .limit(20000),
-    supabase
-      .from('products_catalog')
-      .select('id,display_name')
-      .limit(2000),
-  ])
-
-  type DRow = { product_id: string; brand_id: string; mentions_total: number | null; mentions_instagram: number | null; mentions_youtube: number | null; mentions_reddit: number | null; mentions_tiktok: number | null; mentions_twitter: number | null; mentions_influencer: number | null; mentions_ads: number | null; mentions_promotions: number | null }
-  const daily = ((dailyRes.data as unknown) || []) as DRow[]
-  const nameById: Record<string, string> = {}
-  ;((curatedRes.data as unknown) as { id: string; display_name: string }[] || []).forEach((c) => {
-    nameById[c.id] = c.display_name
-  })
-
-  const agg: Record<string, ChannelSplitRow> = {}
-  for (const r of daily) {
-    if (!r.product_id) continue
-    if (!agg[r.product_id]) {
-      const slug = slugByBid[r.brand_id] || ''
-      agg[r.product_id] = {
-        productId: r.product_id,
-        productName: nameById[r.product_id] || '— unknown —',
-        brandSlug: slug,
-        isJoola: slug === 'joola',
-        total: 0, instagram: 0, youtube: 0, reddit: 0, tiktok: 0,
-        twitter: 0, influencer: 0, ads: 0, promotions: 0, dominantCol: '',
-      }
-    }
-    const a = agg[r.product_id]
-    a.total += Number(r.mentions_total || 0)
-    a.instagram += Number(r.mentions_instagram || 0)
-    a.youtube += Number(r.mentions_youtube || 0)
-    a.reddit += Number(r.mentions_reddit || 0)
-    a.tiktok += Number(r.mentions_tiktok || 0)
-    a.twitter += Number(r.mentions_twitter || 0)
-    a.influencer += Number(r.mentions_influencer || 0)
-    a.ads += Number(r.mentions_ads || 0)
-    a.promotions += Number(r.mentions_promotions || 0)
-  }
-
-  const channelKeys: (keyof ChannelSplitRow)[] = [
-    'instagram', 'youtube', 'reddit', 'tiktok', 'twitter', 'influencer', 'ads', 'promotions',
-  ]
-  return Object.values(agg)
-    .filter((r) => r.total > 0)
-    .map((r) => {
-      let bestKey = ''
-      let bestVal = 0
-      for (const k of channelKeys) {
-        const v = Number(r[k] || 0)
-        if (v > bestVal) { bestVal = v; bestKey = String(k) }
-      }
-      return { ...r, dominantCol: bestKey }
-    })
-    .sort((a, b) => b.total - a.total)
-    .slice(0, topN)
-}
-
-// ─── Section D: Competitor paddle launch tracker ──────────────────────
-export interface LaunchTrackerRow {
-  productId: string
-  productName: string
-  brandSlug: string
-  brandName: string
-  launchedAt: string           // ISO date
-  preBuzz: number              // mentions 14d before launchedAt
-  postBuzz: number             // mentions 14d after launchedAt
-  topChannel: string
-  salesLikelihood: number      // mean from last_30d row
-  joolaResponse: string
-}
-
-export interface LaunchTrackerData {
-  rows: LaunchTrackerRow[]
-  totalProducts: number
-  productsWithLaunchDate: number
-}
-
-export async function fetchLaunchTracker(brands: V2Brand[]): Promise<LaunchTrackerData> {
-  const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const nameByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.name]))
-
-  const [catRes, totalRes] = await Promise.all([
-    supabase
-      .from('products_catalog')
-      .select('id,brand_id,display_name,category,launched_at')
-      .not('launched_at', 'is', null)
-      .limit(500),
-    supabase.from('products_catalog').select('id', { count: 'exact', head: true }),
-  ])
-  type Cat = { id: string; brand_id: string; display_name: string; category: string | null; launched_at: string | null }
-  const cats = ((catRes.data as unknown) || []) as Cat[]
-  const totalProducts = Number(totalRes.count || 0)
-
-  if (cats.length === 0) {
-    return { rows: [], totalProducts, productsWithLaunchDate: 0 }
-  }
-
-  const pids = cats.map((c) => c.id)
-
-  const channelSelect = ATTENTION_CHANNELS.map((c) => c.col).join(',')
-  const dailySelectStr = 'product_id,attention_date,mentions_total,' + channelSelect
-  const [dailyRes, summaryRes] = await Promise.all([
-    supabase
-      .from('product_attention_daily')
-      .select(dailySelectStr)
-      .in('product_id', pids)
-      .limit(20000),
-    supabase
-      .from('product_attention_summary')
-      .select('product_id,sales_likelihood_score,period')
-      .in('product_id', pids)
-      .eq('period', 'last_30d')
-      .limit(1000),
-  ])
-  type DRow = Record<string, unknown> & { product_id: string; attention_date: string; mentions_total: number | null }
-  const daily = ((dailyRes.data as unknown) || []) as DRow[]
-  type Sum = { product_id: string; sales_likelihood_score: number | null }
-  const sums = ((summaryRes.data as unknown) || []) as Sum[]
-  const slById: Record<string, number> = {}
-  for (const s of sums) {
-    if (s.sales_likelihood_score != null) slById[s.product_id] = Number(s.sales_likelihood_score)
-  }
-
-  const rows: LaunchTrackerRow[] = []
-  for (const c of cats) {
-    if (!c.launched_at) continue
-    const launch = new Date(c.launched_at).getTime()
-    const preStart = launch - 14 * 86400000
-    const postEnd = launch + 14 * 86400000
-
-    let pre = 0, post = 0
-    const channelTotals: Record<string, number> = {}
-    for (const r of daily) {
-      if (r.product_id !== c.id || !r.attention_date) continue
-      const t = new Date(String(r.attention_date)).getTime()
-      const m = Number(r.mentions_total || 0)
-      if (t >= preStart && t < launch) pre += m
-      else if (t >= launch && t <= postEnd) {
-        post += m
-        for (const ch of ATTENTION_CHANNELS) {
-          const v = Number((r as Record<string, unknown>)[ch.col] || 0)
-          if (v > 0) channelTotals[ch.label] = (channelTotals[ch.label] || 0) + v
-        }
-      }
-    }
-    let topChannel = '—'
-    let topVal = 0
-    for (const [k, v] of Object.entries(channelTotals)) {
-      if (v > topVal) { topChannel = k; topVal = v }
-    }
-    const slug = slugByBid[c.brand_id] || ''
-    const isJoola = slug === 'joola'
-
-    let response = 'Monitor launch curve'
-    if (!isJoola && post > pre * 1.5 && post >= 20) response = 'Counter with content + athlete push'
-    else if (!isJoola && post >= 10) response = 'Match content cadence'
-    else if (isJoola) response = 'Internal launch reference'
-
-    rows.push({
-      productId: c.id,
-      productName: c.display_name,
-      brandSlug: slug,
-      brandName: nameByBid[c.brand_id] || slug,
-      launchedAt: c.launched_at,
-      preBuzz: pre,
-      postBuzz: post,
-      topChannel,
-      salesLikelihood: Math.round(slById[c.id] || 0),
-      joolaResponse: response,
-    })
-  }
-
-  return {
-    rows: rows.sort((a, b) => (new Date(b.launchedAt).getTime() - new Date(a.launchedAt).getTime())),
-    totalProducts,
-    productsWithLaunchDate: cats.length,
-  }
-}
-
-// ─── Section E: Unmatched competitor product mentions ─────────────────
-export interface UnmatchedMentionRow {
-  mention: string             // normalized lowercase
-  displayMention: string      // original-case representative
-  totalOccurrences: number
-  channels: string[]
-  brandsTalking: string[]     // brand slugs whose comments/posts contained the mention
-  likelyOwnerBrand: string    // heuristic: most common brand context
-}
-
 interface UnmatchedSource {
   table: string
   textArrayCol: 'products_mentioned'
@@ -1020,80 +582,6 @@ const UNMATCHED_SOURCES: UnmatchedSource[] = [
   { table: 'tiktok_comments', textArrayCol: 'products_mentioned', dateCol: 'posted_at', brandCol: 'brand_id', channelLabel: 'TikTok' },
   { table: 'x_posts', textArrayCol: 'products_mentioned', dateCol: 'posted_at', brandCol: 'brand_id', channelLabel: 'X / Twitter' },
 ]
-
-export async function fetchUnmatchedProductMentions(brands: V2Brand[], topN = 30): Promise<UnmatchedMentionRow[]> {
-  const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const cutoff = new Date(Date.now() - 90 * 86400000).toISOString()
-
-  // Build alias allow-list to anti-join against
-  const { data: curated } = await supabase
-    .from('products_catalog')
-    .select('display_name,aliases')
-    .limit(2000)
-  type C = { display_name: string; aliases: string[] | null }
-  const knownNorm = new Set<string>()
-  ;((curated as unknown) as C[] || []).forEach((c) => {
-    const dn = normalizeProductName(c.display_name)
-    if (dn) knownNorm.add(dn)
-    if (Array.isArray(c.aliases)) c.aliases.forEach((a) => {
-      const n = normalizeProductName(a)
-      if (n) knownNorm.add(n)
-    })
-  })
-
-  type Bucket = { display: string; count: number; channels: Set<string>; brandHits: Record<string, number> }
-  const agg: Record<string, Bucket> = {}
-
-  // Run all sources in parallel; tolerate per-table errors silently.
-  await Promise.all(UNMATCHED_SOURCES.map(async (src) => {
-    try {
-      const selectStr = src.brandCol + ',' + src.textArrayCol + ',' + src.dateCol
-      const { data } = await supabase
-        .from(src.table)
-        .select(selectStr)
-        .gte(src.dateCol, cutoff)
-        .not(src.textArrayCol, 'is', null)
-        .limit(5000)
-      type R = Record<string, unknown>
-      ;((data as unknown) as R[] || []).forEach((row) => {
-        const arr = row[src.textArrayCol]
-        if (!Array.isArray(arr)) return
-        const brandId = row[src.brandCol] ? String(row[src.brandCol]) : ''
-        const brandSlug = brandId ? slugByBid[brandId] || '' : ''
-        for (const raw of arr) {
-          if (typeof raw !== 'string') continue
-          const trimmed = raw.trim()
-          if (!trimmed) continue
-          const norm = normalizeProductName(trimmed)
-          if (!norm || norm.length < 3) continue
-          if (knownNorm.has(norm)) continue
-          if (!agg[norm]) agg[norm] = { display: trimmed, count: 0, channels: new Set(), brandHits: {} }
-          agg[norm].count += 1
-          agg[norm].channels.add(src.channelLabel)
-          if (brandSlug) agg[norm].brandHits[brandSlug] = (agg[norm].brandHits[brandSlug] || 0) + 1
-        }
-      })
-    } catch {
-      // ignore per-table failures (table may not exist in some environments)
-    }
-  }))
-
-  return Object.entries(agg)
-    .map(([norm, b]) => {
-      const brandsTalking = Object.entries(b.brandHits).sort((a, c) => c[1] - a[1]).slice(0, 4).map(([s]) => s)
-      const likely = brandsTalking[0] || '—'
-      return {
-        mention: norm,
-        displayMention: b.display,
-        totalOccurrences: b.count,
-        channels: Array.from(b.channels),
-        brandsTalking,
-        likelyOwnerBrand: likely,
-      }
-    })
-    .sort((a, b) => b.totalOccurrences - a.totalOccurrences)
-    .slice(0, topN)
-}
 
 // ─── Section F: Competitor stockout opportunity ───────────────────────
 export interface StockoutOpportunityRow {
@@ -1114,11 +602,22 @@ export async function fetchStockoutOpportunities(brands: V2Brand[], topN = 25): 
   const joolaBrand = brands.find((b) => b.id === 'joola')
 
   const [snapsRes, curatedRes, summaryRes] = await Promise.all([
-    supabase
-      .from('product_snapshots')
-      .select('brand_id,product_id,snapshot_time,availability_status')
-      .order('snapshot_time', { ascending: false })
-      .limit(5000),
+    // Paged, not top-N: the reduction below keeps the LATEST snapshot per
+    // (brand, product) plus the most recent in-stock date, so it needs to see
+    // every tracked product, not the 1,000 newest rows overall. product_snapshots
+    // holds ~38k rows across ~475 products; 10,000 newest-first rows is ~20
+    // snapshot cycles — deep enough to hit every product at least once, and a
+    // deliberate ceiling so the browser never pulls the whole table. If the cap
+    // is ever hit, `fetchPaged` logs a warning naming this label.
+    fetchPaged<{ brand_id: string; product_id: string | null; snapshot_time: string; availability_status: string }>(
+      () => supabase
+        .from('product_snapshots')
+        .select('brand_id,product_id,snapshot_time,availability_status')
+        .order('snapshot_time', { ascending: false })
+        // `id` tiebreak keeps range-paging stable when timestamps collide.
+        .order('id', { ascending: true }),
+      { maxRows: 10_000, label: 'productIntel.stockout.productSnapshots' },
+    ),
     supabase
       .from('products_catalog')
       .select('id,brand_id,display_name,category')
@@ -1130,7 +629,7 @@ export async function fetchStockoutOpportunities(brands: V2Brand[], topN = 25): 
       .limit(2000),
   ])
   type Snap = { brand_id: string; product_id: string | null; snapshot_time: string; availability_status: string }
-  const snaps = ((snapsRes.data as unknown) || []) as Snap[]
+  const snaps = snapsRes as Snap[]
   type Cur = { id: string; brand_id: string; display_name: string; category: string | null }
   const cur = ((curatedRes.data as unknown) || []) as Cur[]
   type Sum = { product_id: string; mentions_total: number | null }
@@ -1445,4 +944,215 @@ export async function fetchAttentionAvailability(brands: V2Brand[]): Promise<Att
     })
   }
   return out
+}
+
+// ─── Customer voice (retail reviews) ──────────────────────────────────
+//
+// Source is `paddle_reviews`: 22,210 retail reviews gathered outside this repo
+// across yotpo / okendo / judgeme / bazaarvoice, arriving pre-enriched
+// (sentiment on 100% of rows). NOT `product_reviews` — migration 016 created
+// that for a widget scraper that never got credentials, and it still holds
+// 0 rows.
+//
+// One shape caveat drives the mapping below: `paddle_reviews.product_id`
+// references `paddle_products`, NOT `products_catalog`. Never join it to the
+// catalog directly. Grouping here is by `canonical_name` (the retailer's
+// product title), which is what the backend alias-matches for mention_facts.
+
+export interface CustomerReview {
+  id: string
+  brandSlug: string
+  productName: string
+  rating: number | null
+  title: string
+  body: string
+  sentiment: 'positive' | 'neutral' | 'negative' | 'unknown'
+  isCrisis: boolean
+  isVerified: boolean
+  isIncentivized: boolean
+  complaintCategory: string | null
+  helpfulCount: number
+  source: string
+  retailer: string | null
+  postedAt: string | null
+}
+
+export interface ProductReviewSummary {
+  productName: string
+  brandSlug: string
+  isJoola: boolean
+  total: number
+  avgRating: number | null
+  positive: number
+  neutral: number
+  negative: number
+  crisis: number
+  verifiedPct: number
+  topComplaint: string | null
+  topReviews: CustomerReview[]   // up to 3, most helpful first
+}
+
+export interface CustomerVoiceData {
+  /** Total rows in paddle_reviews (exact count, not the sampled window). */
+  reviews: number
+  /** How many rows this payload actually analysed. Label this in the UI. */
+  sampled: number
+  avgRating: number | null
+  positivePct: number
+  crisisCount: number
+  incentivizedPct: number
+  bySource: { source: string; count: number }[]
+  products: ProductReviewSummary[]
+}
+
+const REVIEW_SENTIMENTS = new Set(['positive', 'neutral', 'negative'])
+
+function normSentiment(v: unknown): CustomerReview['sentiment'] {
+  const s = String(v || '').toLowerCase()
+  return REVIEW_SENTIMENTS.has(s) ? (s as CustomerReview['sentiment']) : 'unknown'
+}
+
+export async function fetchCustomerVoice(
+  brands: V2Brand[],
+  opts: { topProducts?: number; maxRows?: number } = {},
+): Promise<CustomerVoiceData> {
+  const topProducts = opts.topProducts ?? 25
+  const maxRows = opts.maxRows ?? 8000
+  const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+
+  const COLS =
+    'id,brand_id,canonical_name,rating,title,body,sentiment_label,is_crisis,' +
+    'is_verified,is_incentivized,complaint_category,helpful_count,source,' +
+    'retailer,posted_at'
+
+  // True corpus size, independent of what we pull down. PostgREST caps a single
+  // response at 1,000 rows no matter what .limit() says, so without this the
+  // headline would read "1,000 reviews" against a corpus of 22k.
+  const { count: totalCount } = await supabase
+    .from('paddle_reviews')
+    .select('id', { count: 'exact', head: true })
+
+  // Page through in 1,000-row chunks up to maxRows. Newest first, so a capped
+  // window stays representative of CURRENT sentiment rather than whichever rows
+  // happen to sort first by primary key. The full 22k corpus is ~7 MB of JSON —
+  // too heavy for the browser — so this is a deliberate, labelled sample.
+  const PAGE = 1000
+  const raw: any[] = []
+  for (let from = 0; from < maxRows; from += PAGE) {
+    const { data, error } = await supabase
+      .from('paddle_reviews')
+      .select(COLS)
+      .order('posted_at', { ascending: false })
+      .range(from, Math.min(from + PAGE, maxRows) - 1)
+    if (error) break
+    if (!data || data.length === 0) break
+    raw.push(...data)
+    if (data.length < PAGE) break
+  }
+
+  if (raw.length === 0) {
+    return {
+      reviews: totalCount ?? 0, sampled: 0, avgRating: null, positivePct: 0,
+      crisisCount: 0, incentivizedPct: 0, bySource: [], products: [],
+    }
+  }
+
+  const rows: CustomerReview[] = []
+  for (const r of raw) {
+    const slug = slugByBid[r.brand_id]
+    if (!slug) continue
+    rows.push({
+      id: r.id,
+      brandSlug: slug,
+      productName: r.canonical_name || '— unknown —',
+      rating: r.rating != null ? Number(r.rating) : null,
+      title: r.title || '',
+      body: r.body || '',
+      sentiment: normSentiment(r.sentiment_label),
+      isCrisis: Boolean(r.is_crisis),
+      isVerified: Boolean(r.is_verified),
+      isIncentivized: Boolean(r.is_incentivized),
+      complaintCategory:
+        r.complaint_category && r.complaint_category !== 'none'
+          ? String(r.complaint_category)
+          : null,
+      helpfulCount: Number(r.helpful_count || 0),
+      source: r.source || 'unknown',
+      retailer: r.retailer || null,
+      postedAt: r.posted_at || null,
+    })
+  }
+
+  // ── headline stats
+  const rated = rows.filter((r) => r.rating != null).map((r) => r.rating as number)
+  const avgRating = rated.length
+    ? Math.round((rated.reduce((s, v) => s + v, 0) / rated.length) * 100) / 100
+    : null
+  const positive = rows.filter((r) => r.sentiment === 'positive').length
+  const sourceAgg = new Map<string, number>()
+  rows.forEach((r) => sourceAgg.set(r.source, (sourceAgg.get(r.source) || 0) + 1))
+
+  // ── per-product rollup
+  const byProduct = new Map<string, CustomerReview[]>()
+  for (const r of rows) {
+    const key = `${r.brandSlug}::${r.productName}`
+    const list = byProduct.get(key)
+    if (list) list.push(r)
+    else byProduct.set(key, [r])
+  }
+
+  const products: ProductReviewSummary[] = []
+  // Array.from, not direct iteration — this tsconfig raises TS2802 otherwise.
+  for (const list of Array.from(byProduct.values())) {
+    const first = list[0]
+    const pRated = list.filter((r) => r.rating != null).map((r) => r.rating as number)
+    const complaints = new Map<string, number>()
+    list.forEach((r) => {
+      if (r.complaintCategory) {
+        complaints.set(r.complaintCategory, (complaints.get(r.complaintCategory) || 0) + 1)
+      }
+    })
+    const topComplaint = Array.from(complaints.entries())
+      .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+
+    products.push({
+      productName: first.productName,
+      brandSlug: first.brandSlug,
+      isJoola: first.brandSlug === 'joola',
+      total: list.length,
+      avgRating: pRated.length
+        ? Math.round((pRated.reduce((s, v) => s + v, 0) / pRated.length) * 100) / 100
+        : null,
+      positive: list.filter((r) => r.sentiment === 'positive').length,
+      neutral: list.filter((r) => r.sentiment === 'neutral').length,
+      negative: list.filter((r) => r.sentiment === 'negative').length,
+      crisis: list.filter((r) => r.isCrisis).length,
+      verifiedPct: Math.round((list.filter((r) => r.isVerified).length / list.length) * 100),
+      topComplaint,
+      // Most helpful first; helpful_count is 0 across most retailers, so break
+      // ties on recency to avoid always surfacing the same arbitrary three.
+      topReviews: [...list]
+        .sort((a, b) =>
+          b.helpfulCount - a.helpfulCount ||
+          (b.postedAt || '').localeCompare(a.postedAt || ''))
+        .slice(0, 3),
+    })
+  }
+
+  products.sort((a, b) => b.total - a.total)
+
+  return {
+    reviews: totalCount ?? rows.length,
+    sampled: rows.length,
+    avgRating,
+    positivePct: rows.length ? Math.round((positive / rows.length) * 100) : 0,
+    crisisCount: rows.filter((r) => r.isCrisis).length,
+    incentivizedPct: rows.length
+      ? Math.round((rows.filter((r) => r.isIncentivized).length / rows.length) * 100)
+      : 0,
+    bySource: Array.from(sourceAgg.entries())
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count),
+    products: products.slice(0, topProducts),
+  }
 }

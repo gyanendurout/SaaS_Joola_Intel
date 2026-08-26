@@ -1,8 +1,8 @@
-# JOOLA Intel — Supabase Database Inventory
+# Database — schema inventory
 
-> **Snapshot date**: 2026-05-25
+> **Snapshot date**: 2026-05-25 (row counts are last-observed, not live — run `python scripts/db_verify.py` for current state)
 > **Supabase project**: `loecyghnkkxyymelgexz`
-> **Source of truth**: `migrations/001-016*.sql` + `backend/scraping/sources/**/scrape_*.py` (writers) + `frontend/lib/v2/data.ts` (readers)
+> **Source of truth**: `migrations/001-021*.sql` + `backend/scraping/sources/**/scrape_*.py` (writers) + `frontend/lib/v2/data.ts` (readers)
 > **Probe status**: Schema & writer/reader mapping enumerated from repository artifacts. Live row counts and freshness timestamps must be confirmed by running `python backend/scraping/maintenance/count_rows.py` (the probe-by-REST script could not be executed in this session because shell access was sandboxed). Where this document lists a row count, it is the value last reported in session-memory observations (the most recent dates are noted inline). All schemas, columns, types and source/reader assignments are authoritative.
 
 ---

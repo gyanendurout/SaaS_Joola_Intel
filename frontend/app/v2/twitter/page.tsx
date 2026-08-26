@@ -14,6 +14,7 @@ import { twitterPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
+import { tipFor } from '@/lib/v2/tooltips'
 
 /** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
 function relativeLabel(days: number): string {
@@ -233,13 +234,13 @@ export default function TwitterPage() {
             <table className="data" style={{ width: '100%' }}>
               <thead><tr>
                 <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
-                <SortTh col="brand"    label="Brand"       sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} />
-                <SortTh col="followers" label="Followers"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} />
-                <SortTh col="delta"    label="Flw Δ (wk)"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
-                <SortTh col="tweets"   label="Tweets"      sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} />
-                <SortTh col="engRate"  label="Eng Rate"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} />
-                <th style={{ minWidth: 180 }}>Top Post</th>
-                <th style={{ width: 70, textAlign: 'center' }}>Profile</th>
+                <SortTh col="brand"    label="Brand"       sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ minWidth: 130 }} title={tipFor('Brand')} />
+                <SortTh col="followers" label="Followers"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right' }} title={tipFor('Followers')} />
+                <SortTh col="delta"    label="Flw Δ (wk)"  sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} title={tipFor('Flw Δ (wk)')} />
+                <SortTh col="tweets"   label="Tweets"      sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 70 }} title={tipFor('Tweets')} />
+                <SortTh col="engRate"  label="Eng Rate"    sortKey={bwSortKey} sortDir={bwSortDir} toggle={toggleBwSort} style={{ textAlign: 'right', width: 80 }} title={tipFor('Eng Rate')} />
+                <th style={{ minWidth: 180 }} title={tipFor('Top Post')}>Top Post</th>
+                <th style={{ width: 70, textAlign: 'center' }} title={tipFor('Profile')}>Profile</th>
               </tr></thead>
               <tbody>
                 {sortedBrandOverview.map((d, i) => {
@@ -506,10 +507,10 @@ export default function TwitterPage() {
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
                 <thead>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 110 }} />
-                    <SortTh col="followers" label="Followers" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="brand" label="Brand" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 110 }} title={tipFor('Brand')} />
+                    <SortTh col="followers" label="Followers" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ textAlign: 'right' }} title={tipFor('Followers')} />
                     <SortTh col="followers" label="" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 80, textAlign: 'right' }} />
-                    <SortTh col="tweets" label="Tweets" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 60, textAlign: 'right' }} />
+                    <SortTh col="tweets" label="Tweets" sortKey={followerSortKey} sortDir={followerSortDir} toggle={toggleFollowerSort} style={{ width: 60, textAlign: 'right' }} title={tipFor('Tweets')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={followerBrandFilter} onChange={setFollowerBrandFilter} placeholder="brand…" /></th>
@@ -563,10 +564,10 @@ export default function TwitterPage() {
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 8 }}>
                 <thead>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ width: 110 }} />
-                    <SortTh col="engRate" label="Avg eng" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ textAlign: 'right' }} />
+                    <SortTh col="brand" label="Brand" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ width: 110 }} title={tipFor('Brand')} />
+                    <SortTh col="engRate" label="Avg eng" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ textAlign: 'right' }} title={tipFor('Avg eng')} />
                     <SortTh col="engRate" label="" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ width: 80, textAlign: 'right' }} />
-                    <SortTh col="tweets" label="Tweets" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ width: 60, textAlign: 'right' }} />
+                    <SortTh col="tweets" label="Tweets" sortKey={erSortKey} sortDir={erSortDir} toggle={toggleErSort} style={{ width: 60, textAlign: 'right' }} title={tipFor('Tweets')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={erBrandFilter} onChange={setErBrandFilter} placeholder="brand…" /></th>
@@ -640,13 +641,13 @@ export default function TwitterPage() {
               <table className="data">
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                    <SortTh col="text" label="Post" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} />
-                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="retweets" label="RTs" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="replies" label="Replies" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
+                    <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Brand')} />
+                    <SortTh col="text" label="Post" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '38%' }} title={tipFor('Post')} />
+                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Likes')} />
+                    <SortTh col="retweets" label="RTs" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('RTs')} />
+                    <SortTh col="replies" label="Replies" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Replies')} />
+                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Views')} />
+                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Posted')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={colFilter.brand} onChange={v => setColFilter(p => ({ ...p, brand: v }))} placeholder="brand…" /></th>
@@ -711,7 +712,7 @@ export default function TwitterPage() {
       {/* ─── Paddle & player mentions — coming soon ────────────────────── */}
       <section>
         <div className="section-head"><div>
-          <h2>Paddle &amp; player mentions · X / Twitter</h2>
+          <h2>Paddle &amp; player mentions · X / Twitter<SectionInfo title="Paddle and Player Mentions" description="Posts on X that name a specific paddle or a sponsored player, so you can see which products and people are actually being talked about." source="x_posts - AI entity extraction" /></h2>
           <div className="sub">Cross-channel mention intelligence for X — coming in a future update.</div>
         </div></div>
         <div className="card">

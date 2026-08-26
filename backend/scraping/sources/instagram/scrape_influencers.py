@@ -83,6 +83,9 @@ def run(ctx: dict[str, Any]) -> int:
                 "posted_at":     post.get("timestamp"),
             })
 
+    # NOTE: duplicate post_urls (same shortcode under two influencers, or Apify
+    # returning a post twice) are deduped centrally by sb.upsert() on the
+    # on_conflict key — see supabase_client.upsert().
     p = sb.delete_insert_weekly("influencer_snapshots", snapshots, "week_number", iso_week, iso_year)
     q = sb.upsert("influencer_posts", posts, "post_url")
     log.info("✓ %d influencer snapshots, %d posts upserted", p, q)

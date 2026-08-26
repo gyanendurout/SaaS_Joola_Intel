@@ -7,7 +7,7 @@ import {
   type V2Brand, type V2YTRow, type V2TopYTVideo, type V2YTVideoAnalysis,
 } from '@/lib/v2/data'
 import { fmt, LineChart, Donut } from '@/components/v2/charts'
-import { LoadingPage, pgColor, pgName } from '@/components/v2/PageShell'
+import { LoadingPage, pgColor, pgName, SectionInfo } from '@/components/v2/PageShell'
 import { StatCard } from '@/components/v2/StatCard'
 import { BackButton } from '@/components/v2/BackButton'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
@@ -255,7 +255,7 @@ export default function YoutubeBrandPage() {
       {trendSeries.length > 0 && (
         <section ref={sec1.ref} className={revealCls(sec1.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head">
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Subscriber growth trend</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Subscriber growth trend<SectionInfo title="Subscriber Growth" description="How this channel’s audience has grown week by week. Steady growth matters more than the raw total, which mostly reflects how long the channel has existed." source="yt_channel_weekly" /></h2>
             <div className="sub">{trend.length} weekly snapshots · {fmt(trend[0])} → {fmt(trend[trend.length - 1])}</div>
           </div>
           <div className="card"><div className="card-pad">
@@ -268,7 +268,7 @@ export default function YoutubeBrandPage() {
       {videos.length > 0 && (
         <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head">
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Top performers</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Top performers<SectionInfo title="Top Performing Videos" description="The videos that pulled the most views and engagement. Look for what they have in common - that is the format worth copying." source="yt_videos" /></h2>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
             {[
@@ -293,7 +293,7 @@ export default function YoutubeBrandPage() {
       {(analyses.length > 0 || typeEntries.length > 0) && (
         <section ref={sec3.ref} className={revealCls(sec3.vis)} style={{ marginBottom: 32 }}>
           <div className="section-head">
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Content analysis · AI performance theses</h2>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>Content analysis · AI performance theses<SectionInfo title="Content Analysis" description="An AI read of why particular videos did well or badly. Treat these as prompts for a human judgement, not conclusions." source="yt_video_analysis" /></h2>
             <div className="sub">{analyses.length} videos analysed · showing top 5 · hover a row for full thesis</div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: typeEntries.length > 0 ? '1fr 340px' : '1fr', gap: 16 }}>
@@ -390,7 +390,7 @@ export default function YoutubeBrandPage() {
           <div>
             <h2 style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg)', marginBottom: 4 }}>
               Video library · {filteredVideos.length} videos
-            </h2>
+            <SectionInfo title="Video Library" description="Every video from this channel that we have collected, newest first." source="yt_videos" /></h2>
             <div className="sub">All tracked videos for {brandName} · sorted by {sortKey}</div>
           </div>
           {/* Controls */}

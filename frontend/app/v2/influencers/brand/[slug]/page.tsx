@@ -16,6 +16,7 @@ import {
   type PlayerProductConnection,
 } from '@/lib/v2/influencerIntel'
 import { formatCalendarDate } from '@/lib/v2/format'
+import { tipFor } from '@/lib/v2/tooltips'
 
 const SENT_PILL: Record<string, string> = {
   positive: 'pill-green', neutral: 'pill-ghost', negative: 'pill-red', unknown: 'pill-ghost',
@@ -229,15 +230,15 @@ export default function BrandStrengthDetailPage() {
               <table className="data" style={{ width: '100%' }}>
                 <thead>
                   <tr>
-                    <th>Player</th>
-                    <th>Status</th>
-                    <th>Verification</th>
-                    <th style={{ textAlign: 'right' }}>Followers</th>
-                    <th style={{ textAlign: 'right' }}>Posts</th>
-                    <th style={{ textAlign: 'right' }}>Avg Likes</th>
-                    <th style={{ textAlign: 'right' }}>Eng Rate</th>
-                    <th>Tier</th>
-                    <th>Platforms</th>
+                    <th title={tipFor('Player')}>Player</th>
+                    <th title={tipFor('Status')}>Status</th>
+                    <th title={tipFor('Verification')}>Verification</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Followers')}>Followers</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Posts')}>Posts</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Avg Likes')}>Avg Likes</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Eng Rate')}>Eng Rate</th>
+                    <th title={tipFor('Tier')}>Tier</th>
+                    <th title={tipFor('Platforms')}>Platforms</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -334,13 +335,13 @@ export default function BrandStrengthDetailPage() {
               <table className="data" style={{ width: '100%' }}>
                 <thead>
                   <tr>
-                    <th>Player</th>
-                    <th>Paddle</th>
-                    <th>Channel</th>
-                    <th style={{ textAlign: 'right' }}>Mentions</th>
-                    <th style={{ textAlign: 'right' }}>Positive</th>
-                    <th style={{ textAlign: 'right' }}>Negative</th>
-                    <th style={{ textAlign: 'right' }}>Score</th>
+                    <th title={tipFor('Player')}>Player</th>
+                    <th title={tipFor('Paddle')}>Paddle</th>
+                    <th title={tipFor('Channel')}>Channel</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Mentions')}>Mentions</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Positive')}>Positive</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Negative')}>Negative</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Score')}>Score</th>
                   </tr>
                 </thead>
                 <tbody>

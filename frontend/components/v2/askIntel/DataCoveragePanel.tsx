@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/shared/supabase'
+import { fetchPaged } from '@/lib/v2/paged'
 import type { DataCoverage } from '@/lib/v2/askIntel/types'
 import { fmt } from '@/components/v2/charts'
 
@@ -32,13 +33,22 @@ async function probeChannelCounts(): Promise<{ channel: string; total: number }[
   try {
     const since = new Date()
     since.setDate(since.getDate() - 30)
-    const { data } = await supabase
-      .from('mention_facts')
-      .select('channel')
-      .gte('posted_at', since.toISOString())
-      .limit(5000)
+    // Paged: this panel reports "how many mentions per channel", so a
+    // 1,000-row cap turns a coverage report into a coverage lie. The 30-day
+    // window keeps the read small (~2,800 rows today); maxRows is a deliberate
+    // browser-payload ceiling on mention_facts (~46k rows table-wide) and
+    // `fetchPaged` warns on the console, naming this label, if it is hit.
+    const data = await fetchPaged<{ channel: string }>(
+      () => supabase
+        .from('mention_facts')
+        .select('channel')
+        .gte('posted_at', since.toISOString())
+        // No natural order here; `id` gives range-paging a stable row order.
+        .order('id', { ascending: true }),
+      { maxRows: 10_000, label: 'askIntel.dataCoverage.channelCounts' },
+    )
     const counts = new Map<string, number>()
-    for (const r of (data || []) as { channel: string }[]) {
+    for (const r of data) {
       counts.set(r.channel, (counts.get(r.channel) || 0) + 1)
     }
     return Array.from(counts.entries())

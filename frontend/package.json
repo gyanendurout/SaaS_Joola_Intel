@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "agentation": "^3.0.2",
     "cheerio": "^1.2.0",
     "next": "14.2.5",
     "openai": "^6.33.0",

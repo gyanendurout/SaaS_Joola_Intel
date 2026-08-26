@@ -8,6 +8,7 @@
     2. Build       — npm run build  (skippable with -SkipBuild)
     3. Route smoke — HTTP GET each known route, assert 200 (skippable with -SkipRoutes)
     4. Playwright  — npx playwright test e2e/ (skippable with -SkipPlaywright)
+    5. Tooltips    — qa/tooltip-check.mjs (every (?) popup actually renders)
 
   On overall PASS: writes c:\tmp\joola-intel-qa-passed.flag (read by .husky/pre-push and scripts/deploy.ps1).
   On overall FAIL: deletes the flag and exits with code 1.
@@ -81,7 +82,7 @@ try {
 
   # ── 1. Typecheck ─────────────────────────────────────────────────────
   $sw = [Diagnostics.Stopwatch]::StartNew()
-  Write-Host "[1/4] Typecheck (npx tsc --noEmit)..."
+  Write-Host "[1/5] Typecheck (npx tsc --noEmit)..."
   $tscOut = & npx tsc --noEmit 2>&1
   $tscExit = $LASTEXITCODE
   $sw.Stop()
@@ -98,7 +99,7 @@ try {
     Record 'build' 'SKIP' '-SkipBuild'
   } else {
     $sw.Restart()
-    Write-Host "[2/4] Build (npm run build)..."
+    Write-Host "[2/5] Build (npm run build)..."
     $buildOut = & npm run build 2>&1
     $buildExit = $LASTEXITCODE
     $sw.Stop()
@@ -116,7 +117,7 @@ try {
     Record 'routes' 'SKIP' '-SkipRoutes'
   } else {
     $sw.Restart()
-    Write-Host "[3/4] Route smoke (HTTP GET $($ROUTES.Count) routes against $BaseUrl)..."
+    Write-Host "[3/5] Route smoke (HTTP GET $($ROUTES.Count) routes against $BaseUrl)..."
     $reachable = $false
     try {
       $head = Invoke-WebRequest -Uri $BaseUrl -Method Head -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
@@ -151,7 +152,7 @@ try {
     Record 'playwright' 'SKIP' '-SkipPlaywright'
   } else {
     $sw.Restart()
-    Write-Host "[4/4] Playwright E2E (npx playwright test e2e/)..."
+    Write-Host "[4/5] Playwright E2E (npx playwright test e2e/)..."
     $playwrightInstalled = Test-Path 'node_modules/@playwright/test'
     if (-not $playwrightInstalled) {
       Record 'playwright' 'SKIP' 'not installed -- run: npm install && npx playwright install chromium'
@@ -177,6 +178,36 @@ try {
           Fail "playwright failed"
         }
       }
+    }
+  }
+
+  # ── 5. Tooltip visibility ────────────────────────────────────────────
+  # Guards the 2026-08-24 regression: `.si-popup` carried `display:none` with no
+  # rule to un-hide it, so every (?) tooltip site-wide mounted but rendered
+  # invisible. A DOM-presence check would have passed — this asserts computed
+  # visibility and a non-zero box, which is the only thing that catches it.
+  $sw.Restart()
+  Write-Host "[5/5] Tooltip visibility (qa/tooltip-check.mjs)..."
+  $serverUp = $false
+  try {
+    Invoke-WebRequest -Uri $BaseUrl -Method Head -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop | Out-Null
+    $serverUp = $true
+  } catch { $serverUp = $false }
+
+  if (-not (Test-Path 'node_modules/playwright-core')) {
+    Record 'tooltips' 'SKIP' 'playwright-core not installed'
+  } elseif (-not $serverUp) {
+    Record 'tooltips' 'SKIP' "server not reachable at $BaseUrl"
+  } else {
+    $ttOut = & node qa/tooltip-check.mjs $BaseUrl 2>&1
+    $ttExit = $LASTEXITCODE
+    $sw.Stop()
+    if ($ttExit -eq 0) {
+      Record 'tooltips' 'PASS' ("{0}s" -f [int]$sw.Elapsed.TotalSeconds)
+    } else {
+      Record 'tooltips' 'FAIL' ("exit={0}" -f $ttExit)
+      Add-Content -Path $LogFile -Value ($ttOut -join "`n") -Encoding utf8
+      Fail "tooltip check failed"
     }
   }
 

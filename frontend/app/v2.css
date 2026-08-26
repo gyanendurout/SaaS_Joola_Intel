@@ -958,7 +958,12 @@ html { scroll-behavior: smooth; }
   color: var(--yellow);
 }
 .v2-root .si-popup {
-  display: none;
+  /* Visibility is controlled by React — SectionInfo only mounts this element
+     when hovered or pinned. This was `display: none` with no companion rule to
+     un-hide it (the old CSS-only `.section-info:hover .si-popup` rule went away
+     when the popup moved to position:fixed), which silently hid EVERY tooltip
+     on every v2 page. Do not reintroduce a display toggle here. */
+  display: block;
   position: fixed;
   background: rgba(7,9,14,0.98);
   border: 1px solid rgba(245,230,37,0.28);

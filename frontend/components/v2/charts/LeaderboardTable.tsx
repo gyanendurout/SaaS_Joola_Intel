@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { fmt } from '@/components/v2/charts'
 import { SortTh, ColumnFilter } from '@/components/v2/PageShell'
+import { tipFor } from '@/lib/v2/tooltips'
 
 export interface LeaderboardRow {
   brand: string
@@ -112,19 +113,19 @@ export function LeaderboardTable({
         <table className="data leaderboard-table" role="table" aria-label="Product leaderboard">
           <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
             <tr>
-              <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
-              <SortTh col="product" label="Product" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+              <SortTh col="brand" label="Brand" sortKey={sortKey} sortDir={sortDir} toggle={toggle} title={tipFor('Brand')} />
+              <SortTh col="product" label="Product" sortKey={sortKey} sortDir={sortDir} toggle={toggle} title={tipFor('Product')} />
               <SortTh col="attention" label="Attention" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} title="Attention score combines mentions, recency, and weighted product signals where available." />
-              <SortTh col="mentions" label="Mentions" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+              <SortTh col="mentions" label="Mentions" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} title={tipFor('Mentions')} />
               {/* Optional column: hidden when no rows carry est. units sold */}
               {showEstUnitsSold && (
-                <SortTh col="estimatedUnitsSold" label="Est. units sold" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                <SortTh col="estimatedUnitsSold" label="Est. units sold" sortKey={sortKey} sortDir={sortDir} toggle={toggle} style={{ textAlign: 'right' }} title={tipFor('Est. units sold')} />
               )}
               {/* Optional column: hidden when no rows carry best-lag data */}
               {showBestLag && (
-                <SortTh col="bestLagDays" label="Best lag" sortKey={sortKey} sortDir={sortDir} toggle={toggle} />
+                <SortTh col="bestLagDays" label="Best lag" sortKey={sortKey} sortDir={sortDir} toggle={toggle} title={tipFor('Best lag')} />
               )}
-              <th style={{ textAlign: 'center' }}>Trend</th>
+              <th style={{ textAlign: 'center' }} title={tipFor('Trend')}>Trend</th>
             </tr>
             <tr className="col-filter-row">
               <th><ColumnFilter col="brand" value={colFilter.brand} onChange={(v) => setColFilter((p) => ({ ...p, brand: v }))} placeholder="brand…" /></th>

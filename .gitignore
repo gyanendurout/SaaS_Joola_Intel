@@ -59,3 +59,12 @@ SaaS Marketing/
 ruvector.db
 logs/
 *.prev
+
+# Licensed third-party research (Particl exports: .docx reports + dashboard
+# screenshots). Kept out of git deliberately — it is a paid vendor's material
+# and 18 MB of binaries would live in history forever.
+DATA/
+
+# Stray root manifest from a tool run. The application manifest is frontend/package.json.
+/package.json
+/package-lock.json

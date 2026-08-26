@@ -12,6 +12,7 @@ import {
   fetchRestockCadence,
   fetchPricePressure,
   fetchAttentionAvailability,
+  normalizeProductName,
   type StockoutOpportunityRow,
   type RestockCadenceRow,
   type PricePressureRow,
@@ -19,6 +20,8 @@ import {
 } from '@/lib/v2/productIntel'
 import { ActionFrame, Caveat } from '@/components/v2/ActionFrame'
 import { useBrandFilter } from '@/lib/v2/BrandFilterContext'
+import { fetchPaged } from '@/lib/v2/paged'
+import { tipFor } from '@/lib/v2/tooltips'
 
 // ─── Types ───────────────────────────────────────────────────────────
 interface Brand {
@@ -257,34 +260,75 @@ export default function SalesIntelPage() {
     let cancelled = false
     async function load() {
       try {
-        const [bRes, pRes, sRes, vRes] = await Promise.all([
+        const [bRes, pRes, sRes, vRes, rRes] = await Promise.all([
           supabase.from('brands').select('id, slug, name'),
+          // avg_rating / review_count live on `products` (the scraped catalog),
+          // NOT on products_catalog (the curated one). Selecting them here made
+          // PostgREST reject the whole request with 42703, which left this page
+          // stuck on its loading skeleton forever. They are merged in below.
           supabase
             .from('products_catalog')
-            .select('id, brand_id, display_name, sku, category, avg_rating, review_count, image_url'),
-          supabase
-            .from('product_snapshots')
-            .select(
-              'brand_id, product_id, snapshot_time, price, availability_status, visible_inventory_qty, inventory_signal_type, inventory_confidence',
-            )
-            .order('snapshot_time', { ascending: false })
-            .limit(2000),
+            .select('id, brand_id, display_name, sku, category, image_url'),
+          // Paged, not top-N: `latestByProduct` reduces these rows to the most
+          // recent snapshot per product, and the brand cards count in-stock /
+          // out-of-stock / signal-quality across every tracked product. The
+          // 1,000-row PostgREST cap meant whole brands fell off the grid.
+          // ~38k rows exist across ~475 products; 10,000 newest-first rows is
+          // ~20 snapshot cycles — deep enough to reach every product, and a
+          // deliberate ceiling so the browser never pulls the whole table.
+          fetchPaged<ProductSnapshot>(
+            () => supabase
+              .from('product_snapshots')
+              .select(
+                'brand_id, product_id, snapshot_time, price, availability_status, visible_inventory_qty, inventory_signal_type, inventory_confidence',
+              )
+              .order('snapshot_time', { ascending: false })
+              // `id` tiebreak keeps range-paging stable when timestamps collide.
+              .order('id', { ascending: true }),
+            { maxRows: 10_000, label: 'salesIntel.productSnapshots' },
+          ),
           supabase
             .from('product_variants')
             .select('id, brand_id, product_id, availability_status, price, compare_at_price, first_seen_at, variant_title')
             .limit(1000),
+          supabase
+            .from('products')
+            .select('brand_id, name, avg_rating, review_count')
+            .limit(2000),
         ])
 
         if (cancelled) return
 
         if (bRes.error) throw bRes.error
         if (pRes.error) throw pRes.error
-        if (sRes.error) throw sRes.error
         if (vRes.error) throw vRes.error
 
         setBrands((bRes.data as Brand[] | null) ?? [])
-        setProducts((pRes.data as ProductCatalog[] | null) ?? [])
-        setSnapshots((sRes.data as ProductSnapshot[] | null) ?? [])
+
+        // products_catalog (curated) and products (scraped) are not joined
+        // upstream, so match on brand + normalized name — the same rule
+        // productIntel.buildProductMatches() uses. No cross-brand fuzzy match:
+        // a missing rating is better than a wrong one.
+        const ratingByKey = new Map<string, { avg: number | null; count: number | null }>()
+        for (const r of ((rRes.data as any[] | null) ?? [])) {
+          if (!r.brand_id || !r.name) continue
+          ratingByKey.set(`${r.brand_id}::${normalizeProductName(r.name)}`, {
+            avg: r.avg_rating != null ? Number(r.avg_rating) : null,
+            count: r.review_count != null ? Number(r.review_count) : null,
+          })
+        }
+        const catalog = ((pRes.data as any[] | null) ?? []).map((p) => {
+          const hit = ratingByKey.get(`${p.brand_id}::${normalizeProductName(p.display_name)}`)
+          return {
+            ...p,
+            avg_rating: hit?.avg ?? null,
+            review_count: hit?.count ?? null,
+          } as ProductCatalog
+        })
+        setProducts(catalog)
+        // sRes is already a plain row array — fetchPaged degrades to a partial
+        // (or empty) array on error rather than throwing, matching the other reads.
+        setSnapshots(sRes)
         setVariants((vRes.data as ProductVariant[] | null) ?? [])
 
         // Sections F-I: load the productIntel-derived datasets
@@ -1127,15 +1171,15 @@ export default function SalesIntelPage() {
             <table className="data" style={{ width: '100%' }}>
               <thead><tr>
                 <th style={{ width: 28, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
-                <SortTh col="brand"    label="Brand"         sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ minWidth: 130 }} />
-                <SortTh col="total"    label="Products"      sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 80 }} />
-                <SortTh col="inStock"  label="In Stock"      sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 80 }} />
-                <SortTh col="outStock" label="Out of Stock"  sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 90 }} />
-                <th style={{ minWidth: 120 }}>Stock Health</th>
-                <SortTh col="stockouts" label="Stockout Opps" sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 100 }} />
-                <SortTh col="avgPrice" label="Avg Price"     sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 85 }} />
-                <SortTh col="demand"   label="Demand 30d"    sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 90 }} />
-                <th style={{ width: 110 }}>Restock Pattern</th>
+                <SortTh col="brand"    label="Brand"         sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ minWidth: 130 }} title={tipFor('Brand')} />
+                <SortTh col="total"    label="Products"      sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 80 }} title={tipFor('Products')} />
+                <SortTh col="inStock"  label="In Stock"      sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 80 }} title={tipFor('In Stock')} />
+                <SortTh col="outStock" label="Out of Stock"  sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 90 }} title={tipFor('Out of Stock')} />
+                <th style={{ minWidth: 120 }} title={tipFor('Stock Health')}>Stock Health</th>
+                <SortTh col="stockouts" label="Stockout Opps" sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 100 }} title={tipFor('Stockout Opps')} />
+                <SortTh col="avgPrice" label="Avg Price"     sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 85 }} title={tipFor('Avg Price')} />
+                <SortTh col="demand"   label="Demand 30d"    sortKey={ovSortKey} sortDir={ovSortDir} toggle={brandOverview.toggleOvSort} style={{ textAlign: 'right', width: 90 }} title={tipFor('Demand 30d')} />
+                <th style={{ width: 110 }} title={tipFor('Restock Pattern')}>Restock Pattern</th>
                 <th style={{ width: 70, textAlign: 'center' }}>Detail</th>
               </tr></thead>
               <tbody>
@@ -1352,13 +1396,13 @@ export default function SalesIntelPage() {
               <table className="data">
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <SortTh col="time" label="Time" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} style={{ width: 130 }} />
-                    <SortTh col="brandName" label="Brand" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
-                    <SortTh col="productName" label="Product" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
-                    <SortTh col="status" label="Status" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
-                    <SortTh col="priceVal" label="Price" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} style={{ textAlign: 'right' }} />
-                    <SortTh col="signal" label="Signal" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
-                    <SortTh col="confidence" label="Confidence" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} />
+                    <SortTh col="time" label="Time" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} style={{ width: 130 }} title={tipFor('Time')} />
+                    <SortTh col="brandName" label="Brand" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} title={tipFor('Brand')} />
+                    <SortTh col="productName" label="Product" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} title={tipFor('Product')} />
+                    <SortTh col="status" label="Status" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} title={tipFor('Status')} />
+                    <SortTh col="priceVal" label="Price" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} style={{ textAlign: 'right' }} title={tipFor('Price')} />
+                    <SortTh col="signal" label="Signal" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} title={tipFor('Signal')} />
+                    <SortTh col="confidence" label="Confidence" sortKey={stockSortKey} sortDir={stockSortDir} toggle={toggleStock} title={tipFor('Confidence')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th />
@@ -1435,10 +1479,10 @@ export default function SalesIntelPage() {
               <table className="data">
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <SortTh col="productName" label="Product" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} />
-                    <SortTh col="brandName" label="Brand" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} style={{ width: 140 }} />
+                    <SortTh col="productName" label="Product" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} title={tipFor('Product')} />
+                    <SortTh col="brandName" label="Brand" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} style={{ width: 140 }} title={tipFor('Brand')} />
                     <th style={{ width: '40%' }}>Relative price</th>
-                    <SortTh col="price" label="Price" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} style={{ width: 90, textAlign: 'right' }} />
+                    <SortTh col="price" label="Price" sortKey={priceSortKey} sortDir={priceSortDir} toggle={togglePrice} style={{ width: 90, textAlign: 'right' }} title={tipFor('Price')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="productName" value={priceColFilter.productName} onChange={v => setPriceColFilter(p => ({ ...p, productName: v }))} placeholder="product…" /></th>
@@ -1524,10 +1568,10 @@ export default function SalesIntelPage() {
                   <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                     <tr>
                       <th style={{ width: 40 }}>#</th>
-                      <SortTh col="brand" label="Brand" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} />
-                      <SortTh col="avgPrice" label="Avg price" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} style={{ textAlign: 'right' }} />
-                      <SortTh col="products" label="Products" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} style={{ textAlign: 'right' }} />
-                      <SortTh col="signal" label="Revenue signal" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} />
+                      <SortTh col="brand" label="Brand" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} title={tipFor('Brand')} />
+                      <SortTh col="avgPrice" label="Avg price" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} style={{ textAlign: 'right' }} title={tipFor('Avg price')} />
+                      <SortTh col="products" label="Products" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} style={{ textAlign: 'right' }} title={tipFor('Products')} />
+                      <SortTh col="signal" label="Revenue signal" sortKey={revSortKey} sortDir={revSortDir} toggle={toggleRev} title={tipFor('Revenue signal')} />
                     </tr>
                     <tr className="col-filter-row">
                       <th />
@@ -1603,12 +1647,12 @@ export default function SalesIntelPage() {
                 <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
                     <th>Brand</th>
-                    <th>Product</th>
-                    <th>Stock status</th>
-                    <th>Last in stock</th>
-                    <th style={{ textAlign: 'right' }}>Demand (30d mentions)</th>
-                    <th>JOOLA comparable</th>
-                    <th>Action</th>
+                    <th title={tipFor('Product')}>Product</th>
+                    <th title={tipFor('Stock status')}>Stock status</th>
+                    <th title={tipFor('Last in stock')}>Last in stock</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Demand (30d mentions)')}>Demand (30d mentions)</th>
+                    <th title={tipFor('JOOLA comparable')}>JOOLA comparable</th>
+                    <th title={tipFor('Action')}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1670,12 +1714,12 @@ export default function SalesIntelPage() {
               <table className="data" style={{ width: '100%' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
-                    <th>Brand</th>
-                    <th>Product</th>
-                    <th style={{ textAlign: 'right' }}>Avg days between restocks</th>
-                    <th>Most recent restock</th>
-                    <th>Pattern</th>
-                    <th style={{ textAlign: 'right' }}>Demand (30d)</th>
+                    <th title={tipFor('Brand')}>Brand</th>
+                    <th title={tipFor('Product')}>Product</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Avg days between restocks')}>Avg days between restocks</th>
+                    <th title={tipFor('Most recent restock')}>Most recent restock</th>
+                    <th title={tipFor('Pattern')}>Pattern</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Demand (30d)')}>Demand (30d)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1738,13 +1782,13 @@ export default function SalesIntelPage() {
               <table className="data" style={{ width: '100%' }}>
                 <thead style={{ position: 'sticky', top: 0, zIndex: 2, background: 'var(--sticky-bg)' }}>
                   <tr>
-                    <th>Brand</th>
-                    <th>Product</th>
-                    <th style={{ textAlign: 'right' }}>Current price</th>
-                    <th style={{ textAlign: 'right' }}>90d index</th>
-                    <th style={{ textAlign: 'right' }}>Discount %</th>
-                    <th>JOOLA comparable</th>
-                    <th>Action</th>
+                    <th title={tipFor('Brand')}>Brand</th>
+                    <th title={tipFor('Product')}>Product</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Current price')}>Current price</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('90d index')}>90d index</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Discount %')}>Discount %</th>
+                    <th title={tipFor('JOOLA comparable')}>JOOLA comparable</th>
+                    <th title={tipFor('Action')}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1962,15 +2006,15 @@ export default function SalesIntelPage() {
               <table className="data">
                 <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                   <tr>
-                    <SortTh col="estimate_date" label="Date" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ width: 100 }} />
-                    <SortTh col="brand_id" label="Brand" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} />
-                    <th style={{ minWidth: 140 }}>Product</th>
-                    <SortTh col="estimation_method" label="Method" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} />
+                    <SortTh col="estimate_date" label="Date" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ width: 100 }} title={tipFor('Date')} />
+                    <SortTh col="brand_id" label="Brand" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} title={tipFor('Brand')} />
+                    <th style={{ minWidth: 140 }} title={tipFor('Product')}>Product</th>
+                    <SortTh col="estimation_method" label="Method" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} title={tipFor('Method')} />
                     <SortTh col="estimated_units_sold" label="Units" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ textAlign: 'right' }} title="Estimated units sold in this window" />
                     <SortTh col="estimated_revenue" label="Est. Revenue" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ textAlign: 'right' }} title="units × observed price" />
-                    <SortTh col="price_used" label="Price" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ textAlign: 'right' }} />
+                    <SortTh col="price_used" label="Price" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ textAlign: 'right' }} title={tipFor('Price')} />
                     <SortTh col="confidence_score" label="Confidence" sortKey={estSortKey} sortDir={estSortDir} toggle={toggleEst} style={{ textAlign: 'right' }} title="0.25 = flip signal only, 0.5–1.0 = qty delta" />
-                    <th>Qty Δ</th>
+                    <th title={tipFor('Qty Δ')}>Qty Δ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2064,15 +2108,15 @@ export default function SalesIntelPage() {
               <table className="data">
                 <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                   <tr>
-                    <SortTh col="event_time" label="Time" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ width: 130 }} />
-                    <SortTh col="brand_id" label="Brand" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} />
-                    <th style={{ minWidth: 140 }}>Product</th>
-                    <SortTh col="event_type" label="Event" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} />
-                    <SortTh col="previous_qty" label="Prev Qty" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} />
-                    <SortTh col="current_qty" label="Curr Qty" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} />
-                    <SortTh col="delta_qty" label="Delta" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} />
-                    <SortTh col="confidence_score" label="Confidence" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} />
-                    <th>Reason</th>
+                    <SortTh col="event_time" label="Time" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ width: 130 }} title={tipFor('Time')} />
+                    <SortTh col="brand_id" label="Brand" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} title={tipFor('Brand')} />
+                    <th style={{ minWidth: 140 }} title={tipFor('Product')}>Product</th>
+                    <SortTh col="event_type" label="Event" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} title={tipFor('Event')} />
+                    <SortTh col="previous_qty" label="Prev Qty" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} title={tipFor('Prev Qty')} />
+                    <SortTh col="current_qty" label="Curr Qty" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} title={tipFor('Curr Qty')} />
+                    <SortTh col="delta_qty" label="Delta" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} title={tipFor('Delta')} />
+                    <SortTh col="confidence_score" label="Confidence" sortKey={evtSortKey} sortDir={evtSortDir} toggle={toggleEvt} style={{ textAlign: 'right' }} title={tipFor('Confidence')} />
+                    <th title={tipFor('Reason')}>Reason</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2254,8 +2298,8 @@ export default function SalesIntelPage() {
                 <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                   <tr>
                     <th style={{ width: 36, textAlign: 'center', color: 'var(--fg-4)', fontSize: 10 }}>#</th>
-                    <SortTh col="productName" label="Product" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} />
-                    <SortTh col="brandSlug" label="Brand" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} />
+                    <SortTh col="productName" label="Product" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} title={tipFor('Product')} />
+                    <SortTh col="brandSlug" label="Brand" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} title={tipFor('Brand')} />
                     <SortTh col="avgPrice" label="Price" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Average price observed across snapshots for this product's variants" />
                     <SortTh col="avgDiscount" label="Avg Disc%" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Average discount % = (compare_at_price − price) ÷ compare_at_price × 100. Only populated when compare_at_price is available in Shopify JSON." />
                     <SortTh col="totalUnits" label="Volume" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Estimated total units sold — sum of inventory_delta events for this product across all variants" />
@@ -2263,7 +2307,7 @@ export default function SalesIntelPage() {
                     <SortTh col="totalRevenue" label="Est. Revenue" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Estimated revenue = units sold × observed price. Not verified POS data." />
                     <SortTh col="sellThroughRate" label="Sell-Through" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Sell-through rate = units sold ÷ (units sold + current inventory ÷ 2). Halved denominator follows Particl convention: current snapshot is end-of-period, so average-period inventory ≈ current ÷ 2. High rate = strong demand vs. stock." />
                     <SortTh col="reviewCount" label="Reviews" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Total public review count from the brand's product page (scraped via scrape_catalog). Industry proxy: ~3-5% of buyers leave a review." />
-                    <SortTh col="avgRating" label="Rating" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Average star rating scraped from the brand's product page (1–5). Source: products_catalog.avg_rating." />
+                    <SortTh col="avgRating" label="Rating" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Average star rating scraped from the brand's product page (1–5). Source: products.avg_rating, matched to the catalog by brand + product name." />
                     <SortTh col="avgConfidence" label="Conf." sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} style={{ textAlign: 'right' }} title="Average confidence of the underlying sales estimate. 0.5–1.0 = quantity delta method (high). 0.25 = availability-flip only (low)." />
                     <SortTh col="firstSeen" label="First Seen" sortKey={bsSortKey} sortDir={bsSortDir} toggle={toggleBs} title="Date this variant first appeared in the JOOLA Intel product tracking database." />
                   </tr>
@@ -2379,7 +2423,7 @@ export default function SalesIntelPage() {
             <table className="data">
               <thead style={{ position: 'sticky', top: 0, background: 'rgba(13,17,23,0.95)', zIndex: 2 }}>
                 <tr>
-                  <SortTh col="brand" label="Brand" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} />
+                  <SortTh col="brand" label="Brand" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} title={tipFor('Brand')} />
                   <SortTh col="productCount" label="# Products" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Number of paddle SKUs in products_catalog for this brand" />
                   <SortTh col="avgPrice" label="Avg Price" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Average price observed across all product snapshots for this brand" />
                   <SortTh col="avgDiscount" label="Avg Disc%" sortKey={brandSortKey} sortDir={brandSortDir} toggle={toggleBrand} style={{ textAlign: 'right' }} title="Average discount % from product_variants compare_at_price" />
@@ -2597,14 +2641,14 @@ export default function SalesIntelPage() {
             <table className="data" style={{ width: '100%', minWidth: 760 }}>
               <thead style={{ position: 'sticky', top: 0, background: '#0d1117', zIndex: 1 }}>
                 <tr>
-                  <th style={{ textAlign: 'left' }}>Category</th>
-                  <th style={{ textAlign: 'right' }}># Products</th>
-                  <th style={{ textAlign: 'right' }}>Avg Rating</th>
-                  <th style={{ textAlign: 'right' }}>% Discounted</th>
-                  <th style={{ textAlign: 'right' }}>Price Range</th>
-                  <th style={{ textAlign: 'right' }}>Avg Price</th>
-                  <th style={{ textAlign: 'right' }}>Avg Full Price</th>
-                  <th style={{ textAlign: 'right' }}>Avg Discount</th>
+                  <th style={{ textAlign: 'left' }} title={tipFor('Category')}>Category</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('# Products')}># Products</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Avg Rating')}>Avg Rating</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('% Discounted')}>% Discounted</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Price Range')}>Price Range</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Avg Price')}>Avg Price</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Avg Full Price')}>Avg Full Price</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Avg Discount')}>Avg Discount</th>
                 </tr>
               </thead>
               <tbody>

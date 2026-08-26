@@ -21,6 +21,7 @@
  */
 
 import { supabase } from '@/lib/shared/supabase'
+import { fetchPagedResult } from '@/lib/v2/paged'
 import { type V2Brand } from '@/lib/v2/data'
 
 // ─── Public shapes ───────────────────────────────────────────────────
@@ -200,19 +201,29 @@ export async function fetchMarketIntel(brands: V2Brand[]): Promise<MarketIntelDa
         .eq('period', 'last_30d')
         .limit(2000),
     ),
-    safeQuery<RawMentionFact>(
-      supabase
+    // mention_facts and inventory_events both feed per-brand counters below
+    // (mentions, crisis count, athlete mentions, restock/sellout tallies), so
+    // a 1,000-row PostgREST truncation would silently under-count every brand.
+    // Both are paged, and both now carry an explicit order — an unordered
+    // range-paged read has no stable row order between pages.
+    fetchPagedResult<RawMentionFact>(
+      () => supabase
         .from('mention_facts')
         .select('brand_id,athlete_id,sentiment_label,is_crisis,posted_at')
         .gte('posted_at', since30d)
-        .limit(20000),
+        .order('posted_at', { ascending: false })
+        .order('id', { ascending: true }),
+      // 30-day window measures ~2,800 rows; 20k is headroom, not an expectation.
+      { maxRows: 20_000, label: 'marketIntel.mentionFacts30d' },
     ),
-    safeQuery<RawInventoryEvent>(
-      supabase
+    fetchPagedResult<RawInventoryEvent>(
+      () => supabase
         .from('inventory_events')
         .select('brand_id,event_type,event_time')
         .gte('event_time', since30d)
-        .limit(5000),
+        .order('event_time', { ascending: false })
+        .order('id', { ascending: true }),
+      { maxRows: 20_000, label: 'marketIntel.inventoryEvents30d' },
     ),
     safeQuery<RawIgProfile>(
       supabase

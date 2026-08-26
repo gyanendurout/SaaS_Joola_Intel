@@ -13,6 +13,7 @@
  */
 
 import { supabase } from '@/lib/shared/supabase'
+import { fetchPaged } from './paged'
 
 export type V2Brand = {
   id: string          // slug
@@ -77,9 +78,17 @@ export type V2IGRow = {
 export async function fetchIG(brands: V2Brand[]): Promise<V2IGRow[]> {
   const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
 
-  const [{ data: profiles }, { data: posts }] = await Promise.all([
+  const [{ data: profiles }, posts] = await Promise.all([
     supabase.from('ig_profiles_weekly').select('brand_id,followers,week_number,year,scraped_at').order('scraped_at', { ascending: false }),
-    supabase.from('ig_posts').select('brand_id,like_count,comment_count').limit(2000),
+    // Paged: this feeds a per-brand engagement-rate average over EVERY post
+    // (~1,040 rows). PostgREST caps a single response at 1,000 whatever
+    // `.limit()` says, so the un-paged version silently dropped posts from the
+    // denominator. Ordered by `id` because an unordered range-paged read has
+    // no stable row order between pages.
+    fetchPaged<any>(
+      () => supabase.from('ig_posts').select('brand_id,like_count,comment_count').order('id', { ascending: true }),
+      { maxRows: 20_000, label: 'data.fetchIG.igPosts' },
+    ),
   ])
 
   // Most-recent snapshot per brand
@@ -140,7 +149,14 @@ export type V2AdRow = {
 
 export async function fetchAds(brands: V2Brand[]): Promise<V2AdRow[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const { data } = await supabase.from('marketing_ads').select('brand_id,platform,is_active').limit(5000)
+  // Paged: this is a full census of ads per brand (total / meta / google /
+  // active) and the share-of-voice denominator — ~1,600 rows, so the single
+  // 1,000-row PostgREST response was skewing every brand's share. Ordered by
+  // `id` because range-paging an unordered read has no stable row order.
+  const data = await fetchPaged<any>(
+    () => supabase.from('marketing_ads').select('brand_id,platform,is_active').order('id', { ascending: true }),
+    { maxRows: 20_000, label: 'data.fetchAds.marketingAds' },
+  )
   const agg: Record<string, V2AdRow> = {}
   ;(data || []).forEach((a: any) => {
     const slug = slugByBid[a.brand_id]
@@ -281,10 +297,16 @@ export async function fetchReddit(brands: V2Brand[]): Promise<V2RedditRow[]> {
   // Pull title/body/subreddit so we can apply the generic-name brand context guard.
   // Schema (migration 006_enrichment_columns.sql) renamed sentiment → sentiment_label;
   // use PostgREST alias `sentiment:sentiment_label` so downstream code keeps reading `r.sentiment`.
-  const { data } = await supabase
-    .from('reddit_mentions')
-    .select('brand_id,sentiment:sentiment_label,subreddit,title,body')
-    .limit(3000)
+  // Paged: per-brand mention + sentiment counts over the whole table
+  // (~1,130 rows). Ordered by `id` — range-paging an unordered read has no
+  // stable row order between pages.
+  const data = await fetchPaged<any>(
+    () => supabase
+      .from('reddit_mentions')
+      .select('brand_id,sentiment:sentiment_label,subreddit,title,body')
+      .order('id', { ascending: true }),
+    { maxRows: 20_000, label: 'data.fetchReddit.redditMentions' },
+  )
   const agg: Record<string, V2RedditRow> = {}
   ;(data || []).forEach((r: any) => {
     const slug = slugByBid[r.brand_id]
@@ -356,11 +378,15 @@ export type V2AdSample = {
 
 export async function fetchAdSample(brands: V2Brand[], limit = 12): Promise<V2AdSample[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  // Deliberate top-N, NOT an accidental truncation: this is a sample of the
+  // most recent creatives, ordered newest-first and sliced to `limit`. Clamped
+  // to PostgREST's 1,000-row ceiling so an oversized `limit` cannot silently
+  // ask for more than one response can carry.
   const { data } = await supabase
     .from('marketing_ads')
     .select('brand_id,platform,body,cta,started_at,is_active,captured_at')
     .order('captured_at', { ascending: false })
-    .limit(limit * 4)
+    .limit(Math.min(limit * 4, 1000))
   return (data || []).slice(0, limit).map((a: any) => ({
     brand: slugByBid[a.brand_id] || 'unknown',
     platform: a.platform === 'meta' ? 'Meta' : 'Google',
@@ -382,11 +408,14 @@ export async function fetchTopIGPosts(brands: V2Brand[], limit = 200): Promise<V
   // Pull a wider pool so de-duplication (shortcode first, then post_id,
   // then permalink) still leaves us with the requested `limit` after
   // collapsing duplicate IG posts that snuck in over multiple scrapes.
+  // Deliberate top-N, NOT an accidental truncation: ranked by like_count desc
+  // and cut to `limit` after dedupe. Clamped to PostgREST's 1,000-row ceiling
+  // so the over-fetch pool can never quietly exceed what one response carries.
   const { data } = await supabase
     .from('ig_posts')
     .select('brand_id,handle,caption,like_count,comment_count,view_count,post_format,posted_at,post_url,instagram_post_id')
     .order('like_count', { ascending: false })
-    .limit(Math.max(limit * 3, 600))
+    .limit(Math.min(Math.max(limit * 3, 600), 1000))
 
   // Frontend dedupe — schema has no unique index on shortcode, so the
   // table is known to carry duplicates from re-scrapes. First-seen wins.
@@ -628,10 +657,16 @@ export async function fetchYTTrend(brands: V2Brand[]): Promise<Record<string, nu
 // ─── Reddit weekly mention trend (binned from posted_at) ─────────────
 export async function fetchRedditTrend(brands: V2Brand[]): Promise<Record<string, number[]>> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const { data } = await supabase
-    .from('reddit_mentions')
-    .select('brand_id,posted_at,subreddit,title,body')
-    .limit(5000)
+  // Paged: bins every mention into 8 weekly buckets per brand, so a truncated
+  // read shortens the bars. ~1,130 rows. Ordered by `id` — range-paging an
+  // unordered read has no stable row order between pages.
+  const data = await fetchPaged<any>(
+    () => supabase
+      .from('reddit_mentions')
+      .select('brand_id,posted_at,subreddit,title,body')
+      .order('id', { ascending: true }),
+    { maxRows: 20_000, label: 'data.fetchRedditTrend.redditMentions' },
+  )
   const now = Date.now()
   const buckets: Record<string, number[]> = {}
   ;(data || []).forEach((r: any) => {
@@ -652,10 +687,17 @@ export type V2Subreddit = { name: string; mentions: number; joolaShare: number }
 export async function fetchRedditSubreddits(brands: V2Brand[]): Promise<V2Subreddit[]> {
   const joolaIds = new Set(brands.filter((b) => b.joola).map((b) => b.brand_id))
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const { data } = await supabase
-    .from('reddit_mentions')
-    .select('brand_id,subreddit,title,body')
-    .limit(5000)
+  // Paged: mention counts and JOOLA share per subreddit — an aggregate over
+  // the whole table (~1,130 rows), then sliced to the top 6 subreddits. The
+  // slice is on the AGGREGATE, so the read itself must be complete. Ordered by
+  // `id` — range-paging an unordered read has no stable row order.
+  const data = await fetchPaged<any>(
+    () => supabase
+      .from('reddit_mentions')
+      .select('brand_id,subreddit,title,body')
+      .order('id', { ascending: true }),
+    { maxRows: 20_000, label: 'data.fetchRedditSubreddits.redditMentions' },
+  )
   const bySubreddit: Record<string, { total: number; joola: number }> = {}
   ;(data || []).forEach((r: any) => {
     const slug = slugByBid[r.brand_id]
@@ -783,11 +825,18 @@ export async function fetchIGCommentMentions(
 // ─── IG post frequency heatmap (4 weeks × 7 days, Mon-first) ─────────
 export async function fetchPostFrequency(brands: V2Brand[]): Promise<Record<string, number[][]>> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const { data } = await supabase
-    .from('ig_posts')
-    .select('brand_id,posted_at')
-    .order('posted_at', { ascending: false })
-    .limit(2000)
+  // Paged: builds a 4-week × 7-day posting-frequency heatmap, i.e. a count per
+  // cell. ~1,040 rows in the table, so the single 1,000-row response was
+  // already clipping cells. `id` tiebreak keeps range-paging stable when
+  // timestamps collide.
+  const data = await fetchPaged<any>(
+    () => supabase
+      .from('ig_posts')
+      .select('brand_id,posted_at')
+      .order('posted_at', { ascending: false })
+      .order('id', { ascending: true }),
+    { maxRows: 20_000, label: 'data.fetchPostFrequency.igPosts' },
+  )
   const now = Date.now()
   const freq: Record<string, number[][]> = {}
   brands.forEach((b) => { freq[b.id] = Array.from({ length: 4 }, () => Array(7).fill(0)) })
@@ -862,9 +911,19 @@ export type V2CommentCount = { brand: string; ig: number; yt: number; total: num
 
 export async function fetchCommentCounts(brands: V2Brand[]): Promise<V2CommentCount[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
-  const [{ data: ig }, { data: yt }] = await Promise.all([
-    supabase.from('ig_comments').select('brand_id').limit(10000),
-    supabase.from('yt_comments').select('brand_id').limit(10000),
+  // Paged: this function IS a row count per brand — the most direct possible
+  // victim of the 1,000-row cap. ig_comments holds ~8,700 rows and yt_comments
+  // ~3,750, so the numbers on the page were wrong by 8x / 4x. Ordered by `id`
+  // because range-paging an unordered read has no stable row order.
+  const [ig, yt] = await Promise.all([
+    fetchPaged<any>(
+      () => supabase.from('ig_comments').select('brand_id').order('id', { ascending: true }),
+      { maxRows: 50_000, label: 'data.fetchCommentCounts.igComments' },
+    ),
+    fetchPaged<any>(
+      () => supabase.from('yt_comments').select('brand_id').order('id', { ascending: true }),
+      { maxRows: 50_000, label: 'data.fetchCommentCounts.ytComments' },
+    ),
   ])
   const igC: Record<string, number> = {}
   const ytC: Record<string, number> = {}
@@ -1165,9 +1224,15 @@ export type V2TikTokVideo = {
 
 export async function fetchTikTok(brands: V2Brand[]): Promise<V2TikTokRow[]> {
   const slugByBid = Object.fromEntries(brands.map(b => [b.brand_id, b.id]))
-  const [{ data: profiles }, { data: vids }] = await Promise.all([
+  const [{ data: profiles }, vids] = await Promise.all([
     supabase.from('tiktok_profiles_weekly').select('brand_id,handle,followers,following,video_count,total_hearts,week_number,year,scraped_at').order('scraped_at', { ascending: false }),
-    supabase.from('tiktok_videos').select('brand_id,view_count').limit(3000),
+    // Paged: drives per-brand video COUNT and average views (~1,390 rows), both
+    // of which a 1,000-row cap distorts. Ordered by `id` — range-paging an
+    // unordered read has no stable row order between pages.
+    fetchPaged<any>(
+      () => supabase.from('tiktok_videos').select('brand_id,view_count').order('id', { ascending: true }),
+      { maxRows: 20_000, label: 'data.fetchTikTok.tiktokVideos' },
+    ),
   ])
   const byBrand: Record<string, { current: number; following: number; videoCount: number; hearts: number; trend: number[] }> = {}
   ;(profiles || []).forEach((p: any) => {
@@ -1558,12 +1623,16 @@ export async function fetchRedditViral(
 export async function fetchRedditRemoved(brands: V2Brand[]): Promise<V2RedditRemoved[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
   try {
-    const { data, error } = await supabase
-      .from('reddit_mentions')
-      .select('brand_id,is_removed')
-      .eq('is_removed', true)
-      .limit(5000)
-    if (error || !data) return []
+    // Paged: a per-brand count of removed threads — truncation understates it.
+    // Ordered by `id`; range-paging an unordered read has no stable row order.
+    const data = await fetchPaged<any>(
+      () => supabase
+        .from('reddit_mentions')
+        .select('brand_id,is_removed')
+        .eq('is_removed', true)
+        .order('id', { ascending: true }),
+      { maxRows: 20_000, label: 'data.fetchRedditRemoved.redditMentions' },
+    )
     const agg: Record<string, V2RedditRemoved> = {}
     data.forEach((r: any) => {
       const slug = slugByBid[r.brand_id]
@@ -1583,12 +1652,17 @@ export async function fetchRedditCrisisClusters(
 ): Promise<V2RedditCrisisCluster[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
   try {
-    const { data, error } = await supabase
-      .from('reddit_mentions')
-      .select('brand_id,crisis_keywords,subreddit,title,body')
-      .not('crisis_keywords', 'is', null)
-      .limit(5000)
-    if (error || !data) return []
+    // Paged: counts keyword occurrences per brand and only THEN slices to the
+    // top `limit` clusters, so the read behind the ranking must be complete.
+    // Ordered by `id` — range-paging an unordered read has no stable row order.
+    const data = await fetchPaged<any>(
+      () => supabase
+        .from('reddit_mentions')
+        .select('brand_id,crisis_keywords,subreddit,title,body')
+        .not('crisis_keywords', 'is', null)
+        .order('id', { ascending: true }),
+      { maxRows: 20_000, label: 'data.fetchRedditCrisisClusters.redditMentions' },
+    )
     const agg: Record<string, V2RedditCrisisCluster> = {}
     data.forEach((r: any) => {
       const slug = slugByBid[r.brand_id]
@@ -1626,11 +1700,17 @@ export async function fetchRedditReplyVsOp(
 ): Promise<V2RedditReplyVsOp[]> {
   const slugByBid = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
   try {
-    const { data: comments, error: cErr } = await supabase
-      .from('reddit_comments')
-      .select('parent_post_id,sentiment_label,brand_id')
-      .limit(10_000)
-    if (cErr || !comments) return []
+    // Paged: aggregates reply sentiment per parent thread (~2,700 rows). A
+    // 1,000-row cap both loses threads entirely and skews the pos/neg ratio of
+    // the ones that survive. Ordered by `id` — range-paging an unordered read
+    // has no stable row order between pages.
+    const comments = await fetchPaged<any>(
+      () => supabase
+        .from('reddit_comments')
+        .select('parent_post_id,sentiment_label,brand_id')
+        .order('id', { ascending: true }),
+      { maxRows: 20_000, label: 'data.fetchRedditReplyVsOp.redditComments' },
+    )
     const parents: Record<string, { brand: string; pos: number; neg: number; total: number }> = {}
     comments.forEach((c: any) => {
       const slug = slugByBid[c.brand_id]
@@ -1643,6 +1723,8 @@ export async function fetchRedditReplyVsOp(
     })
     const parentIds = Object.keys(parents).slice(0, 500)
     if (parentIds.length === 0) return []
+    // Not paged, and safe: bounded by `parentIds` (max 500 ids), so this read
+    // can never reach PostgREST's 1,000-row ceiling.
     const { data: mentions, error: mErr } = await supabase
       .from('reddit_mentions')
       .select('id,sentiment_label:sentiment_label,brand_id,subreddit,title,body')

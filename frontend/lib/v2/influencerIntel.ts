@@ -17,6 +17,7 @@
  */
 
 import { supabase } from '@/lib/shared/supabase'
+import { fetchPaged } from './paged'
 import { type V2Brand } from './data'
 import {
   SPONSORED_PLAYER_ROSTER,
@@ -484,12 +485,17 @@ export async function fetchInfluencerIntel(
     })
 
   // ── 3. Mention facts (cross-channel player mentions when athlete_id set)
-  const mentionsRaw = await safeSelect<any>(() =>
-    supabase.from('mention_facts')
+  // Paged: these rows are not just a feed — they drive the player↔paddle
+  // connection matrix, per-brand player stats and the coverage counters, all
+  // of which are counts. A 1,000-row PostgREST cap would understate every one
+  // of them. `id` tiebreak keeps range-paging stable when timestamps collide.
+  const mentionsRaw = await fetchPaged<any>(
+    () => supabase.from('mention_facts')
       .select('id,channel,source_id,brand_id,product_id,athlete_id,sentiment_label,text_snippet,posted_at,engagement,link_url')
       .not('athlete_id', 'is', null)
       .order('posted_at', { ascending: false })
-      .limit(5000),
+      .order('id', { ascending: true }),
+    { maxRows: 10_000, label: 'influencerIntel.mentionFacts' },
   )
 
   // Build product lookup so connections section can label paddles
@@ -934,10 +940,16 @@ export async function fetchAthleteImpact(brands: V2Brand[]): Promise<AthleteImpa
       .select('id,influencer_id,like_count,comment_count,view_count,posted_at,sentiment')
       .gte('posted_at', cutoffIso)
       .limit(5000)),
-    safeSelect<any>(() => supabase.from('mention_facts')
+    // Paged: every row here is counted into an athlete's mention / product-
+    // mention / sentiment tallies, so a 1,000-row PostgREST truncation would
+    // deflate the impact score of every player. ~1,800 rows match today.
+    // The read carries no natural ordering, so order by `id` — an unordered
+    // range-paged read has no stable row order between pages.
+    fetchPaged<any>(() => supabase.from('mention_facts')
       .select('athlete_id,product_id,sentiment_label')
       .not('athlete_id', 'is', null)
-      .limit(10000)),
+      .order('id', { ascending: true }),
+      { maxRows: 20_000, label: 'influencerIntel.athleteImpact.mentionFacts' }),
     safeSelect<any>(() => supabase.from('influencer_x_snapshots')
       .select('influencer_id,followers,week_number,year,scraped_at')
       .order('scraped_at', { ascending: false })

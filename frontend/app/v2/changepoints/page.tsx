@@ -11,6 +11,7 @@ import {
 } from '@/lib/v2/analytics'
 import { PageHead, LoadingPage, SectionInfo, pgName, pgColor, SortTh, ColumnFilter } from '@/components/v2/PageShell'
 import { ChangepointTimeline } from '@/components/v2/charts/ChangepointTimeline'
+import { tipFor } from '@/lib/v2/tooltips'
 
 type CompetitorSignalRow = {
   brandSlug: string
@@ -415,8 +416,8 @@ export default function ChangepointsPage() {
                     <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                         <tr>
-                          <SortTh col="date" label="Date" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} />
-                          <SortTh col="brandName" label="Brand" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} />
+                          <SortTh col="date" label="Date" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} title={tipFor('Date')} />
+                          <SortTh col="brandName" label="Brand" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} title={tipFor('Brand')} />
                           <SortTh col="productName" label="Detail" sortKey={logSortKey} sortDir={logSortDir} toggle={toggleLogSort} />
                         </tr>
                         <tr className="col-filter-row">
@@ -491,12 +492,12 @@ export default function ChangepointsPage() {
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <th>Brand</th>
-                    <th>Product</th>
-                    <th>Signal changed</th>
-                    <th>Date</th>
-                    <th>Possible cause</th>
-                    <th>Recommended investigation</th>
+                    <th title={tipFor('Brand')}>Brand</th>
+                    <th title={tipFor('Product')}>Product</th>
+                    <th title={tipFor('Signal changed')}>Signal changed</th>
+                    <th title={tipFor('Date')}>Date</th>
+                    <th title={tipFor('Possible cause')}>Possible cause</th>
+                    <th title={tipFor('Recommended investigation')}>Recommended investigation</th>
                   </tr>
                 </thead>
                 <tbody>

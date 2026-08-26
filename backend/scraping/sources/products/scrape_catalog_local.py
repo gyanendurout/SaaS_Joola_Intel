@@ -32,12 +32,21 @@ Run via pipeline:
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from typing import Any, Callable
 
 from ...core import supabase_client as sb
 from ...core.logger import get_logger
+from ...core.network import http_request
+
+# products.json is a plain JSON endpoint; a browser UA keeps storefronts that
+# trim responses for obvious bots from doing so.
+_PRODUCTS_JSON_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
 
 log = get_logger("products.catalog_local")
 
@@ -396,19 +405,64 @@ JS_WILSON = r"""() => {""" + RATING_EXTRACTORS_JS + r"""
 
 # ---------------------------------------------------------------------------
 # Brand configuration.
+# ── FX normalisation ────────────────────────────────────────────────────────
+# Six Zero is an AU storefront. Before migration 025 this scraper simply threw
+# its prices away: price_usd was set to None for any non-USD currency and the
+# published AUD figure was stored nowhere at all. Net effect was 24 of Six
+# Zero's 35 catalog rows carrying no price, which removed the brand from price
+# analysis entirely and left it with no Tier on Product Intel.
+#
+# Now the local figure is always kept (price_local) and converted where a rate
+# exists. fx_rate_used + fx_rate_date travel with the row so any converted price
+# can be audited later — "what rate produced this, and when" is answerable
+# without guessing.
+_FX_CACHE: dict[tuple[str, str], tuple[float, str] | None] = {}
+
+
+def _fx_rate(base_ccy: str, quote_ccy: str = "USD") -> tuple[float, str] | None:
+    """Newest (rate, as_of) for base->quote, or None if no rate is on file.
+
+    Cached per run: this is called once per scraped product and the rate does
+    not change mid-crawl.
+    """
+    key = (base_ccy, quote_ccy)
+    if key in _FX_CACHE:
+        return _FX_CACHE[key]
+    result: tuple[float, str] | None = None
+    try:
+        # get_filtered, not get: sb.get() prefixes every param with "eq.",
+        # which would emit base_ccy=eq.eq.AUD and limit=eq.1.
+        rows = sb.get_filtered(
+            "fx_rates", "rate,as_of",
+            f"base_ccy=eq.{base_ccy}&quote_ccy=eq.{quote_ccy}"
+            f"&order=as_of.desc&limit=1",
+        )
+        if rows:
+            result = (float(rows[0]["rate"]), rows[0]["as_of"])
+    except Exception as exc:  # noqa: BLE001 - a missing rate must not stop a scrape
+        log.warning("  ⚠ FX lookup %s->%s failed: %s", base_ccy, quote_ccy, exc)
+    if result is None:
+        log.warning(
+            "  ⚠ no %s->%s rate on file — prices stay local and those products "
+            "will have no USD price or Tier", base_ccy, quote_ccy,
+        )
+    _FX_CACHE[key] = result
+    return result
+
+
 # `currency` defaults to USD; only override where the site quotes another currency.
 # ---------------------------------------------------------------------------
 BRAND_SCRAPERS: list[dict[str, Any]] = [
-    {"slug": "joola",    "url": "https://joola.com/collections/pickleball-paddles",
+    {"slug": "joola", "shopify_domain": "joola.com",    "url": "https://joola.com/collections/pickleball-paddles",
      "wait_for": ".card.card-product", "js": JS_JOOLA, "currency": "USD",
      "stealth": False, "extra_wait": 5000},
-    {"slug": "six-zero", "url": "https://www.sixzeropickleball.com/collections/paddles",
+    {"slug": "six-zero", "shopify_domain": "www.sixzeropickleball.com", "url": "https://www.sixzeropickleball.com/collections/paddles",
      "wait_for": ".grid__item",        "js": JS_SIX_ZERO, "currency": "AUD",
      "stealth": False, "extra_wait": 5000},
     # onix uses Bazaarvoice which lazy-renders after the page is interactive;
     # 8000ms gives the BV bundle time to hydrate, otherwise rating selectors
     # come back null even though the widget would have loaded on a real page view.
-    {"slug": "onix",     "url": "https://www.onixpickleball.com/collections/paddles",
+    {"slug": "onix", "shopify_domain": "www.onixpickleball.com",     "url": "https://www.onixpickleball.com/collections/paddles",
      "wait_for": ".ProductItem",       "js": JS_ONIX, "currency": "USD",
      "stealth": False, "extra_wait": 8000},
     {"slug": "franklin", "url": "https://www.franklinsports.com/pickleball/paddles",
@@ -420,7 +474,7 @@ BRAND_SCRAPERS: list[dict[str, Any]] = [
     {"slug": "wilson",   "url": "https://www.wilson.com/en-us/collection/pickleball/paddles",
      "wait_for": '[data-test*="product-tile"], [class*="productTile"], article[class*="product"]',
      "js": JS_WILSON, "currency": "USD", "stealth": False, "extra_wait": 8000},
-    {"slug": "engage",   "url": "https://engagepickleball.com/collections/allpaddles",
+    {"slug": "engage", "shopify_domain": "engagepickleball.com",   "url": "https://engagepickleball.com/collections/allpaddles",
      "wait_for": ".card", "js": JS_ENGAGE, "currency": "USD",
      "stealth": True, "extra_wait": 8000},
 ]
@@ -429,6 +483,127 @@ BRAND_SCRAPERS: list[dict[str, Any]] = [
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# ── currency detection + plausibility ───────────────────────────────────────
+# Shopify geo-prices by visitor IP, and the `currency` field in BRAND_SCRAPERS
+# is a static guess about what a US visitor would see. Run the crawl from
+# anywhere else and the two disagree silently.
+#
+# 2026-08-26, crawling from an India-based host:
+#     Six Zero "Black Opal 14mm"  rendered  Rs. 21,400.00   (INR)
+#                                 config    currency = AUD
+#                                 stored    price_local 21400 AUD -> $14,124
+# A $300 paddle recorded at fourteen thousand dollars, and nothing raised,
+# because 21400 is a well-formed number and AUD is a well-formed currency. The
+# only evidence of the fault was in the price string itself, which said rupees.
+#
+# So: read the currency off the rendered text, and treat the configured value
+# only as the tie-breaker for a bare `$`, which really is ambiguous.
+_CURRENCY_MARKS: tuple[tuple[str, str], ...] = (
+    # Explicit ISO codes first — unambiguous wherever they appear.
+    ("aud", "AUD"), ("usd", "USD"), ("cad", "CAD"), ("gbp", "GBP"),
+    ("eur", "EUR"), ("inr", "INR"), ("nzd", "NZD"),
+    # Then symbols and local abbreviations. Longer forms before shorter ones so
+    # "ca$" is not consumed by "a$".
+    ("rs.", "INR"), ("rs ", "INR"), ("₹", "INR"),
+    ("ca$", "CAD"), ("nz$", "NZD"), ("a$", "AUD"),
+    ("£", "GBP"), ("€", "EUR"),
+)
+
+# No pickleball product costs this much. The dearest paddle in the tracked
+# catalog lists at $299.95; the ceiling sits well above that so a genuine
+# premium launch is never clipped, while a currency mix-up — which is out by
+# 50x or more — cannot pass.
+MAX_PLAUSIBLE_USD = 2000.0
+
+# A product-grid selector broad enough to catch every card also catches the
+# collection page's filter sidebar. These are facet labels, never product names.
+# Anchored and whole-string so a real paddle called "Hybrid 16mm Elongated"
+# is untouched — only a name that is nothing BUT a facet word is dropped.
+_FACET_LABEL = re.compile(
+    r"^(?:thickness|shape|hybrid|elongated|widebody|wide body|standard|core|"
+    r"weight|grip|colou?r|size|price|brand|type|material|sort|filter|all|"
+    r"availability|in stock|out of stock|\d+\s*mm)$",
+    re.I)
+
+
+def detect_currency(raw: str | None, configured: str = "USD") -> str:
+    """ISO code for the currency a price string is actually quoted in.
+
+    Falls back to `configured` only when the text carries no evidence beyond a
+    bare `$`, which could legitimately be USD, AUD or CAD.
+    """
+    if not raw:
+        return configured
+    text = str(raw).lower()
+    for mark, code in _CURRENCY_MARKS:
+        if mark in text:
+            return code
+    return configured
+
+
+def shopify_price_index(domain: str) -> dict[str, tuple[float | None, float | None]]:
+    """{handle: (price, compare_at_price)} from a Shopify storefront's products.json.
+
+    THE reason this exists: /products.json is served in the shop's OWN default
+    currency and is not geo-localized, while the rendered collection page is.
+    Crawling six-zero from India renders `Rs. 21,400.00`; products.json returns
+    `300.00`, the real AUD list price, from the same host at the same moment.
+
+    That also makes the `currency` field in BRAND_SCRAPERS true again — it
+    describes the shop's default currency, which is exactly what these numbers
+    are quoted in.
+
+    Returns {} on any failure, so the caller silently falls back to the DOM
+    price and the plausibility guard remains the backstop.
+    """
+    index: dict[str, tuple[float | None, float | None]] = {}
+    for page in range(1, 11):                     # 250/page
+        try:
+            resp = http_request(
+                "GET", f"https://{domain}/products.json?limit=250&page={page}",
+                headers={"User-Agent": _PRODUCTS_JSON_UA}, timeout=30)
+            if resp.status_code != 200:
+                break
+            products = json.loads(resp.text).get("products", [])
+        except Exception as exc:                  # noqa: BLE001 - fall back to DOM
+            log.warning("  ⚠ %s products.json unavailable (%s) — falling back to "
+                        "rendered prices, which may be geo-localized", domain, exc)
+            break
+        if not products:
+            break
+        for product in products:
+            handle = str(product.get("handle") or "").strip()
+            variants = product.get("variants") or []
+            if not handle or not variants:
+                continue
+            # Variant 0 is the default the collection page shows.
+            first = variants[0]
+            index[handle] = (_parse_price(first.get("price")),
+                             _parse_price(first.get("compare_at_price")))
+    return index
+
+
+def shopify_handle(link: str | None) -> str:
+    """`https://shop.com/products/black-opal-14mm?v=1` -> `black-opal-14mm`."""
+    if not link or "/products/" not in link:
+        return ""
+    tail = str(link).split("/products/", 1)[1]
+    return tail.split("?", 1)[0].split("#", 1)[0].strip("/").split("/")[0]
+
+
+def plausible_usd(price: float | None) -> bool:
+    """False for a price no pickleball product could carry.
+
+    A hard reject, deliberately, rather than a rescaling guess: dividing by 100
+    "because it looks like cents" would have turned the INR figure into a
+    convincing $214 and buried the real fault permanently.
+    """
+    if price is None:
+        return False
+    return 0 < price <= MAX_PLAUSIBLE_USD
+
+
 def _parse_price(raw: str | None) -> float | None:
     if not raw:
         return None
@@ -513,6 +688,10 @@ def run(ctx: dict[str, Any]) -> int:
     brand_map: dict[str, str] = {r["slug"]: r["id"] for r in sb.get("brands", "id,slug")}
     now_iso = datetime.now(timezone.utc).isoformat()
     all_rows: list[dict[str, Any]] = []
+    # slug -> currency actually served, when it differs from the configured one.
+    # Reported once at the end rather than per product, so a geo-priced crawl is
+    # a single loud line instead of 35 easily-scrolled-past warnings.
+    geo_mismatch: dict[str, str] = {}
 
     log.info("Local Playwright catalog scrape for %d brands", len(targets))
     with sync_playwright() as p:
@@ -527,12 +706,28 @@ def run(ctx: dict[str, Any]) -> int:
                 continue
 
             items = _scrape_brand(browser, cfg)
+            # Authoritative, non-geo-localized prices where the brand runs
+            # Shopify. Empty dict for everyone else, and on any fetch failure —
+            # the DOM price then applies as before.
+            price_index = (shopify_price_index(cfg["shopify_domain"])
+                           if cfg.get("shopify_domain") else {})
+            if price_index:
+                log.info("    · %s: %d prices from products.json",
+                         cfg["slug"], len(price_index))
             for it in items:
                 name = (it.get("name") or "").strip()
                 if len(name) < 3:
                     continue
                 # Filter obvious badge text accidentally captured as names
                 if name.lower() in {"best seller", "new", "sale", "coming soon", "in stock"}:
+                    continue
+                # ...and the collection page's own filter sidebar. Six Zero's
+                # `.grid__item` selector also matches its facet list, so the DB
+                # ended up with priced "products" called `Thickness`, `HYBRID`
+                # and `14MM`. They look like real rows to every consumer
+                # downstream, and they carry a price, so they would have shown
+                # up in the price comparison as products.
+                if _FACET_LABEL.match(name):
                     continue
                 regular = _parse_price(it.get("comparePrice")) or _parse_price(it.get("price"))
                 sale    = None
@@ -545,8 +740,53 @@ def run(ctx: dict[str, Any]) -> int:
                 discount_pct = None
                 if regular and sale and regular > sale:
                     discount_pct = round((regular - sale) / regular * 100, 1)
-                # Only store price_usd when the source currency is USD
-                price_usd = actual if cfg.get("currency", "USD") == "USD" else None
+                configured = cfg.get("currency", "USD")
+
+                # Prefer products.json: it is quoted in the shop's own default
+                # currency and does not move with the crawler's IP address.
+                from_json = price_index.get(shopify_handle(it.get("link")))
+                if from_json and from_json[0] is not None:
+                    json_price, json_compare = from_json
+                    regular = json_compare or json_price
+                    sale = json_price if (json_compare and json_compare > json_price) else None
+                    actual = sale or regular
+                    discount_pct = (round((regular - sale) / regular * 100, 1)
+                                    if regular and sale and regular > sale else None)
+                    ccy = configured
+                else:
+                    # Fell back to the rendered price. Read the currency off the
+                    # text rather than trusting config, because a geo-priced
+                    # storefront serves whatever the crawler's IP implies.
+                    ccy = detect_currency(it.get("price") or it.get("comparePrice"),
+                                          configured)
+                    if ccy != configured:
+                        geo_mismatch[cfg["slug"]] = ccy
+                price_local = actual
+                fx_rate: float | None = None
+                fx_date: str | None = None
+                if ccy == "USD":
+                    price_usd = actual
+                else:
+                    rate = _fx_rate(ccy, "USD")
+                    if rate and actual is not None:
+                        fx_rate, fx_date = rate
+                        price_usd = round(actual * fx_rate, 2)
+                    else:
+                        price_usd = None
+                # Last line of defence. A price that cannot belong to a
+                # pickleball product is dropped rather than stored: a NULL price
+                # reads as "unknown" everywhere downstream, whereas $14,124
+                # reads as a fact and would rank Six Zero as the premium brand
+                # in the price comparison.
+                if price_usd is not None and not plausible_usd(price_usd):
+                    log.warning(
+                        "  ⚠ %s: implausible price $%.2f for %r (%s %s) — "
+                        "storing NULL. Currency detection or FX rate is wrong.",
+                        cfg["slug"], price_usd, name[:50], price_local, ccy,
+                    )
+                    price_usd = None
+                    sale = None
+                    discount_pct = None
                 # Rating/reviews — now populated for every brand via the
                 # extractRating / extractReviewCount cascade. Parse defensively
                 # using the same regex shape as scrape_catalog.py so the two
@@ -577,9 +817,16 @@ def run(ctx: dict[str, Any]) -> int:
                     "url":             it.get("link") or cfg["url"],
                     "category":        "paddle",
                     "price_usd":       price_usd,
-                    "sale_price_usd":  sale if cfg.get("currency", "USD") == "USD" else None,
-                    "currency":        cfg.get("currency", "USD"),
-                    "country_code":    "AU" if cfg.get("currency") == "AUD" else "US",
+                    "sale_price_usd":  sale if ccy == "USD" else None,
+                    "currency":        ccy,
+                    "country_code":    "AU" if ccy == "AUD" else "US",
+                    # migration 025. If those columns are not yet applied the
+                    # Supabase client strips them and reports a SCHEMA GAP
+                    # rather than losing the row.
+                    "price_local":          price_local,
+                    "price_local_currency": ccy,
+                    "fx_rate_used":         fx_rate,
+                    "fx_rate_date":         fx_date,
                     "avg_rating":      avg_rating,
                     "review_count":    review_count,
                     "in_stock":        bool(it.get("inStock", True)),
@@ -593,6 +840,13 @@ def run(ctx: dict[str, Any]) -> int:
         return 0
 
     n = sb.upsert("products", all_rows, "name,brand_id")
+    for slug, served in sorted(geo_mismatch.items()):
+        configured = next(
+            (c.get("currency", "USD") for c in BRAND_SCRAPERS if c["slug"] == slug), "?")
+        log.warning(
+            "  ⚠ %s: storefront served %s, config says %s. Shopify geo-prices by "
+            "visitor IP — run this crawl from a US egress, or the prices are that "
+            "market's, not the brand's home market.", slug, served, configured)
     log.info("✓ %d total products upserted via local Playwright", n)
     return n
 

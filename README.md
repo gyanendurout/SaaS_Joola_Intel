@@ -1,25 +1,29 @@
 # JOOLA Intel
 
-Pickleball competitive intelligence platform. Tracks 11 brands across all
-social channels, ad libraries, product catalogs, and athlete networks; ships
-a Next.js dashboard backed by Supabase.
+Pickleball competitive intelligence platform. Tracks 11 paddle brands across
+every public social channel, ad library, product catalog, and athlete network;
+ships a Next.js dashboard backed by Supabase, with an AI Q&A layer over the
+warehouse.
+
+- **Production**: https://saas-joola-intel.vercel.app
+- **GitHub**: https://github.com/gyanendurout/SaaS_Joola_Intel
+- **Supabase**: project `loecyghnkkxyymelgexz`
 
 ## Layout
 
 ```
 joola-intel-nextjs/
-├── frontend/            # Next.js 14 dashboard (deploys to Vercel)
-├── backend/             # Python scraping pipeline (runs locally / cron)
-│   └── scraping/        # All 9 scrape channels + AI enrichment + facts
-├── analytics_backend/   # Python statistical pipeline (lag scans, Granger,
-│                        # changepoints) — runs after scraping
-├── scripts/             # Cross-cutting utilities (deploy, weekly run,
-│                        # one-off migrations)
-├── migrations/          # SQL migrations (shared by backend + analytics)
-├── docs/                # Architecture, runbooks, recovery docs
-├── .env                 # Shared Python env (gitignored)
-├── .env.example         # Template for new clones
-└── CLAUDE.md            # Claude Code session memory
+├── frontend/            Next.js 14 dashboard (deploys to Vercel)
+├── backend/             Python scraping pipeline
+│   └── scraping/        9 scrape channels + enrichment + facts + sales-intel
+├── analytics_backend/   Python statistical pipeline (marts, lag scans,
+│                        Granger, changepoints) — runs after scraping
+├── scripts/             Cross-cutting utilities (weekly_run, deploy, db_verify)
+├── migrations/          SQL migrations, shared by both Python units
+├── docs/                Architecture, runbooks, schema, recovery
+├── DATA/                Particl reference exports (research inputs, not code)
+├── .env                 Shared Python env (gitignored)
+└── .env.example         Template for new clones
 ```
 
 Three independent deployment units:
@@ -27,8 +31,8 @@ Three independent deployment units:
 | Unit | Purpose | Deploy target |
 |---|---|---|
 | `frontend/` | Next.js dashboard | Vercel (auto on push to `main`) |
-| `backend/` | Scrape + enrich + fact-derive | Local cron / Railway / GH Actions |
-| `analytics_backend/` | Refresh marts + run stats | Same host as backend |
+| `backend/` | Scrape → enrich → derive facts | Local cron / GitHub Actions |
+| `analytics_backend/` | Refresh marts + run statistics | Same host as backend |
 
 ## Quick start
 
@@ -43,7 +47,7 @@ npm run dev                   # http://localhost:3000
 ### Backend (scraping pipeline)
 ```bash
 python -m pip install -r backend/requirements.txt
-cp .env.example .env          # fill in SUPABASE_SERVICE_ROLE_KEY, APIFY_TOKEN, OPENAI_API_KEY
+cp .env.example .env          # SUPABASE_SERVICE_ROLE_KEY, APIFY_TOKEN, OPENAI_API_KEY
 python -m backend.scraping.run --module all                  # full weekly run
 python -m backend.scraping.run --module enrichment           # just AI enrichment
 python -m backend.scraping.run --module instagram --brands joola,selkirk
@@ -63,43 +67,40 @@ python scripts/weekly_run.py
 ## Deployment
 
 ```bash
-# Frontend (Vercel auto-deploys on push to main)
+# Frontend — Vercel auto-deploys on push to main
 git push origin main
 
-# Frontend qa-gated deploy from CLI
+# Frontend — QA-gated deploy from the CLI
 cd frontend && npm run deploy -- -Message "fix: …"
 ```
 
-Vercel project setting required after the 2026-05-24 reorg:
+Vercel project setting required since the 2026-05-24 split:
 **Settings → General → Root Directory → `frontend/`**.
 
-## Key docs
-
-| Doc | Read it when |
-|---|---|
-| [docs/BUSINESS_REQUIREMENTS.md](docs/BUSINESS_REQUIREMENTS.md) | New to JOOLA Intel — start here |
-| [docs/CODE_ARCHITECTURE.md](docs/CODE_ARCHITECTURE.md) | Mapping a feature end-to-end |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Shipping or hardening prod |
-| [docs/SCRAPING_PIPELINE.md](docs/SCRAPING_PIPELINE.md) | Adding / debugging a scraper |
-| [docs/AI_ENRICHMENT.md](docs/AI_ENRICHMENT.md) | Tuning sentiment / crisis / NER |
-| [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Building a new dashboard page |
-| [docs/RUNBOOK.md](docs/RUNBOOK.md) | Pipeline broke at 2 AM |
-| [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md) | Schema rebuild from migrations |
-| [docs/RECOVERY_INDEX.md](docs/RECOVERY_INDEX.md) | Index of all recovery docs |
-| [CLAUDE.md](CLAUDE.md) | Per-session memory for Claude Code |
-
-## Live URLs
-
-- **Production**: https://saas-joola-intel.vercel.app
-- **GitHub**: https://github.com/gyanendurout/SaaS_Joola_Intel
-- **Supabase**: project `loecyghnkkxyymelgexz`
-
-## Husky pre-push (fresh clones)
-
-After cloning, one-time setup so the pre-push regression hook runs:
-
+After cloning, enable the pre-push regression hook once:
 ```bash
 git config core.hooksPath .husky
 ```
 
-The hook lives at `.husky/pre-push` and invokes `frontend/qa/regression.ps1`.
+## Documentation — one owner per topic
+
+Each topic has exactly **one** authoritative file. Update that file, not a copy.
+
+| Topic | Owner | Read it when |
+|---|---|---|
+| Product, users, scope, KPIs, UX product rules | [BRD.md](BRD.md) | New to JOOLA Intel — start here |
+| Coding rules, invariants, gotchas for AI agents | [CLAUDE.md](CLAUDE.md) | Before writing any code |
+| Open work / blockers | [TODO.md](TODO.md) | Picking up the next task |
+| System topology, file map, data flow | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Mapping a feature end-to-end |
+| Running / debugging / extending the scrapers | [backend/README.md](backend/README.md) | Adding or fixing a scraper |
+| Marts + statistical jobs | [analytics_backend/README.md](analytics_backend/README.md) | Working on correlations, changepoints |
+| Deploy topology, env vars, CI | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Shipping or hardening prod |
+| Weekly ops + incident troubleshooting | [docs/RUNBOOK.md](docs/RUNBOOK.md) | The pipeline broke at 2 AM |
+| Table-by-table schema, writers, readers | [docs/DATABASE.md](docs/DATABASE.md) | Writing a query or a migration |
+| Rebuilding the DB from migrations | [docs/DATABASE_RECOVERY.md](docs/DATABASE_RECOVERY.md) | Schema rebuild from zero |
+| Rebuilding the dashboard from zero | [docs/FRONTEND_REBUILD.md](docs/FRONTEND_REBUILD.md) | Disaster recovery |
+| Palette, components, chart contracts | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | Building a new dashboard page |
+| Historical session logs | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Archaeology only |
+
+[docs/README.md](docs/README.md) indexes `docs/` and gives the disaster-recovery
+reading order.

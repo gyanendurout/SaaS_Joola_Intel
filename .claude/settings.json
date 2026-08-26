@@ -261,7 +261,9 @@
       "Bash(python -m backend.scraping.run --module sales-intelligence --source scrape_inventory)",
       "Bash(rm -f /c/Workspace/pipeline_v2_state.json /c/Workspace/pipeline_v2_state.prev 2>&1 *)",
       "Bash(curl -s \"http://localhost:3002/v2/crisis\")",
-      "Bash(python -m analytics_backend.run --module statistics --source changepoints)"
+      "Bash(python -m analytics_backend.run --module statistics --source changepoints)",
+      "Bash(python \"C:\\\\Users\\\\GYANEN~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Workspace-joola-intel-nextjs\\\\241d7a17-b909-4430-a174-1092d83d3491\\\\scratchpad\\\\profile_sales_data.py\")",
+      "Bash(python \"C:\\\\Users\\\\GYANEN~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Workspace-joola-intel-nextjs\\\\241d7a17-b909-4430-a174-1092d83d3491\\\\scratchpad\\\\profile_followup.py\")"
     ],
     "additionalDirectories": [
       "\\tmp",

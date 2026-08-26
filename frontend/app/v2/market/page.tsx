@@ -17,6 +17,7 @@ import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRan
 import { supabase } from '@/lib/shared/supabase'
 import { fetchMarketIntel, type MarketIntelData, type CommandCenterRow, type BrandStrategyCard } from '@/lib/v2/marketIntel'
 import { useReveal, revealCls } from '@/lib/v2/animations'
+import { tipFor } from '@/lib/v2/tooltips'
 
 interface MentionSummaryRow {
   brand_id: string
@@ -631,13 +632,13 @@ export default function MarketIntelPage() {
               <table className="data" style={{ width: '100%', minWidth: 880 }}>
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <th style={{ textAlign: 'left' }}>Brand</th>
-                    <SortTh col="igFollowers" label="IG Followers" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
-                    <SortTh col="ytVideos" label="YT Videos" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
-                    <SortTh col="mentions7d" label="7d Mentions" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
-                    <SortTh col="mentions30d" label="30d Mentions" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
-                    <SortTh col="sentiment7d" label="Sentiment 7d" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'center' }} />
-                    <SortTh col="productAttention" label="Product Attention" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} />
+                    <th style={{ textAlign: 'left' }} title={tipFor('Brand')}>Brand</th>
+                    <SortTh col="igFollowers" label="IG Followers" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} title={tipFor('IG Followers')} />
+                    <SortTh col="ytVideos" label="YT Videos" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} title={tipFor('YT Videos')} />
+                    <SortTh col="mentions7d" label="7d Mentions" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} title={tipFor('7d Mentions')} />
+                    <SortTh col="mentions30d" label="30d Mentions" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} title={tipFor('30d Mentions')} />
+                    <SortTh col="sentiment7d" label="Sentiment 7d" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'center' }} title={tipFor('Sentiment 7d')} />
+                    <SortTh col="productAttention" label="Product Attention" sortKey={benchmarkSortKey} sortDir={benchmarkSortDir} toggle={toggle} style={{ textAlign: 'right' }} title={tipFor('Product Attention')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={benchmarkBrandFilter} onChange={setBenchmarkBrandFilter} placeholder="brand…" /></th>
@@ -702,10 +703,10 @@ export default function MarketIntelPage() {
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th style={{ textAlign: 'left' }}>Area</th>
-                    <th style={{ textAlign: 'left' }}>Winner</th>
-                    <th style={{ textAlign: 'center' }}>JOOLA rank</th>
-                    <th style={{ textAlign: 'left' }}>Biggest threat</th>
-                    <th style={{ textAlign: 'left' }}>Recommended action</th>
+                    <th style={{ textAlign: 'left' }} title={tipFor('Winner')}>Winner</th>
+                    <th style={{ textAlign: 'center' }} title={tipFor('JOOLA rank')}>JOOLA rank</th>
+                    <th style={{ textAlign: 'left' }} title={tipFor('Biggest threat')}>Biggest threat</th>
+                    <th style={{ textAlign: 'left' }} title={tipFor('Recommended action')}>Recommended action</th>
                   </tr>
                 </thead>
                 <tbody>

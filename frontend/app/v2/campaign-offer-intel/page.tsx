@@ -31,6 +31,7 @@ import {
 } from '@/lib/v2/campaignOfferIntel'
 import { formatCalendarDate } from '@/lib/v2/format'
 import { useReveal, revealCls } from '@/lib/v2/animations'
+import { tipFor } from '@/lib/v2/tooltips'
 
 type PlatformKey = 'all' | 'meta' | 'google' | 'other'
 type PromoTypeKey = 'all' | 'discount' | 'free_shipping' | 'launch' | 'bundle' | 'general' | 'other'
@@ -465,13 +466,13 @@ export default function CampaignOfferIntelPage() {
           <table className="data" style={{ width: '100%', minWidth: 940 }}>
             <thead>
               <tr>
-                <SortTh col="brand" label="Brand" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} style={{ textAlign: 'left' }} />
-                <SortTh col="ads" label="Active ads" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} />
-                <SortTh col="promos" label="Active promos" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} />
-                <SortTh col="adShare" label="Ad share %" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} />
-                <SortTh col="promoShare" label="Promo share %" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} />
-                <SortTh col="avgDiscount" label="Avg discount" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} />
-                <SortTh col="pressure" label="Pressure score" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} />
+                <SortTh col="brand" label="Brand" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} style={{ textAlign: 'left' }} title={tipFor('Brand')} />
+                <SortTh col="ads" label="Active ads" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} title={tipFor('Active ads')} />
+                <SortTh col="promos" label="Active promos" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} title={tipFor('Active promos')} />
+                <SortTh col="adShare" label="Ad share %" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} title={tipFor('Ad share %')} />
+                <SortTh col="promoShare" label="Promo share %" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} title={tipFor('Promo share %')} />
+                <SortTh col="avgDiscount" label="Avg discount" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} title={tipFor('Avg discount')} />
+                <SortTh col="pressure" label="Pressure score" sortKey={pressureSort.key} sortDir={pressureSort.dir} toggle={(k) => toggleSort(pressureSort, setPressureSort, k)} title={tipFor('Pressure score')} />
               </tr>
             </thead>
             <tbody>
@@ -600,9 +601,9 @@ export default function CampaignOfferIntelPage() {
               <table className="data" style={{ width: '100%' }}>
                 <thead>
                   <tr>
-                    <th style={{ textAlign: 'left' }}>Platform</th>
-                    <th style={{ textAlign: 'right' }}>Ads</th>
-                    <th style={{ textAlign: 'right' }}>Share</th>
+                    <th style={{ textAlign: 'left' }} title={tipFor('Platform')}>Platform</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Ads')}>Ads</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Share')}>Share</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -643,13 +644,13 @@ export default function CampaignOfferIntelPage() {
             <table className="data" style={{ width: '100%', minWidth: 980 }}>
               <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                 <tr>
-                  <SortTh col="brand" label="Brand" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="text" label="Promo text" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="type" label="Type" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} />
-                  <SortTh col="discount" label="Discount" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} />
-                  <SortTh col="detectedAt" label="Detected" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} />
-                  <SortTh col="active" label="Status" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} />
-                  <th>Source</th>
+                  <SortTh col="brand" label="Brand" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} style={{ textAlign: 'left' }} title={tipFor('Brand')} />
+                  <SortTh col="text" label="Promo text" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} style={{ textAlign: 'left' }} title={tipFor('Promo text')} />
+                  <SortTh col="type" label="Type" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} title={tipFor('Type')} />
+                  <SortTh col="discount" label="Discount" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} title={tipFor('Discount')} />
+                  <SortTh col="detectedAt" label="Detected" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} title={tipFor('Detected')} />
+                  <SortTh col="active" label="Status" sortKey={offerSort.key} sortDir={offerSort.dir} toggle={(k) => toggleSort(offerSort, setOfferSort, k)} title={tipFor('Status')} />
+                  <th title={tipFor('Source')}>Source</th>
                 </tr>
                 <tr className="col-filter-row">
                   <th><ColumnFilter col="brand" value={offerColFilter.brand} onChange={(v) => setOfferColFilter((p) => ({ ...p, brand: v }))} /></th>
@@ -720,12 +721,12 @@ export default function CampaignOfferIntelPage() {
             <table className="data" style={{ width: '100%', minWidth: 980 }}>
               <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                 <tr>
-                  <SortTh col="brand" label="Brand" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="platform" label="Platform" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} />
-                  <SortTh col="copy" label="Copy" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} style={{ textAlign: 'left' }} />
-                  <SortTh col="cta" label="CTA" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} />
-                  <SortTh col="startedAt" label="First seen" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} />
-                  <SortTh col="active" label="Status" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} />
+                  <SortTh col="brand" label="Brand" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} style={{ textAlign: 'left' }} title={tipFor('Brand')} />
+                  <SortTh col="platform" label="Platform" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} title={tipFor('Platform')} />
+                  <SortTh col="copy" label="Copy" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} style={{ textAlign: 'left' }} title={tipFor('Copy')} />
+                  <SortTh col="cta" label="CTA" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} title={tipFor('CTA')} />
+                  <SortTh col="startedAt" label="First seen" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} title={tipFor('First seen')} />
+                  <SortTh col="active" label="Status" sortKey={adSort.key} sortDir={adSort.dir} toggle={(k) => toggleSort(adSort, setAdSort, k)} title={tipFor('Status')} />
                   <th>Source</th>
                 </tr>
                 <tr className="col-filter-row">
@@ -894,12 +895,12 @@ export default function CampaignOfferIntelPage() {
               <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                 <tr>
                   <th style={{ textAlign: 'left' }}>Brand</th>
-                  <th style={{ textAlign: 'center' }}>Promo type</th>
-                  <th style={{ textAlign: 'right' }}>Discount depth</th>
-                  <th style={{ textAlign: 'right' }}>Frequency</th>
-                  <th style={{ textAlign: 'right' }}>Last detected</th>
-                  <th style={{ textAlign: 'left' }}>Product affected</th>
-                  <th style={{ textAlign: 'left' }}>JOOLA response</th>
+                  <th style={{ textAlign: 'center' }} title={tipFor('Promo type')}>Promo type</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Discount depth')}>Discount depth</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Frequency')}>Frequency</th>
+                  <th style={{ textAlign: 'right' }} title={tipFor('Last detected')}>Last detected</th>
+                  <th style={{ textAlign: 'left' }} title={tipFor('Product affected')}>Product affected</th>
+                  <th style={{ textAlign: 'left' }} title={tipFor('JOOLA response')}>JOOLA response</th>
                 </tr>
               </thead>
               <tbody>
@@ -956,12 +957,12 @@ export default function CampaignOfferIntelPage() {
               <table className="data" style={{ width: '100%' }}>
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <th style={{ textAlign: 'left' }}>Brand</th>
-                    <th style={{ textAlign: 'left' }}>Theme</th>
-                    <th style={{ textAlign: 'center' }}>CTA</th>
-                    <th style={{ textAlign: 'center' }}>Platform</th>
-                    <th style={{ textAlign: 'right' }}>Count</th>
-                    <th style={{ textAlign: 'left' }}>Example</th>
+                    <th style={{ textAlign: 'left' }} title={tipFor('Brand')}>Brand</th>
+                    <th style={{ textAlign: 'left' }} title={tipFor('Theme')}>Theme</th>
+                    <th style={{ textAlign: 'center' }} title={tipFor('CTA')}>CTA</th>
+                    <th style={{ textAlign: 'center' }} title={tipFor('Platform')}>Platform</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Count')}>Count</th>
+                    <th style={{ textAlign: 'left' }} title={tipFor('Example')}>Example</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1208,7 +1209,7 @@ function PromoCadenceHeatmap({ rows, name }: { rows: PromoCadenceRow[]; name: (s
       <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 12, minWidth: '100%' }}>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left', padding: '6px 8px', color: '#8a93a4', fontWeight: 600 }}>Brand</th>
+            <th style={{ textAlign: 'left', padding: '6px 8px', color: '#8a93a4', fontWeight: 600 }} title={tipFor('Brand')}>Brand</th>
             {Array.from({ length: weeks }).map((_, i) => (
               <th key={i} style={{ padding: '6px 6px', color: '#8a93a4', fontWeight: 600, textAlign: 'center', fontSize: 10 }}>W{i + 1}</th>
             ))}

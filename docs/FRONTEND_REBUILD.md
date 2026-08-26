@@ -1,6 +1,6 @@
-# 05 — Frontend Rebuild
+# Frontend Rebuild
 
-> **Goal.** Stand up the Next.js 14 dashboard locally; verify it reads from Supabase. Then deploy (see `07_DEPLOYMENT.md`).
+> **Goal.** Stand up the Next.js 14 dashboard locally; verify it reads from Supabase. Then deploy (see `DEPLOYMENT.md`).
 
 ---
 
@@ -9,7 +9,7 @@
 | Layer | Choice | Notes |
 |---|---|---|
 | Framework | Next.js **14.2.5** (App Router) | TypeScript |
-| UI | Custom CSS in `app/v2.css` | Tailwind is **installed but not used** for the v2 dashboard |
+| UI | Custom CSS in `frontend/app/v2.css` | Tailwind is **installed but not used** for the v2 dashboard |
 | Data | `@supabase/supabase-js` v2.45 | Read directly from the browser via anon key |
 | Charts | Hand-rolled SVG in `components/v2/charts.tsx` | No third-party chart lib |
 | AI | `openai` package | Used by one server endpoint `app/api/generate-content/route.ts` |
@@ -84,7 +84,7 @@ Smoke test: navigate to `http://localhost:3000/v2/reddit`. If data appears, Supa
 └───────────────────────────────────────────────────────────────┘
 ```
 
-**No API layer for reads.** Browser components call `supabase.from(...).select(...)` directly. The anon key is safe in the browser bundle; RLS protects writes (when enabled — see `02_DATABASE_RECOVERY.md` step 4).
+**No API layer for reads.** Browser components call `supabase.from(...).select(...)` directly. The anon key is safe in the browser bundle; RLS protects writes (when enabled — see `DATABASE_RECOVERY.md` step 4).
 
 The only **server-side** code is the four routes in `app/api/`, of which only `generate-content` is wired into the v2 dashboard for AI content briefs.
 
@@ -130,11 +130,11 @@ isFiltered = selectedSlugs.length > 0
 // false → show all brands (either nothing selected OR all selected)
 ```
 
-Mounted near the root of `app/v2/layout.tsx` so every page sees the same filter.
+Mounted near the root of `frontend/app/v2/layout.tsx` so every page sees the same filter.
 
 ---
 
-## Data layer (`lib/v2/data.ts`)
+## Data layer (`frontend/lib/v2/data.ts`)
 
 Pattern: one async fetcher per page. Each returns reshaped data ready for the page's charts.
 
@@ -158,7 +158,7 @@ fetchSignals()         → V2SignalRow[]   // ai-flagged crises/opportunities
 
 ## Brand colors
 
-Authoritative palette lives in `lib/v2/data.ts`:
+Authoritative palette lives in `frontend/lib/v2/data.ts`:
 
 ```ts
 BRAND_COLORS = {
@@ -208,4 +208,4 @@ npm install
 npm run dev
 ```
 
-If the repo is lost too, you'd need to rebuild from this `backup/` directory **plus the underlying source tree**, which is not snapshotted here. The migrations + `01_BUSINESS_REQUIREMENTS.md` define the data contract; the dashboard would have to be re-implemented. TODO: maintain a periodic full-tree backup elsewhere (e.g. an S3 bucket).
+If the repo is lost too, you'd need to rebuild from the `docs/` directory **plus the underlying source tree**, which is not snapshotted here. The migrations + `../BRD.md` define the data contract; the dashboard would have to be re-implemented. TODO: maintain a periodic full-tree backup elsewhere (e.g. an S3 bucket).

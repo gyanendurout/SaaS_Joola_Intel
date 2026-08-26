@@ -31,6 +31,14 @@ Pipeline order (--module all):
   11. facts       — mention facts, topic lifecycle, competitor-switch signals
   12. sales-intel — revenue estimates, restock signals, launch detection
 
+Run separately, NOT part of --module all:
+  product-specs   — crawls brand sites for paddle specs into paddle_specs
+                    (migration 024). Specs change rarely, so re-crawling weekly
+                    would be wasted requests. Run it after a catalog refresh or
+                    when a brand launches a paddle:
+                        python scripts/weekly_run.py --module product-specs
+  reviews-crawl4ai — per-product review widgets
+
 Logs written to: c:/tmp/joola_weekly_YYYYMMDD_HHMM.log
 State saved to: pipeline_v2_state.json (auto-resume on re-run after crash)
 """

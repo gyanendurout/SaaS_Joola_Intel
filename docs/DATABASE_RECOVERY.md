@@ -1,6 +1,6 @@
-# 02 — Database Recovery (Supabase)
+# Database Recovery (Supabase)
 
-> **Goal.** Recreate the Supabase database from `migrations/*.sql` in correct order. Verify seed counts. After this doc you should have a working DB ready for `apify_to_supabase.py`.
+> **Goal.** Recreate the Supabase database from `migrations/*.sql` in correct order. Verify seed counts. After this doc you should have a working DB ready for the scraping pipeline (`../backend/README.md`).
 
 ---
 
@@ -38,7 +38,7 @@ All migrations live in `migrations/` at the repo root. **Do not modify them — 
 > ⚠ **Pre-requisite tables not in these migrations.** `001` references `products` and `brands`, and `003` references `brands`. `004`/`005`/`006` reference `reddit_mentions`, `influencer_posts`, `ig_comments`, `yt_comments`, `influencers`, `ig_profiles_weekly`, `yt_channels`, `yt_videos`. These are the **legacy base schema** from the POC's earlier era and were **not snapshotted** into this `migrations/` directory.
 >
 > **If recovering from scratch with no DB at all**, you must first recreate the base schema. The contract is:
-> - `brands(id uuid PK, slug text unique, name text, is_joola bool)` — seed with the 11 slugs in `01_BUSINESS_REQUIREMENTS.md`.
+> - `brands(id uuid PK, slug text unique, name text, is_joola bool)` — seed with the 11 slugs in `../BRD.md`.
 > - `influencers(id uuid PK, name text, instagram_handle text unique, brand_id uuid, x_handle text)` — seed with 27 athletes; their Instagram handles are listed in `migrations/005_influencer_x.sql` `(values …)`.
 > - `products(id uuid PK, brand_id uuid, name text, …)` — scraped paddle SKUs.
 > - `ig_profiles_weekly`, `ig_posts`, `ig_comments` — Instagram channel data per brand.
@@ -46,7 +46,7 @@ All migrations live in `migrations/` at the repo root. **Do not modify them — 
 > - `reddit_mentions(id uuid PK, reddit_post_id text, brand_id uuid, subreddit text, post_title text, content_text text, upvotes int, comment_count int, posted_at timestamptz, country_code text, …)`.
 > - `influencer_posts(id uuid PK, influencer_id uuid, post_url text, …)`.
 >
-> **TODO: verify with team** — the exact `CREATE TABLE` statements for the base schema aren't in `migrations/`. Either recover from a Supabase backup, or reverse-engineer the schemas from `scripts/pipeline/apify_to_supabase.py`'s `sb_upsert` calls and the `select=…` strings in `lib/v2/data.ts`.
+> **TODO: verify with team** — the exact `CREATE TABLE` statements for the base schema aren't in `migrations/`. Either recover from a Supabase backup, or reverse-engineer the schemas from `backend/scraping/sources/`'s `sb_upsert` calls and the `select=…` strings in `frontend/lib/v2/data.ts`.
 
 ---
 
@@ -148,7 +148,7 @@ NEXT_PUBLIC_OPENAI_KEY=sk-...               # POC only, leaks to browser bundle
 | Supabase project deleted, no backup | Run all migrations from scratch. **Re-scrape from week 0** — historical scraper data is **not recoverable**. Apify garbage-collects datasets after 30 days. |
 | Supabase project deleted, daily backup available | Restore the backup, skip migrations entirely, just re-run scraping going forward. |
 | One table corrupted / dropped | Re-run the migration that creates it (idempotent via `if not exists`). Re-run scraper to repopulate. |
-| Duplicate-rows error during scrape (`42P10`) | A new unique constraint is needed. Follow the pattern in `004_unique_constraints.sql` / `008_products_constraint.sql`: archive → delete → add constraint. See `08_RUNBOOK.md` for the full pattern. |
+| Duplicate-rows error during scrape (`42P10`) | A new unique constraint is needed. Follow the pattern in `004_unique_constraints.sql` / `008_products_constraint.sql`: archive → delete → add constraint. See `RUNBOOK.md` for the full pattern. |
 | Schema drift between local and prod | Diff `migrations/` against Supabase via `pg_dump --schema-only` and reconcile. |
 
 ---

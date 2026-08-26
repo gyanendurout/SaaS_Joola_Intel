@@ -14,6 +14,7 @@ import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/
 import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { useReveal, revealCls } from '@/lib/v2/animations'
+import { tipFor } from '@/lib/v2/tooltips'
 
 /** Relative caption ("3 days ago") kept only for the title tooltip on date cells. */
 function relativeLabel(days: number): string {
@@ -439,9 +440,9 @@ export default function InstagramPage() {
               <thead><tr>
                 {(['brand','followers','deltaPct','engRate','erRank','posts','avgLikes','bestFmt','trend'] as const).map(k => {
                   const labelMap: Record<string, string> = { brand: 'Brand', followers: 'Followers', deltaPct: 'Follower Growth', engRate: 'Eng. Rate', erRank: 'ER Rank', posts: 'Posts', avgLikes: 'Avg Likes', bestFmt: 'Best Format', trend: 'Trend' }
-                  return <SortTh key={k} col={k} label={labelMap[k]} sortKey={bwSortKey} sortDir={bwSortDir} toggle={(c) => { if (bwSortKey === c) setBwSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBwSortKey(c); setBwSortDir('desc') } }} />
+                  return <SortTh key={k} col={k} label={labelMap[k]} title={tipFor(labelMap[k])} sortKey={bwSortKey} sortDir={bwSortDir} toggle={(c) => { if (bwSortKey === c) setBwSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setBwSortKey(c); setBwSortDir('desc') } }} />
                 })}
-                <th style={{ textAlign: 'center' }}>Profile</th>
+                <th style={{ textAlign: 'center' }} title={tipFor('Profile')}>Profile</th>
               </tr></thead>
               <tbody>
                 {(() => {
@@ -804,14 +805,14 @@ export default function InstagramPage() {
               <table className="data">
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <SortTh col="brand" label="Brand · handle" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                    <SortTh col="caption" label="Caption" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '36%' }} />
-                    <SortTh col="format" label="Format" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
-                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="engRate" label="Eng. Rate" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} />
+                    <SortTh col="brand" label="Brand · handle" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Brand · handle')} />
+                    <SortTh col="caption" label="Caption" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ width: '36%' }} title={tipFor('Caption')} />
+                    <SortTh col="format" label="Format" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Format')} />
+                    <SortTh col="likes" label="Likes" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Likes')} />
+                    <SortTh col="comments" label="Comments" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Comments')} />
+                    <SortTh col="views" label="Views" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Views')} />
+                    <SortTh col="engRate" label="Eng. Rate" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} style={{ textAlign: 'right' }} title={tipFor('Eng. Rate')} />
+                    <SortTh col="days" label="Posted" sortKey={sortKey} sortDir={sortDir} toggle={toggleSort} title={tipFor('Posted')} />
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={colFilter.brand} onChange={v => setColFilter(p => ({ ...p, brand: v }))} placeholder="brand…" /></th>
@@ -1188,6 +1189,9 @@ export default function InstagramPage() {
         </div>
       </section>
 
+      {/* Dev-only audit table: an inventory of pre-existing IG sections kept for
+          reviewer context. Not customer-facing — gated so it never ships to prod. */}
+      {process.env.NODE_ENV !== 'production' && (<>
       <h3 style={{ marginTop: 56, marginBottom: 8, color: 'var(--fg)', fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
         Review required — existing Instagram sections not included in this change request
       </h3>
@@ -1199,10 +1203,10 @@ export default function InstagramPage() {
             <thead>
               <tr>
                 <th style={{ textAlign: 'left' }}>Section</th>
-                <th style={{ textAlign: 'left' }}>Original purpose</th>
-                <th style={{ textAlign: 'left' }}>Data source</th>
-                <th style={{ textAlign: 'left' }}>Status</th>
-                <th style={{ textAlign: 'left' }}>Recommended action</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('Original purpose')}>Original purpose</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('Data source')}>Data source</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('Status')}>Status</th>
+                <th style={{ textAlign: 'left' }} title={tipFor('Recommended action')}>Recommended action</th>
               </tr>
             </thead>
             <tbody>
@@ -1252,6 +1256,7 @@ export default function InstagramPage() {
           </table>
         </div></div>
       </section>
+      </>)}
     </div>
   )
 }

@@ -11,6 +11,7 @@ import {
 import { PageHead, LoadingPage, SectionInfo, pgName, pgColor, SortTh, ColumnFilter } from '@/components/v2/PageShell'
 import { CorrelationHeatmap, type CorrelationCell } from '@/components/v2/charts/CorrelationHeatmap'
 import { LagScanChart } from '@/components/v2/charts/LagScanChart'
+import { tipFor } from '@/lib/v2/tooltips'
 
 type LeadingIndicatorRow = {
   kind: string
@@ -508,15 +509,15 @@ export default function CorrelationsPage() {
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <SortTh col="brand" label="Brand" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} />
-                    <SortTh col="product" label="Product" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} />
-                    <SortTh col="driver" label="Driver" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} />
-                    <SortTh col="bestLag" label="Best lag" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="absScore" label="|r|" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="bestScore" label="r (signed)" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="bestPvalue" label="p" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} />
-                    <SortTh col="nSamples" label="n" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} />
-                    <th style={{ textAlign: 'center' }}>Sig.</th>
+                    <SortTh col="brand" label="Brand" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} title={tipFor('Brand')} />
+                    <SortTh col="product" label="Product" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} title={tipFor('Product')} />
+                    <SortTh col="driver" label="Driver" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} title={tipFor('Driver')} />
+                    <SortTh col="bestLag" label="Best lag" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} title={tipFor('Best lag')} />
+                    <SortTh col="absScore" label="|r|" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} title={tipFor('|r|')} />
+                    <SortTh col="bestScore" label="r (signed)" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} title={tipFor('r (signed)')} />
+                    <SortTh col="bestPvalue" label="p" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} title={tipFor('p')} />
+                    <SortTh col="nSamples" label="n" sortKey={tblSortKey} sortDir={tblSortDir} toggle={toggleTblSort} style={{ textAlign: 'right' }} title={tipFor('n')} />
+                    <th style={{ textAlign: 'center' }} title={tipFor('Sig.')}>Sig.</th>
                   </tr>
                   <tr className="col-filter-row">
                     <th><ColumnFilter col="brand" value={tblColFilter.brand} onChange={(v) => setTblColFilter((p) => ({ ...p, brand: v }))} placeholder="brand…" /></th>
@@ -601,10 +602,10 @@ export default function CorrelationsPage() {
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
                     <th>Outcome</th>
-                    <th>Leading signal</th>
-                    <th style={{ textAlign: 'right' }}>Lag (days)</th>
-                    <th style={{ textAlign: 'right' }}>Confidence</th>
-                    <th>What it means</th>
+                    <th title={tipFor('Leading signal')}>Leading signal</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Lag (days)')}>Lag (days)</th>
+                    <th style={{ textAlign: 'right' }} title={tipFor('Confidence')}>Confidence</th>
+                    <th title={tipFor('What it means')}>What it means</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -666,9 +667,9 @@ export default function CorrelationsPage() {
               <table className="data" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead style={{ position: 'sticky', top: 0, background: 'var(--sticky-bg)', zIndex: 2 }}>
                   <tr>
-                    <th>Finding</th>
-                    <th>Business meaning</th>
-                    <th>Recommended action</th>
+                    <th title={tipFor('Finding')}>Finding</th>
+                    <th title={tipFor('Business meaning')}>Business meaning</th>
+                    <th title={tipFor('Recommended action')}>Recommended action</th>
                   </tr>
                 </thead>
                 <tbody>

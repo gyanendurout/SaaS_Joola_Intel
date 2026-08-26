@@ -1,12 +1,15 @@
-# 06 — Design System
+# Design System
 
-> **Goal.** Cheat-sheet for visual conventions and component contracts in the v2 dashboard. Pulled from `app/v2.css`, `lib/v2/data.ts`, and the CLAUDE.md session logs.
+> Sole owner of palette, typography, and component/chart contracts for the v2
+> dashboard. Derived from `frontend/app/v2.css` and `frontend/lib/v2/data.ts`.
+> Product-level UX rules (tooltips, quadrants, no duplicate KPIs) are specified
+> in [`../BRD.md`](../BRD.md) §10, not here.
 
 ---
 
 ## Palette
 
-### Brand colors (authoritative — `lib/v2/data.ts::BRAND_COLORS`)
+### Brand colors (authoritative — `frontend/lib/v2/data.ts::BRAND_COLORS`)
 
 | Slug | Hex | Use |
 |---|---|---|

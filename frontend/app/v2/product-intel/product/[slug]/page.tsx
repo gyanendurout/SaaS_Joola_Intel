@@ -18,6 +18,7 @@ import { ProductAttention }    from '@/components/v2/product-detail/ProductAtten
 import { ProductPeriodMatrix } from '@/components/v2/product-detail/ProductPeriodMatrix'
 import { ProductPriceContext } from '@/components/v2/product-detail/ProductPriceContext'
 import type { AttentionDailyRow } from '@/lib/v2/productIntel'
+import { tipFor } from '@/lib/v2/tooltips'
 
 export default function CatalogueProductPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -156,8 +157,8 @@ export default function CatalogueProductPage() {
             <div className="table-wrap" style={{ maxHeight: 320, overflowY: 'auto' }}>
               <table className="data" style={{ width: '100%' }}>
                 <thead><tr>
-                  <th style={{ textAlign: 'left' }}>Brand</th>
-                  <th style={{ textAlign: 'left' }}>Product</th>
+                  <th style={{ textAlign: 'left' }} title={tipFor('Brand')}>Brand</th>
+                  <th style={{ textAlign: 'left' }} title={tipFor('Product')}>Product</th>
                   <th style={{ textAlign: 'right' }} title="7-day attention score">Attention</th>
                   <th style={{ textAlign: 'right' }} title="Total mentions">Mentions</th>
                   <th title="28-day trend">Trend</th>
@@ -192,7 +193,7 @@ export default function CatalogueProductPage() {
               <table className="data" style={{ width: '100%' }}>
                 <thead><tr>
                   <th>#</th>
-                  <th style={{ textAlign: 'left' }}>Product</th>
+                  <th style={{ textAlign: 'left' }} title={tipFor('Product')}>Product</th>
                   <th style={{ textAlign: 'right' }} title="7-day attention score">Attention</th>
                   <th style={{ textAlign: 'right' }} title="Total mentions">Mentions</th>
                   <th title="28-day trend">Trend</th>

@@ -15,6 +15,7 @@
  */
 
 import { supabase } from '@/lib/shared/supabase'
+import { fetchPagedResult } from './paged'
 
 // ─── Shapes ───────────────────────────────────────────────────────────
 
@@ -58,16 +59,10 @@ export type CrisisDailyPoint = {
 
 // ─── Internals ────────────────────────────────────────────────────────
 
-const MISSING_TABLE_RE =
-  /(does not exist|42P01|relation .* does not exist|Could not find the table)/i
-
+// Missing-table / RLS detection now lives in `fetchPagedResult`, which logs the
+// failing page and reports it through `ok`. We only need the one-shot guard so
+// a broken table doesn't spam the console on every re-render.
 let warnedMissing = false
-
-function isMissingTable(error: unknown): boolean {
-  if (!error) return false
-  const msg = String((error as { message?: string }).message || error)
-  return MISSING_TABLE_RE.test(msg)
-}
 
 function dayKey(iso: string | null | undefined): string {
   if (!iso) return ''
@@ -88,44 +83,47 @@ function daysAgo(n: number): Date {
  * All crisis incidents (is_crisis=true) within the last `days` window.
  * Joined to brands so the UI gets brand_slug directly.
  *
- * Default 90 days — wide enough for dashboards, small enough that the
- * payload stays tractable (single query, no pagination).
+ * Default 90 days. Every `aggregate*` helper below counts these rows, so the
+ * read is PAGED: PostgREST caps a single response at 1,000 rows whatever
+ * `.limit()` says, and this predicate matches ~1,100 rows today — enough that
+ * the un-paged version was already dropping incidents from every rollup.
+ * `maxRows` stays a real ceiling on browser payload; `fetchPagedResult` logs a
+ * warning naming this call site if it is ever hit.
  */
 export async function fetchCrisisIncidents(opts?: {
   days?: number
   limit?: number
 }): Promise<CrisisIncident[]> {
   const days = opts?.days ?? 90
-  const limit = opts?.limit ?? 1000
+  const maxRows = opts?.limit ?? 10_000
   const since = daysAgo(days).toISOString()
 
-  const { data, error } = await supabase
-    .from('mention_facts')
-    .select(
-      'id,channel,source_table,source_id,brand_id,product_id,athlete_id,' +
-      'sentiment_score,sentiment_label,text_snippet,posted_at,' +
-      'brands!inner(slug)',
-    )
-    .eq('is_crisis', true)
-    .gte('posted_at', since)
-    .order('posted_at', { ascending: false })
-    .limit(limit)
+  const { data, ok } = await fetchPagedResult<any>(
+    () => supabase
+      .from('mention_facts')
+      .select(
+        'id,channel,source_table,source_id,brand_id,product_id,athlete_id,' +
+        'sentiment_score,sentiment_label,text_snippet,posted_at,' +
+        'brands!inner(slug)',
+      )
+      .eq('is_crisis', true)
+      .gte('posted_at', since)
+      .order('posted_at', { ascending: false })
+      // `id` tiebreak keeps range-paging stable when timestamps collide.
+      .order('id', { ascending: true }),
+    { maxRows, label: 'crisis.incidents' },
+  )
 
-  if (error) {
-    if (isMissingTable(error)) {
-      if (!warnedMissing) {
-        // eslint-disable-next-line no-console
-        console.warn('[crisis] mention_facts table missing — returning []')
-        warnedMissing = true
-      }
-      return []
+  if (!ok && data.length === 0) {
+    if (!warnedMissing) {
+      // eslint-disable-next-line no-console
+      console.warn('[crisis] mention_facts unreadable — returning []')
+      warnedMissing = true
     }
-    // eslint-disable-next-line no-console
-    console.warn('[crisis] fetchCrisisIncidents failed:', error)
     return []
   }
 
-  return (data || []).map((r: any) => ({
+  return data.map((r: any) => ({
     id: r.id,
     channel: r.channel,
     source_table: r.source_table,
