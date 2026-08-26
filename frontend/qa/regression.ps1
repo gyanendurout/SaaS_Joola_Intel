@@ -63,6 +63,36 @@ function Record($stage, $status, $detail) {
   Add-Content -Path $LogFile -Value $line -Encoding utf8
 }
 
+$unverified = [System.Collections.ArrayList]@()
+
+# A stage that could not run is NOT a stage that passed. Deliberate skips
+# (-SkipBuild / -SkipRoutes / -SkipPlaywright) are an explicit opt-out and stay
+# green; incidental skips (no dev server, tool missing) withhold the pass flag,
+# because .husky/pre-push and scripts/deploy.ps1 treat that flag as permission
+# to ship.
+function SkipStage($stage, $detail, [switch]$Deliberate) {
+  Record $stage 'SKIP' $detail
+  if (-not $Deliberate) { [void]$unverified.Add($stage) }
+}
+
+# Run a native executable without letting its stderr abort the script.
+# PowerShell 5.1 wraps native stderr in ErrorRecords; under
+# $ErrorActionPreference='Stop' one harmless notice (e.g. node's "NO_COLOR is
+# ignored due to FORCE_COLOR") throws before the stage can record a result.
+# Only $LASTEXITCODE decides pass/fail here.
+function Invoke-Native {
+  param([string]$File, [string[]]$Arguments)
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $out  = & $File @Arguments 2>&1 | ForEach-Object { "$_" }
+    $code = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $prev
+  }
+  [pscustomobject]@{ Output = $out; ExitCode = $code }
+}
+
 function Fail($msg) {
   Write-Host ""
   Write-Host "STAGE FAILED: $msg" -ForegroundColor Red
@@ -83,8 +113,9 @@ try {
   # ── 1. Typecheck ─────────────────────────────────────────────────────
   $sw = [Diagnostics.Stopwatch]::StartNew()
   Write-Host "[1/5] Typecheck (npx tsc --noEmit)..."
-  $tscOut = & npx tsc --noEmit 2>&1
-  $tscExit = $LASTEXITCODE
+  $tscRun = Invoke-Native 'npx' @('tsc','--noEmit')
+  $tscOut = $tscRun.Output
+  $tscExit = $tscRun.ExitCode
   $sw.Stop()
   if ($tscExit -eq 0) {
     Record 'typecheck' 'PASS' ("{0}s" -f [int]$sw.Elapsed.TotalSeconds)
@@ -96,12 +127,13 @@ try {
 
   # ── 2. Build ─────────────────────────────────────────────────────────
   if ($SkipBuild) {
-    Record 'build' 'SKIP' '-SkipBuild'
+    SkipStage 'build' '-SkipBuild' -Deliberate
   } else {
     $sw.Restart()
     Write-Host "[2/5] Build (npm run build)..."
-    $buildOut = & npm run build 2>&1
-    $buildExit = $LASTEXITCODE
+    $buildRun = Invoke-Native 'npm' @('run','build')
+    $buildOut = $buildRun.Output
+    $buildExit = $buildRun.ExitCode
     $sw.Stop()
     if ($buildExit -eq 0) {
       Record 'build' 'PASS' ("{0}s" -f [int]$sw.Elapsed.TotalSeconds)
@@ -114,18 +146,18 @@ try {
 
   # ── 3. Route smoke ───────────────────────────────────────────────────
   if ($SkipRoutes) {
-    Record 'routes' 'SKIP' '-SkipRoutes'
+    SkipStage 'routes' '-SkipRoutes' -Deliberate
   } else {
     $sw.Restart()
     Write-Host "[3/5] Route smoke (HTTP GET $($ROUTES.Count) routes against $BaseUrl)..."
     $reachable = $false
     try {
-      $head = Invoke-WebRequest -Uri $BaseUrl -Method Head -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+      $head = Invoke-WebRequest -Uri $BaseUrl -Method Head -TimeoutSec 30 -UseBasicParsing -ErrorAction Stop
       $reachable = $true
     } catch { $reachable = $false }
 
     if (-not $reachable) {
-      Record 'routes' 'SKIP' "dev server not reachable at $BaseUrl"
+      SkipStage 'routes' "dev server not reachable at $BaseUrl"
     } else {
       $failedRoutes = @()
       foreach ($route in $ROUTES) {
@@ -149,26 +181,27 @@ try {
 
   # ── 4. Playwright E2E ────────────────────────────────────────────────
   if ($SkipPlaywright) {
-    Record 'playwright' 'SKIP' '-SkipPlaywright'
+    SkipStage 'playwright' '-SkipPlaywright' -Deliberate
   } else {
     $sw.Restart()
     Write-Host "[4/5] Playwright E2E (npx playwright test e2e/)..."
     $playwrightInstalled = Test-Path 'node_modules/@playwright/test'
     if (-not $playwrightInstalled) {
-      Record 'playwright' 'SKIP' 'not installed -- run: npm install && npx playwright install chromium'
+      SkipStage 'playwright' 'not installed -- run: npm install && npx playwright install chromium'
     } else {
       $serverReachable = $false
       try {
-        Invoke-WebRequest -Uri $BaseUrl -Method Head -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop | Out-Null
+        Invoke-WebRequest -Uri $BaseUrl -Method Head -TimeoutSec 30 -UseBasicParsing -ErrorAction Stop | Out-Null
         $serverReachable = $true
       } catch { $serverReachable = $false }
 
       if (-not $serverReachable) {
-        Record 'playwright' 'SKIP' "dev server not reachable at $BaseUrl"
+        SkipStage 'playwright' "dev server not reachable at $BaseUrl"
       } else {
         $env:PLAYWRIGHT_BASE_URL = $BaseUrl
-        $pwOut = & npx playwright test e2e/ --reporter=line 2>&1
-        $pwExit = $LASTEXITCODE
+        $pwRun = Invoke-Native 'npx' @('playwright','test','e2e/','--reporter=line')
+        $pwOut = $pwRun.Output
+        $pwExit = $pwRun.ExitCode
         $sw.Stop()
         if ($pwExit -eq 0) {
           Record 'playwright' 'PASS' ("{0}s" -f [int]$sw.Elapsed.TotalSeconds)
@@ -190,17 +223,18 @@ try {
   Write-Host "[5/5] Tooltip visibility (qa/tooltip-check.mjs)..."
   $serverUp = $false
   try {
-    Invoke-WebRequest -Uri $BaseUrl -Method Head -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop | Out-Null
+    Invoke-WebRequest -Uri $BaseUrl -Method Head -TimeoutSec 30 -UseBasicParsing -ErrorAction Stop | Out-Null
     $serverUp = $true
   } catch { $serverUp = $false }
 
   if (-not (Test-Path 'node_modules/playwright-core')) {
-    Record 'tooltips' 'SKIP' 'playwright-core not installed'
+    SkipStage 'tooltips' 'playwright-core not installed'
   } elseif (-not $serverUp) {
-    Record 'tooltips' 'SKIP' "server not reachable at $BaseUrl"
+    SkipStage 'tooltips' "server not reachable at $BaseUrl"
   } else {
-    $ttOut = & node qa/tooltip-check.mjs $BaseUrl 2>&1
-    $ttExit = $LASTEXITCODE
+    $ttRun = Invoke-Native 'node' @('qa/tooltip-check.mjs', $BaseUrl)
+    $ttOut = $ttRun.Output
+    $ttExit = $ttRun.ExitCode
     $sw.Stop()
     if ($ttExit -eq 0) {
       Record 'tooltips' 'PASS' ("{0}s" -f [int]$sw.Elapsed.TotalSeconds)
@@ -217,10 +251,17 @@ try {
   $results | Format-Table -AutoSize | Out-Host
 
   $hardFails = @($results | Where-Object { $_.Status -eq 'FAIL' })
-  if ($hardFails.Count -eq 0) {
+  if ($hardFails.Count -eq 0 -and $unverified.Count -eq 0) {
     Set-Content -Path $FlagFile -Value (Get-Date -Format o) -Encoding utf8
     Write-Host "PASS -- flag written: $FlagFile" -ForegroundColor Green
     exit 0
+  } elseif ($hardFails.Count -eq 0) {
+    if (Test-Path $FlagFile) { Remove-Item $FlagFile -Force }
+    Write-Host "INCOMPLETE -- could not verify: $($unverified -join ', ')" -ForegroundColor Yellow
+    Write-Host "Nothing failed, but these stages never ran, so this is not a pass." -ForegroundColor Yellow
+    Write-Host "Start the dev server (npm run dev), or pass the matching -Skip switch to opt out on purpose." -ForegroundColor DarkGray
+    Write-Host "Flag NOT written: $FlagFile" -ForegroundColor DarkGray
+    exit 1
   } else {
     if (Test-Path $FlagFile) { Remove-Item $FlagFile -Force }
     Write-Host "FAIL -- $($hardFails.Count) stage(s) failed. Flag cleared." -ForegroundColor Red

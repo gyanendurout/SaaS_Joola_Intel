@@ -404,14 +404,18 @@ Get-Content c:\Workspace\joola-intel-nextjs\.env | ForEach-Object {
 flag is what `.husky/pre-push` and `scripts/deploy.ps1` read as permission to
 ship. Two bugs make the gate weaker than it looks:
 
-- [ ] **A skipped stage counts as a pass.** Routes, Playwright and tooltips all
+- [x] **A skipped stage counts as a pass.** Fixed 2026-08-26: incidental skips
+      (no dev server, tool missing) now withhold the flag and exit 1; only the
+      explicit `-Skip*` switches stay green. Reachability probe raised 5s->30s. Routes, Playwright and tooltips all
       SKIP when the dev server does not answer a `HEAD` within 5s — and the run
       still reports PASS and still writes the flag. A cold Next dev server takes
       ~43s to compile the first route, so on any fresh machine the deploy gate
       degrades to "`tsc` succeeded" without saying so. Either SKIP on
       routes/E2E should withhold the flag, or it should require an explicit
       opt-out switch (`-SkipPlaywright` is already the honest way to ask).
-- [ ] **`2>&1` on native commands aborts the run under PowerShell 5.1.** With
+- [x] **`2>&1` on native commands aborts the run under PowerShell 5.1.** Fixed
+      2026-08-26: native calls go through an `Invoke-Native` helper that drops
+      `$ErrorActionPreference` to Continue and judges only `$LASTEXITCODE`. With
       `$ErrorActionPreference = 'Stop'`, `& npx playwright test … 2>&1` turns
       each stderr line into an ErrorRecord and throws. A harmless node notice
       ("The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set")
