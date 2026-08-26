@@ -14,6 +14,7 @@ from typing import Any
 from ...core import apify_client as apify
 from ...core import supabase_client as sb
 from ...core.errors import ActorRunError
+from . import ad_payload
 from ...core.logger import get_logger
 
 log = get_logger("ads.google")
@@ -43,6 +44,7 @@ def run(ctx: dict[str, Any]) -> int:
         log.info("[DRY-RUN] would scrape Google Ads for %d brands", len(targets))
         return 0
 
+    available = ad_payload.writable_columns(sb)
     rows: list[dict] = []
     for t in targets:
         try:
@@ -59,26 +61,21 @@ def run(ctx: dict[str, Any]) -> int:
             continue
 
         for item in items:
-            ad_id = (
-                item.get("adId") or item.get("ad_id")
-                or item.get("creativeId") or item.get("creative_id")
-                or item.get("id")
-            )
+            ad_id = ad_payload.ad_id_of(item, "google")
             if not ad_id:
                 continue
-            rows.append({
-                "brand_id":     t["brand_id"],
-                "platform":     "google",
-                "ad_id":        str(ad_id),
-                "page_name":    item.get("advertiserName") or item.get("advertiser") or t["domain"],
-                "body":         (item.get("adText") or item.get("description") or item.get("text") or "")[:2000],
-                "cta":          item.get("cta"),
-                "creative_url": item.get("imageUrl") or item.get("videoUrl") or item.get("creativeUrl") or item.get("preview_image_url"),
-                "landing_url":  item.get("destinationUrl") or item.get("landingUrl") or item.get("landing_url"),
-                "started_at":   item.get("firstShown") or item.get("startedAt") or item.get("first_shown"),
-                "is_active":    item.get("isActive", True),
-                "raw":          item,
-            })
+            # This actor returns no ad copy and no advertiser landing page --
+            # see ad_payload.google_fields. Do not re-add speculative keys for
+            # them; their absence is the actor's, not a mapping slip.
+            fields = ad_payload.google_fields(item)
+            rows.append(ad_payload.restrict({
+                "brand_id":  t["brand_id"],
+                "platform":  "google",
+                "ad_id":     str(ad_id),
+                "page_name": fields.pop("page_name", None) or t["domain"],
+                "raw":       item,
+                **fields,
+            }, available))
         log.info("✓ %s: %d ads collected", t["slug"], len(items))
 
     n = sb.upsert("marketing_ads", rows, "platform,ad_id")

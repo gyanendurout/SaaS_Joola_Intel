@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import quote
 
 from ...core import apify_client as apify
+from . import ad_payload
 from ...core import supabase_client as sb
 from ...core.logger import get_logger
 
@@ -60,6 +61,7 @@ def run(ctx: dict[str, Any]) -> int:
 
     name_to_slug = {p["page_name"].lower(): p["slug"] for p in pages}
 
+    available = ad_payload.writable_columns(sb)
     rows: list[dict] = []
     for item in items:
         page_name = (item.get("page_name") or item.get("pageName") or "").strip()
@@ -73,23 +75,20 @@ def run(ctx: dict[str, Any]) -> int:
         if not brand_id:
             continue
 
-        ad_id = item.get("ad_archive_id") or item.get("adArchiveId") or item.get("id")
+        ad_id = ad_payload.ad_id_of(item, "meta")
         if not ad_id:
             continue
 
-        rows.append({
-            "brand_id":     brand_id,
-            "platform":     "meta",
-            "ad_id":        str(ad_id),
-            "page_name":    page_name,
-            "body":         (item.get("ad_creative_body") or item.get("body") or "")[:2000],
-            "cta":          item.get("cta_text") or item.get("cta"),
-            "creative_url": item.get("creative_url") or item.get("image_url") or item.get("video_url"),
-            "landing_url":  item.get("link_url") or item.get("landing_url"),
-            "started_at":   item.get("ad_delivery_start_time") or item.get("started_at"),
-            "is_active":    item.get("is_active", True),
-            "raw":          item,
-        })
+        # Field mapping lives in ad_payload.meta_fields -- see that module for
+        # why: reading these keys inline is what silently blanked 698 ads.
+        rows.append(ad_payload.restrict({
+            "brand_id":  brand_id,
+            "platform":  "meta",
+            "ad_id":     str(ad_id),
+            "page_name": page_name,
+            "raw":       item,
+            **ad_payload.meta_fields(item),
+        }, available))
 
     n = sb.upsert("marketing_ads", rows, "platform,ad_id")
     log.info("✓ %d Meta ads upserted", n)
