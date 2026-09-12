@@ -67,6 +67,43 @@ def _fetch_shopify_catalog(shopify_json_url: str) -> list[dict]:
         return []
 
 
+# The exact columns every product_snapshots row carries, always, from every
+# builder. PostgREST rejects a bulk insert whose objects differ in key set
+# (PGRST102), and this module used to normalise at the call site by unioning
+# whatever keys happened to be present and filling the gaps with None.
+#
+# That is the wrong fix twice over. `_uniform_batches()` in the shared client now
+# groups rows by key set, so the call-site normalisation is redundant; and
+# union-filling writes an explicit SQL NULL, which on INSERT overrides the column
+# DEFAULT. product_snapshots carries defaults on `currency` ('USD'),
+# `inventory_confidence` ('low'), `snapshot_time` (now()), `created_at` (now()) and
+# `id` (gen_random_uuid()). The three columns these builders never set — currency,
+# created_at, id — are deliberately ABSENT from this tuple so their defaults apply.
+SNAPSHOT_COLUMNS: tuple[str, ...] = (
+    "brand_id",
+    "product_id",
+    "variant_id",
+    "snapshot_time",
+    "product_url",
+    "price",
+    "compare_at_price",
+    "availability_status",
+    "inventory_signal_type",
+    "inventory_confidence",
+    "visible_inventory_qty",
+)
+
+
+def _snapshot_row(values: dict) -> dict:
+    """Project `values` onto exactly SNAPSHOT_COLUMNS, in order.
+
+    A column with no value is PRESENT and None, which is what keeps a batch
+    postable. Keys outside the tuple are dropped rather than silently creating a
+    second shape.
+    """
+    return {col: values.get(col) for col in SNAPSHOT_COLUMNS}
+
+
 def _snapshots_from_shopify_json(
     brand_id: str,
     products: list[dict],
@@ -112,11 +149,9 @@ def _snapshots_from_shopify_json(
             })
 
             # One snapshot per variant per scrape run
-            snapshot_rows.append({
+            snap = _snapshot_row({
                 "brand_id":            brand_id,
                 "product_id":          product_id,
-                # variant_id FK resolved after upsert — patched in _resolve_variant_fks
-                "_ext_variant_id":     ext_id,
                 "snapshot_time":       now,
                 "product_url":         product_url,
                 "price":               price,
@@ -127,6 +162,10 @@ def _snapshots_from_shopify_json(
                 # visible_inventory_qty filled in Pass 2 when available
                 "visible_inventory_qty": None,
             })
+            # variant_id FK resolved after upsert — _resolve_variant_fks consumes
+            # this scratch key and writes the real variant_id in its place.
+            snap["_ext_variant_id"] = ext_id
+            snapshot_rows.append(snap)
 
     return variant_rows, snapshot_rows
 
@@ -204,7 +243,7 @@ async def _scrape_non_shopify_brand(
         url = result["url"]
         if not result["success"]:
             log.debug("  miss: %s", url)
-            snapshot_rows.append({
+            snapshot_rows.append(_snapshot_row({
                 "brand_id":            brand_id,
                 "product_id":          None,
                 "snapshot_time":       now,
@@ -212,7 +251,7 @@ async def _scrape_non_shopify_brand(
                 "availability_status": "unknown",
                 "inventory_signal_type": "crawl4ai_failed",
                 "inventory_confidence":  "low",
-            })
+            }))
             continue
 
         html = result["html"]
@@ -221,7 +260,7 @@ async def _scrape_non_shopify_brand(
         # Check for structured data (JSON-LD)
         avail_status, price, inv_qty, sig_type, confidence = _extract_from_html(html)
 
-        snapshot_rows.append({
+        snapshot_rows.append(_snapshot_row({
             "brand_id":              brand_id,
             "product_id":            None,
             "snapshot_time":         now,
@@ -231,7 +270,7 @@ async def _scrape_non_shopify_brand(
             "visible_inventory_qty": inv_qty,
             "inventory_signal_type": sig_type,
             "inventory_confidence":  confidence,
-        })
+        }))
 
     return snapshot_rows
 
@@ -410,11 +449,10 @@ def run(ctx: dict[str, Any]) -> int:
     shopify_snaps = _resolve_variant_fks(all_snapshot_rows, ext_to_internal)
     all_snaps = shopify_snaps + non_shopify_snapshots
 
-    # Normalize: Supabase REST requires all rows in a batch to have the same keys.
-    # Build the union of all keys, then fill missing keys with None.
+    # No key normalisation here. Every builder already returns SNAPSHOT_COLUMNS
+    # exactly, and sb.insert() groups by key set anyway. The union-fill that used
+    # to live here wrote explicit NULLs that would override column DEFAULTS.
     if all_snaps:
-        all_keys = set().union(*(row.keys() for row in all_snaps))
-        all_snaps = [{k: row.get(k) for k in all_keys} for row in all_snaps]
         n_snaps = sb.insert("product_snapshots", all_snaps)
         log.info("✓ %d product_snapshots written", n_snaps)
     else:
