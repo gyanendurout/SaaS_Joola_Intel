@@ -18,6 +18,10 @@ import json
 import re
 from typing import Any
 
+from ...core.logger import get_logger
+
+log = get_logger("ads.payload")
+
 # Meta serves dynamic catalogue ads whose body is a token filled in at delivery
 # time ("{{product.brand}}"). Nobody wrote that sentence, so it must not be
 # counted as messaging -- it is recorded as a template ad with empty copy.
@@ -173,12 +177,34 @@ def writable_columns(sb, table: str = "marketing_ads") -> set[str]:
     lands. Posting an unknown column makes PostgREST reject the whole batch
     (PGRST204) and would lose a week of ads over a column that is merely nice to
     have -- so unknown keys are dropped rather than allowed to fail the run.
+
+    Probe via get_filtered(), NOT get(). `supabase_client.get()` renders every
+    param as `k=eq.v`, which is right for column equality and wrong for
+    PostgREST's reserved params: `{"limit": "1"}` became `?limit=eq.1`, a 400 that
+    the old bare `except Exception` swallowed into an empty set. `restrict()`
+    treats empty as "no filter", so from the day it was written until 2026-09-12
+    this guard was a no-op that reported success. get_filtered() passes its filter
+    string through untouched.
     """
     try:
-        sample = sb.get(table, "*", {"limit": "1"})
-    except Exception:
+        sample = sb.get_filtered(table, "*", "limit=1")
+    except Exception as e:
+        # Fail OPEN deliberately — a failed probe must not cost a week of ads —
+        # but never fail silent: restrict() is about to pass every key through,
+        # so an unapplied migration will now surface as PGRST204 on the batch.
+        log.warning(
+            "could not read %s columns (%s: %s). restrict() will act as a NO-OP "
+            "for this run, so an unknown column will fail the batch instead of "
+            "being dropped.", table, type(e).__name__, e,
+        )
         return set()
-    return set(sample[0].keys()) if sample else set()
+    if not sample:
+        log.warning(
+            "%s is empty, so no column list could be read. restrict() will act "
+            "as a NO-OP for this run.", table,
+        )
+        return set()
+    return set(sample[0].keys())
 
 
 def restrict(row: dict, available: set[str]) -> dict:

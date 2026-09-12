@@ -136,3 +136,116 @@ def test_ad_id_extraction_per_platform():
     assert ad_id_of(META_ITEM, "meta") == "945687884878300"
     assert ad_id_of(GOOGLE_ITEM, "google") == "CR02156660292304502785"
     assert ad_id_of({}, "meta") is None
+
+
+# ── writable_columns() (found 2026-09-12) ───────────────────────────────────
+#
+# This helper is the documented safety net for migrations/026: if a scrape runs
+# before that migration lands, posting an unknown column makes PostgREST reject
+# the whole batch (PGRST204) and loses a week of ads. `restrict()` is supposed to
+# drop those keys.
+#
+# It had never run once. `sb.get(table, "*", {"limit": "1"})` goes through
+# supabase_client.get(), which renders EVERY param as `k=eq.v` — so the request
+# was `?select=*&limit=eq.1`. `limit` is a reserved PostgREST param requiring an
+# integer, so it 400s, a bare `except Exception` swallowed it, and the function
+# returned an empty set. `restrict()` treats empty as "no filter", so the guard
+# was a permanent no-op that reported success.
+
+class _RecordingSb:
+    def __init__(self, rows=None, boom=False):
+        self.rows = rows if rows is not None else []
+        self.boom = boom
+        self.get_calls: list[tuple] = []
+        self.get_filtered_calls: list[tuple] = []
+
+    def get(self, table, select="*", params=None):
+        self.get_calls.append((table, select, params))
+        if self.boom:
+            raise RuntimeError("400 Bad Request: unexpected 'limit'")
+        return self.rows
+
+    def get_filtered(self, table, select, filters):
+        self.get_filtered_calls.append((table, select, filters))
+        if self.boom:
+            raise RuntimeError("400 Bad Request")
+        return self.rows
+
+
+def test_supabase_get_mangles_reserved_params_into_eq_filters():
+    """Why the old call could never work — documents the rendering, no network.
+
+    supabase_client.get() builds its suffix as `&k=eq.v` for every param. That is
+    correct for column equality and wrong for PostgREST's reserved params, so
+    {"limit": "1"} becomes `limit=eq.1` and the request 400s.
+    """
+    params = {"limit": "1"}
+    suffix = "&" + "&".join(f"{k}=eq.{v}" for k, v in params.items())
+    assert suffix == "&limit=eq.1"   # mirrors supabase_client.get() verbatim
+
+
+def test_writable_columns_probes_via_get_filtered_with_a_raw_limit():
+    """The regression: the probe must use the raw-filter API, not the eq. one.
+
+    get_filtered() passes its filter string through untouched, so `limit=1`
+    arrives as a real PostgREST limit. Asserting the call shape rather than just
+    the return value — a stubbed sb.get() returns rows happily either way, which
+    is exactly why this bug survived.
+    """
+    from backend.scraping.sources.ads import ad_payload
+
+    sb = _RecordingSb(rows=[{"ad_id": "1", "brand_id": "b", "is_active": True}])
+    cols = ad_payload.writable_columns(sb, "marketing_ads")
+
+    assert cols == {"ad_id", "brand_id", "is_active"}
+    assert sb.get_calls == [], "must not use the eq.-rendering get() for a limit"
+    assert sb.get_filtered_calls == [("marketing_ads", "*", "limit=1")]
+
+
+def test_writable_columns_returns_the_real_column_set():
+    from backend.scraping.sources.ads import ad_payload
+
+    sb = _RecordingSb(rows=[{"ad_id": "1", "ad_title": "t", "archive_url": "u"}])
+    assert ad_payload.writable_columns(sb, "marketing_ads") == {
+        "ad_id", "ad_title", "archive_url"}
+
+
+def test_writable_columns_on_empty_table_returns_empty_set():
+    """No rows means no column information — restrict() then cannot filter."""
+    from backend.scraping.sources.ads import ad_payload
+
+    assert ad_payload.writable_columns(_RecordingSb(rows=[])) == set()
+
+
+def test_writable_columns_failure_is_logged_not_swallowed(caplog):
+    """Fail open (never lose a week of ads) but never fail silent."""
+    from backend.scraping.sources.ads import ad_payload
+
+    with caplog.at_level("WARNING"):
+        cols = ad_payload.writable_columns(_RecordingSb(boom=True))
+
+    assert cols == set()
+    assert caplog.records, (
+        "a failed column probe must log — a silent empty set turns restrict() "
+        "into a no-op while reporting success"
+    )
+    assert any("restrict" in r.getMessage().lower()
+               or "no-op" in r.getMessage().lower()
+               or "column" in r.getMessage().lower()
+               for r in caplog.records)
+
+
+def test_restrict_drops_unknown_keys_when_columns_are_known():
+    from backend.scraping.sources.ads import ad_payload
+
+    row = {"ad_id": "1", "ad_title": "t", "not_a_column": "x"}
+    assert ad_payload.restrict(row, {"ad_id", "ad_title"}) == {
+        "ad_id": "1", "ad_title": "t"}
+
+
+def test_restrict_passes_everything_through_when_columns_unknown():
+    """Empty set = no filter. Documented fail-open; pinned so it stays explicit."""
+    from backend.scraping.sources.ads import ad_payload
+
+    row = {"ad_id": "1", "not_a_column": "x"}
+    assert ad_payload.restrict(row, set()) == row
