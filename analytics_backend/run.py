@@ -36,12 +36,16 @@ MODULE_STEPS: dict[str, Module] = {
         [("analytics_backend.marts.refresh_timeseries", "run")],
     ],
     "statistics": [
-        # All four read from joola_timeseries_daily and write to analysis_results
+        # All five read from joola_timeseries_daily and write to analysis_results
         # with their own `kind` tag; independent.
+        # seasonality was missing from this registry, so `--module all` never
+        # ran it and kind='stl' was never produced — the module was only ever
+        # imported by cross_correlation for its stl_deseasonalize() helper.
         [("analytics_backend.statistics.correlation_scan", "run"),
          ("analytics_backend.statistics.cross_correlation", "run"),
          ("analytics_backend.statistics.changepoints",      "run"),
-         ("analytics_backend.statistics.granger",           "run")],
+         ("analytics_backend.statistics.granger",           "run"),
+         ("analytics_backend.statistics.seasonality",       "run")],
     ],
 }
 

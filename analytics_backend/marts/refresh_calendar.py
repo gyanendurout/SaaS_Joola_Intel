@@ -58,9 +58,15 @@ def run(ctx: dict[str, Any]) -> int:
         log.info("CONCURRENTLY refresh unavailable; trying plain refresh.")
         fallback = exec_sql(plain_sql)
         if not fallback.get("executed"):
-            log.warning(
-                "Could not auto-refresh %s — proceeding to count what's currently materialized.",
-                _MV_NAME,
+            log.error(
+                "STALE MART: %s was NOT refreshed (%s). exec_sql() never raises, "
+                "so this step still returns a healthy-looking row count from the "
+                "PREVIOUS snapshot — the date spine's trailing edge has not moved, "
+                "which freezes every downstream mart. The `exec_sql(query text)` "
+                "function is defined in no migration; install it once in the "
+                "Supabase SQL editor (see analytics_backend/core/exec_sql.py) or "
+                "run the REFRESH manually.",
+                _MV_NAME, fallback.get("reason", "unknown"),
             )
 
     n = _count_rows()

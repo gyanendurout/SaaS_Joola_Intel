@@ -26,7 +26,10 @@ _WINDOW_DAYS = 180
 _TOP_N_PRODUCTS = 10
 _PERIOD = 7
 _MIN_OBS = _PERIOD * 2  # STL minimum requirement
-_SERIES = ("attention_score", "estimated_units_sold", "ad_pressure_score")
+# estimated_units_sold is 100% NULL in joola_timeseries_daily, so STL always
+# returned None for it. Swapped for mention_count, which is dense — the same
+# substitution changepoints.py already made.
+_SERIES = ("attention_score", "mention_count", "ad_pressure_score")
 _MAX_WORKERS = 8
 
 
@@ -190,20 +193,24 @@ def _stl_summary(s: pd.Series, period: int = _PERIOD) -> dict[str, Any] | None:
 
 def _stl_one(
     brand_id: str,
-    product_id: str,
+    lookup_pid: str,
+    stored_pid: str | None,
     series_name: str,
     df: pd.DataFrame,
     run_date: date,
 ) -> dict[str, Any] | None:
+    # lookup_pid filters `df` inside _product_series; stored_pid is what lands
+    # in analysis_results.product_id (None for the brand-wide rollup). Mirrors
+    # changepoints.py.
     try:
-        s = _product_series(df, product_id, series_name)
+        s = _product_series(df, lookup_pid, series_name)
         summary = _stl_summary(s)
         if summary is None:
             return None
         return {
             "kind": "stl",
             "brand_id": brand_id,
-            "product_id": product_id,
+            "product_id": stored_pid,
             "driver": series_name,
             "target": series_name,
             "metric_date": run_date.isoformat(),
@@ -216,7 +223,7 @@ def _stl_one(
     except Exception as exc:
         log.warning(
             "stl failed brand=%s product=%s series=%s: %s",
-            brand_id, product_id, series_name, exc,
+            brand_id, stored_pid, series_name, exc,
         )
         return None
 
@@ -231,18 +238,29 @@ def run(ctx: dict[str, Any]) -> int:
     brand_ids = _filter_brand_ids(brand_map, brands)
     log.info("seasonality: %d brands in scope", len(brand_ids))
 
-    tasks: list[tuple[str, str, str, pd.DataFrame]] = []
+    # Each task: (brand_id, lookup_pid, stored_pid, series_name, df)
+    BRAND_AGG = "__brand_agg__"
+    tasks: list[tuple[str, str, str | None, str, pd.DataFrame]] = []
     for brand_id in brand_ids:
         df = _fetch_brand_window(brand_id)
         if df.empty:
             continue
-        products = _top_products(df)
-        if not products:
-            continue
         present_series = [s for s in _SERIES if s in df.columns]
-        for product_id in products:
+        if not present_series:
+            continue
+
+        # Brand-level rollup: 100+ daily observations even where individual
+        # products carry only 5-15 days, which is below STL's _MIN_OBS of
+        # 2 x period (14). Without this almost every series would skip.
+        brand_df = df.copy()
+        brand_df["canonical_product_id"] = BRAND_AGG
+        for series_name in present_series:
+            tasks.append((brand_id, BRAND_AGG, None, series_name, brand_df))
+
+        # Product-level (original). Sparse products still skip via _MIN_OBS.
+        for product_id in _top_products(df):
             for series_name in present_series:
-                tasks.append((brand_id, product_id, series_name, df))
+                tasks.append((brand_id, product_id, product_id, series_name, df))
 
     if not tasks:
         log.info("seasonality: nothing to do")
@@ -255,7 +273,8 @@ def run(ctx: dict[str, Any]) -> int:
     rows: list[dict[str, Any]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
         futures = [
-            pool.submit(_stl_one, b, p, sn, df, run_date) for (b, p, sn, df) in tasks
+            pool.submit(_stl_one, b, lp, sp, sn, df, run_date)
+            for (b, lp, sp, sn, df) in tasks
         ]
         for fut in concurrent.futures.as_completed(futures):
             row = fut.result()

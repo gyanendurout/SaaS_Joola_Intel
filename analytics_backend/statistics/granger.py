@@ -27,12 +27,19 @@ _WINDOW_DAYS = 180
 _TOP_N_PRODUCTS = 10
 _MAX_LAG = 14
 _MIN_OBS = 30
-_TARGET = "estimated_units_sold"
+# Was: estimated_units_sold. That column is 100% NULL in joola_timeseries_daily
+# (sales_estimates has never populated), so `pair.dropna()` in _granger_one
+# emptied every pair and this module has never written a single kind='granger'
+# row. mention_count is dense. correlation_scan.py and changepoints.py already
+# made this exact switch; it was never propagated here.
+_TARGET = "mention_count"
+# yt_transcript_attention is not a column of joola_timeseries_daily, so run()'s
+# `present_drivers` filter silently dropped it. Removed so _DRIVERS reflects
+# what is actually tested.
 _DRIVERS = (
     "attention_score",
     "ad_pressure_score",
     "promo_active_flag",
-    "yt_transcript_attention",
 )
 _MAX_WORKERS = 4  # statsmodels is CPU-heavy; keep modest
 
@@ -65,7 +72,7 @@ def _fetch_brand_window(brand_id: str) -> pd.DataFrame:
     start = _window_start().isoformat()
     select = (
         "metric_date,brand_id,canonical_product_id,canonical_product_name,"
-        "attention_score,ad_pressure_score,promo_active_flag,"
+        "mention_count,attention_score,ad_pressure_score,promo_active_flag,"
         "estimated_units_sold"
     )
     filters = (
@@ -162,11 +169,15 @@ def _make_stationary(s: pd.Series) -> tuple[pd.Series, int]:
 
 def _granger_one(
     brand_id: str,
-    product_id: str,
+    lookup_pid: str,
+    stored_pid: str | None,
     driver: str,
     df: pd.DataFrame,
     run_date: date,
 ) -> dict[str, Any] | None:
+    # lookup_pid filters `df` inside _product_series; stored_pid is what lands
+    # in analysis_results.product_id (None for the brand-wide rollup). Mirrors
+    # changepoints.py.
     try:
         from statsmodels.tsa.stattools import grangercausalitytests  # type: ignore
     except Exception as exc:
@@ -174,8 +185,8 @@ def _granger_one(
         return None
 
     try:
-        x_raw = _product_series(df, product_id, driver)
-        y_raw = _product_series(df, product_id, _TARGET)
+        x_raw = _product_series(df, lookup_pid, driver)
+        y_raw = _product_series(df, lookup_pid, _TARGET)
         if x_raw.empty or y_raw.empty:
             return None
 
@@ -187,7 +198,7 @@ def _granger_one(
         if len(pair) < _MIN_OBS:
             log.info(
                 "granger skip n<%d brand=%s product=%s driver=%s (n=%d)",
-                _MIN_OBS, brand_id, product_id, driver, len(pair),
+                _MIN_OBS, brand_id, stored_pid, driver, len(pair),
             )
             return None
 
@@ -233,7 +244,7 @@ def _granger_one(
         return {
             "kind": "granger",
             "brand_id": brand_id,
-            "product_id": product_id,
+            "product_id": stored_pid,
             "driver": driver,
             "target": _TARGET,
             "metric_date": run_date.isoformat(),
@@ -246,7 +257,7 @@ def _granger_one(
     except Exception as exc:
         log.warning(
             "granger failed brand=%s product=%s driver=%s: %s",
-            brand_id, product_id, driver, exc,
+            brand_id, stored_pid, driver, exc,
         )
         return None
 
@@ -262,18 +273,30 @@ def run(ctx: dict[str, Any]) -> int:
     brand_ids = _filter_brand_ids(brand_map, brands)
     log.info("granger: %d brands in scope", len(brand_ids))
 
-    tasks: list[tuple[str, str, str, pd.DataFrame]] = []
+    # Each task: (brand_id, lookup_pid, stored_pid, driver, df)
+    BRAND_AGG = "__brand_agg__"
+    tasks: list[tuple[str, str, str | None, str, pd.DataFrame]] = []
     for brand_id in brand_ids:
         df = _fetch_brand_window(brand_id)
         if df.empty:
             continue
-        products = _top_products(df)
-        if not products:
-            continue
         present_drivers = [d for d in _DRIVERS if d in df.columns]
-        for product_id in products:
+        if not present_drivers:
+            continue
+
+        # Brand-level rollup: 100+ daily observations even where individual
+        # products carry only 5-15 days. Without this, differencing in
+        # _make_stationary left every product series under _MIN_OBS=30 and the
+        # module emitted zero rows.
+        brand_df = df.copy()
+        brand_df["canonical_product_id"] = BRAND_AGG
+        for driver in present_drivers:
+            tasks.append((brand_id, BRAND_AGG, None, driver, brand_df))
+
+        # Product-level (original). Sparse products still skip via _MIN_OBS.
+        for product_id in _top_products(df):
             for driver in present_drivers:
-                tasks.append((brand_id, product_id, driver, df))
+                tasks.append((brand_id, product_id, product_id, driver, df))
 
     if not tasks:
         log.info("granger: nothing to do")
@@ -285,7 +308,8 @@ def run(ctx: dict[str, Any]) -> int:
     rows: list[dict[str, Any]] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
         futures = [
-            pool.submit(_granger_one, b, p, d, df, run_date) for (b, p, d, df) in tasks
+            pool.submit(_granger_one, b, lp, sp, d, df, run_date)
+            for (b, lp, sp, d, df) in tasks
         ]
         for fut in concurrent.futures.as_completed(futures):
             row = fut.result()
