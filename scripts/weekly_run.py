@@ -168,12 +168,28 @@ def main() -> int:
     log.info("")
 
     # Phase 1-4 — scraping pipeline (instagram, youtube, …, enrichment, facts)
+    #
+    # Exit 2 from the scraping runner means "ran, but some steps failed" (see
+    # EXIT_PARTIAL in backend/scraping/run.py). The modules that succeeded DID
+    # write their rows, so the derived layers are still worth rebuilding — on
+    # 2026-09-12 the ads module lost every row while the other eight wrote 11k,
+    # and skipping analytics over that would have thrown away the good work too.
+    # So: carry the failure forward and return it at the end, but keep going.
+    # Any other non-zero code means the pipeline could not run at all (bad
+    # credentials) and there is nothing for analytics to read.
+    scraping_failed = False
     try:
+        from backend.scraping.run import EXIT_PARTIAL
         from backend.scraping.run import main as _scraping_main
         _scraping_main(pipeline_argv)
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else (1 if exc.code else 0)
-        if code != 0:
+        if code == EXIT_PARTIAL:
+            scraping_failed = True
+            log.error("Scraping pipeline exited with code %d — some steps failed. "
+                      "Continuing to analytics on the rows that did land; this run "
+                      "will still report failure.", code)
+        elif code != 0:
             log.error("Scraping pipeline exited with code %d", code)
             return code
     except KeyboardInterrupt:
@@ -207,6 +223,12 @@ def main() -> int:
         except Exception as exc:
             log.exception("Unexpected error in analytics phase: %s", exc)
             return 1
+
+    if scraping_failed:
+        log.error("Weekly run finished with failed scraping steps — see "
+                  "'Failed steps:' above. Exiting non-zero so cron/CI does not "
+                  "record this as a clean run.")
+        return 2
 
     return 0
 

@@ -40,6 +40,16 @@ from .core.settings import require_apify, require_supabase
 
 log = get_logger("runner")
 
+# Process exit codes. weekly_run.py branches on these, so they are a contract:
+#   0  clean run
+#   1  could not run (credential check failed) — abort the whole weekly run
+#   2  ran, but some steps failed or write columns were stripped. The modules that
+#      did succeed wrote their rows, so downstream phases remain worth running;
+#      the caller must still surface the run as unsuccessful.
+EXIT_OK = 0
+EXIT_CANNOT_RUN = 1
+EXIT_PARTIAL = 2
+
 
 # ── Module registry ───────────────────────────────────────────────────────────
 # Each module is a list of *parallel groups*. Inner list = parallel steps,
@@ -458,6 +468,34 @@ def main(argv: list[str] | None = None) -> None:
     if sb.SCHEMA_GAPS or sb.SCHEMA_GAPS_READ:
         log.error("  Find the migration adding them:  grep -rn '<column>' migrations/")
     log.info("=" * 55)
+
+    # Exit non-zero when anything was lost. Until 2026-09-12 this function
+    # returned normally after logging "Failed steps: …", so the process exited 0
+    # and every caller reading $? — cron, CI, `cmd1 && cmd2` chains — treated a
+    # run that silently dropped 89 rows as a success. The log line is for humans;
+    # the exit code is the only thing automation can act on.
+    #
+    # SCHEMA_GAPS (write) counts as failure too: those columns were stripped so
+    # the rest of each row could land, which means data was accepted-but-dropped.
+    # SCHEMA_GAPS_READ does not — a stale column name in a select degrades the
+    # output but never writes anything wrong, and failing on it would block runs
+    # that are merely reading one column too many.
+    # Exit 2, not 1, and the distinction is load-bearing: weekly_run.py aborts the
+    # whole run (skipping the analytics phase) on a non-zero scraping exit. Exit 1
+    # means "could not run" — bad credentials, nothing was attempted — and should
+    # stop everything. Exit 2 means "ran, but lost something": the other modules
+    # did land their rows, so the derived layers are still worth rebuilding. A flat
+    # exit 1 here would have let one Cloudflare-blocked brand throw away the
+    # entire analytics phase.
+    if failed or sb.SCHEMA_GAPS:
+        reasons = []
+        if failed:
+            reasons.append(f"{len(failed)} failed step(s)")
+        if sb.SCHEMA_GAPS:
+            reasons.append(f"write schema gaps in {len(sb.SCHEMA_GAPS)} table(s)")
+        log.error("Exiting %d — %s. Nothing downstream should treat this run as "
+                  "complete.", EXIT_PARTIAL, "; ".join(reasons))
+        sys.exit(EXIT_PARTIAL)
 
 
 if __name__ == "__main__":

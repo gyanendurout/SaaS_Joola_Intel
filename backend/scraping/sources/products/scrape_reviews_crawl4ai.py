@@ -11,7 +11,7 @@ Supports all six review platforms:
   - Stamped    (Gamma)
   - Shopify SPR / Loox (Franklin, Six Zero, Engage)
 
-Updates products.avg_rating and products.review_count via upsert.
+Updates products.avg_rating and products.review_count via per-row PATCH.
 Also writes to product_reviews table (migration 016) for individual review text
 when the page exposes them.
 
@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from ...core import supabase_client as sb
+from ...core.errors import SupabaseError
 from ...core.crawl4ai_client import fetch_pages_batch, run_sync
 from ...core.logger import get_logger
 
@@ -215,17 +216,40 @@ def run(ctx: dict[str, Any]) -> int:
         log.info("No review data extracted")
         return 0
 
-    # Update products table with fresh rating + review_count
-    update_rows = [
-        {
-            "id":              p["id"],
+    # Update products table with fresh rating + review_count.
+    #
+    # PATCH per row, NOT upsert. `products.name` is NOT NULL with no default, and
+    # Postgres validates the proposed insert tuple before ON CONFLICT arbitration
+    # can turn it into an UPDATE — so a partial-column payload sent as an upsert
+    # dies with `23502 null value in column "name"` and takes the whole batch with
+    # it. That cost a 100-minute crawl on 2026-09-12: 89 ratings extracted, 0 written.
+    #
+    # Adding "name" to the payload would satisfy the constraint but is still wrong:
+    # these products came from a SELECT, so an upsert would resurrect any row the
+    # dedup job (migrations/008, products_dupe_archive) deleted in the meantime as
+    # a name-only zombie. PATCH affects 0 rows in that case, which is correct.
+    written = 0
+    for p in updated:
+        if sb.patch("products", p["id"], {
             "avg_rating":      p["avg_rating"],
             "review_count":    p["review_count"],
             "last_scraped_at": p["last_scraped_at"],
-        }
-        for p in updated
-    ]
-    n = sb.upsert("products", update_rows, "id")
+        }):
+            written += 1
+
+    # upsert() gets this guard from _assert_wrote_something(); the PATCH path needs
+    # its own or "extracted 89, wrote 0" returns a cheerful 0 again.
+    if not written:
+        raise SupabaseError(
+            f"patch products: {len(updated)} rows attempted, 0 written. Every "
+            f"PATCH failed — see the errors above; the payload or a constraint is "
+            f"wrong, not the upstream crawl."
+        )
+    if written < len(updated):
+        log.error("patch products: %d of %d rows written — this run is INCOMPLETE "
+                  "for review data.", written, len(updated))
+
+    n = written
     log.info("✓ %d products updated with review data", n)
 
     with_rating  = sum(1 for p in updated if p.get("avg_rating")  is not None)
