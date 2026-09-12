@@ -81,6 +81,13 @@ def run(ctx: dict[str, Any]) -> int:
 
         # Field mapping lives in ad_payload.meta_fields -- see that module for
         # why: reading these keys inline is what silently blanked 698 ads.
+        #
+        # Every row here MUST carry the same keys. meta_fields() guarantees all
+        # of META_COLUMNS on every item, and the five keys below are
+        # unconditional, so the batch is key-uniform. Do not make any of them
+        # conditional: PostgREST answers a ragged bulk POST with 400 PGRST102
+        # and discards the whole array, which is how this module wrote 0 of 168
+        # ads on 2026-09-12.
         rows.append(ad_payload.restrict({
             "brand_id":  brand_id,
             "platform":  "meta",

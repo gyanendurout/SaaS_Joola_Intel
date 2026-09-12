@@ -23,6 +23,47 @@ from typing import Any
 # counted as messaging -- it is recorded as a template ad with empty copy.
 TEMPLATE_ONLY = re.compile(r"^\s*\{\{.*?\}\}\s*$", re.S)
 
+# The exact columns each builder returns, ALWAYS, for every item.
+#
+# These are tuples and not "whatever happened to have a value" because a bulk
+# POST whose objects differ in key set is rejected wholesale by PostgREST with
+# 400 PGRST102 "All object keys must match". Returning only the populated keys
+# made one ad with no CTA enough to lose the entire batch: on 2026-09-12 that
+# cost 822 freshly scraped creatives (168 Meta + 654 Google, 0 written) after
+# the Apify credits had already been spent.
+#
+# A key whose value is unknown is present and None -- an explicit SQL NULL --
+# not absent. The two booleans are the exceptions: they carry their real value
+# so they match the column DEFAULT instead of going tri-state. See below.
+META_COLUMNS: tuple[str, ...] = (
+    "body", "cta", "ad_title", "landing_url", "creative_url",
+    "started_at", "last_shown", "publisher_platforms",
+    "is_template_ad", "is_active",
+)
+
+# Google's actor returns no ad copy and no advertiser landing page, so `body`,
+# `cta` and `landing_url` are absent from EVERY Google row by design. That is
+# uniform, and therefore fine -- what PostgREST objects to is rows differing
+# from each other, not a builder omitting a column it never has.
+GOOGLE_COLUMNS: tuple[str, ...] = (
+    "page_name", "creative_url", "started_at", "last_shown",
+    "approx_days_shown", "ad_format", "archive_url",
+)
+
+
+def fixed_shape(columns: tuple[str, ...], values: dict) -> dict:
+    """Project `values` onto exactly `columns`, in order.
+
+    Empty string and empty list collapse to None so "the actor returned
+    nothing" is stored as NULL rather than as '' -- but the KEY is always
+    present, which is what keeps a batch postable.
+    """
+    out: dict[str, Any] = {}
+    for col in columns:
+        v = values.get(col)
+        out[col] = None if v == "" or v == [] else v
+    return out
+
 
 def as_dict(value: Any) -> dict:
     if isinstance(value, str):
@@ -40,8 +81,9 @@ def is_template_body(text: str | None) -> bool:
 def meta_fields(item: Any) -> dict:
     """Map one apify/facebook-ads-scraper item onto marketing_ads columns.
 
-    Only keys carrying a value are returned, so a partial payload never
-    overwrites a good column with None.
+    Returns every key in META_COLUMNS for every item, value or no value. It used
+    to return only the keys that carried a value, which made the batch ragged
+    and unpostable -- see META_COLUMNS.
     """
     raw = as_dict(item)
     snap = as_dict(raw.get("snapshot"))
@@ -57,7 +99,7 @@ def meta_fields(item: Any) -> dict:
     first_image = images[0] if images and isinstance(images[0], str) else None
 
     platforms = raw.get("publisherPlatform") or []
-    out: dict[str, Any] = {
+    return fixed_shape(META_COLUMNS, {
         "body": (body or "")[:2000] or None,
         "cta": snap.get("ctaText") or card.get("ctaText"),
         "ad_title": snap.get("title") or card.get("title"),
@@ -71,11 +113,15 @@ def meta_fields(item: Any) -> dict:
         "started_at": raw.get("startDateFormatted"),
         "last_shown": raw.get("endDateFormatted"),
         "publisher_platforms": [str(p) for p in platforms] or None,
-        "is_template_ad": template or None,
-    }
-    if raw.get("isActive") is not None:
-        out["is_active"] = bool(raw["isActive"])
-    return {k: v for k, v in out.items() if v not in (None, "", [])}
+        # Real boolean, never None: the column is `DEFAULT false`, and a NULL
+        # here would break `WHERE is_template_ad = false` for every ordinary ad.
+        "is_template_ad": bool(template),
+        # The column is `DEFAULT true` and the actor is invoked with
+        # activeStatus="active", so an item that does not mention isActive is
+        # an active ad. Writing None instead would make every such ad read as
+        # "unknown" and break the "what is running now" queries outright.
+        "is_active": bool(raw["isActive"]) if raw.get("isActive") is not None else True,
+    })
 
 
 def google_fields(item: Any) -> dict:
@@ -85,6 +131,9 @@ def google_fields(item: Any) -> dict:
     are absent by design rather than by mistake -- do not add speculative keys
     here to 'fix' that. It does return firstShown/lastShown/approxDaysShown,
     which are what make ad recency answerable.
+
+    Returns every key in GOOGLE_COLUMNS for every item, value or no value, so
+    the batch stays postable -- see META_COLUMNS for why.
     """
     raw = as_dict(item)
     out: dict[str, Any] = {
@@ -102,7 +151,7 @@ def google_fields(item: Any) -> dict:
         # click land" would then answer with a Google URL for every Google ad.
         "archive_url": raw.get("adUrl"),
     }
-    return {k: v for k, v in out.items() if v not in (None, "", [])}
+    return fixed_shape(GOOGLE_COLUMNS, out)
 
 
 def ad_id_of(item: Any, platform: str) -> str | None:

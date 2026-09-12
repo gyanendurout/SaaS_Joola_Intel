@@ -68,3 +68,7 @@ DATA/
 # Stray root manifest from a tool run. The application manifest is frontend/package.json.
 /package.json
 /package-lock.json
+
+# Generated knowledge-graph output from the graphify tool (5.5 MB of AST cache).
+# Regenerate with /graphify; never belongs in history.
+graphify-out/

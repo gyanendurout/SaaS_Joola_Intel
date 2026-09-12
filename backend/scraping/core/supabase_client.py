@@ -154,6 +154,67 @@ def get_filtered(table: str, select: str, filters: str) -> list[dict]:
     return _get_tolerating_read_gaps(table, select, f"&{filters}", hdrs, timeout=60)
 
 
+# PostgREST rejects a bulk POST whose objects do not all carry an identical key
+# set: 400 PGRST102 "All object keys must match". The rejection takes the WHOLE
+# array with it, so one row with an extra key loses every row in the batch.
+_BATCH_SIZE = 500
+
+
+def _uniform_batches(table: str, rows: list[dict[str, Any]],
+                     size: int = _BATCH_SIZE) -> list[list[dict[str, Any]]]:
+    """Split rows into POST-able batches whose objects all share one key set.
+
+    This is the guard for PGRST102 "All object keys must match". On 2026-09-12
+    the ads module threw away 822 freshly scraped creatives to it -- 168 Meta
+    and 654 Google rows, 0 written, Apify credits already spent -- because the
+    row builders emitted only the keys that happened to carry a value, so one
+    ad with no CTA gave the batch a second key set.
+
+    Rows are GROUPED by key set rather than padded out to the key union with
+    None. Padding reads tidier and is one line, but it is not semantics
+    preserving and would quietly corrupt tables:
+
+      * under ``Prefer: resolution=merge-duplicates`` every key in the payload
+        becomes ``SET col = excluded.col``, so a NULL this run happens to carry
+        blanks a value an earlier run or a backfill had captured;
+      * on INSERT an explicit NULL *overrides the column DEFAULT*. marketing_ads
+        has ``is_active BOOLEAN DEFAULT true`` and ``is_template_ad boolean
+        DEFAULT false``, both of which the Meta builder legitimately omits --
+        padding would turn every such row into NULL and make "is this ad running"
+        unanswerable.
+
+    Grouping sends strictly the keys the caller asked for, so no existing
+    caller's write semantics change at all: rows that are already key-uniform
+    -- every write path audited on 2026-09-12 except the two ad builders and
+    sales_intelligence/scrape_inventory_crawl4ai.py -- produce exactly one group
+    and byte-identical requests to before this function existed.
+
+    Ragged input is still a caller bug -- it costs one extra round trip per
+    distinct shape -- so it is logged with the differing keys named, loudly
+    enough that the builder gets fixed rather than leaning on this net forever.
+    """
+    groups: dict[frozenset[str], list[dict[str, Any]]] = {}
+    for r in rows:
+        # dict preserves insertion order, so group order (and therefore write
+        # order) stays deterministic.
+        groups.setdefault(frozenset(r.keys()), []).append(r)
+
+    if len(groups) > 1:
+        shapes = [set(k) for k in groups]
+        ragged = sorted(set().union(*shapes) - set.intersection(*shapes))
+        log.warning(
+            "%s rows are not key-uniform: %d distinct key sets across %d rows. "
+            "Grouping them into %d key-uniform request set(s) so PostgREST does "
+            "not reject the batch with PGRST102. Keys present on some rows but "
+            "not others: %s. FIX the row builder to emit a fixed key set "
+            "(explicit None, or the column default, for absent values).",
+            table, len(groups), len(rows), len(groups), ", ".join(ragged) or "(none)",
+        )
+
+    return [g[i:i + size] for g in groups.values()
+            for i in range(0, len(g), size)]
+
+
 def _assert_wrote_something(verb: str, table: str, attempted: int,
                             written: int, failed_batches: int) -> None:
     """A write given rows that lands nothing is always a failure, never a 0.
@@ -208,8 +269,7 @@ def upsert(table: str, rows: list[dict[str, Any]], on_conflict: str) -> int:
     inserted = 0
     failed_batches = 0
     attempted = len(rows)
-    for i in range(0, len(rows), 500):
-        batch = rows[i:i + 500]
+    for i, batch in enumerate(_uniform_batches(table, rows)):
         resp = http_request("POST", url, headers=_headers, json=batch, timeout=30)
         # A batch may name more than one missing column; strip and retry until
         # the payload is clean or the error is something else.
@@ -234,7 +294,7 @@ def upsert(table: str, rows: list[dict[str, Any]], on_conflict: str) -> int:
             )
         else:
             failed_batches += 1
-            log.error("Upsert %s batch %d error %d: %s", table, i, resp.status_code, resp.text[:300])
+            log.error("Upsert %s batch #%d error %d: %s", table, i, resp.status_code, resp.text[:300])
     _assert_wrote_something("upsert", table, attempted, inserted, failed_batches)
     return inserted
 
@@ -254,8 +314,7 @@ def insert(table: str, rows: list[dict[str, Any]]) -> int:
     # No "resolution=merge-duplicates" header — straight insert.
     hdrs = {k: v for k, v in _headers.items() if k != "Prefer"}
     hdrs["Prefer"] = "return=minimal"
-    for i in range(0, len(rows), 500):
-        batch = rows[i:i + 500]
+    for i, batch in enumerate(_uniform_batches(table, rows)):
         resp = http_request("POST", url, headers=hdrs, json=batch, timeout=30)
         while resp.status_code == 400 and "PGRST204" in resp.text:
             if not _strip_missing_column(table, batch, resp.text):
@@ -265,7 +324,7 @@ def insert(table: str, rows: list[dict[str, Any]]) -> int:
             inserted += len(batch)
         else:
             failed_batches += 1
-            log.error("Insert %s batch %d error %d: %s", table, i, resp.status_code, resp.text[:300])
+            log.error("Insert %s batch #%d error %d: %s", table, i, resp.status_code, resp.text[:300])
     _assert_wrote_something("insert", table, attempted, inserted, failed_batches)
     return inserted
 
@@ -277,8 +336,7 @@ def upsert_returning(table: str, rows: list[dict[str, Any]], on_conflict: str) -
     url = f"{_url}/rest/v1/{table}?on_conflict={on_conflict}"
     hdrs = {**_headers, "Prefer": "resolution=merge-duplicates,return=representation"}
     out: list[dict] = []
-    for i in range(0, len(rows), 500):
-        batch = rows[i:i + 500]
+    for batch in _uniform_batches(table, rows):
         resp = http_request("POST", url, headers=hdrs, json=batch, timeout=30)
         if resp.status_code not in (200, 201):
             log.error("Upsert-returning %s error %d: %s", table, resp.status_code, resp.text[:300])
@@ -302,8 +360,7 @@ def delete_insert_weekly(table: str, rows: list[dict[str, Any]],
         log.warning("delete-before-insert %s failed %d: %s", table, dr.status_code, dr.text[:200])
     inserted = 0
     url_plain = f"{_url}/rest/v1/{table}"
-    for i in range(0, len(rows), 500):
-        batch = rows[i:i + 500]
+    for batch in _uniform_batches(table, rows):
         resp = http_request("POST", url_plain, headers=hdrs, json=batch, timeout=30)
         if resp.status_code in (200, 201):
             inserted += len(batch)

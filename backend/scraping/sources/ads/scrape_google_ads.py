@@ -67,6 +67,13 @@ def run(ctx: dict[str, Any]) -> int:
             # This actor returns no ad copy and no advertiser landing page --
             # see ad_payload.google_fields. Do not re-add speculative keys for
             # them; their absence is the actor's, not a mapping slip.
+            #
+            # google_fields() returns all of GOOGLE_COLUMNS every time and the
+            # five keys below are unconditional, so every row is key-uniform.
+            # `page_name` is popped (not conditionally read) so the shape stays
+            # identical whether or not the actor named the advertiser. A ragged
+            # batch is a 400 PGRST102 that discards every row -- 0 of 654 here
+            # on 2026-09-12.
             fields = ad_payload.google_fields(item)
             rows.append(ad_payload.restrict({
                 "brand_id":  t["brand_id"],

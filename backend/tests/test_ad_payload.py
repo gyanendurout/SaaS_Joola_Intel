@@ -6,7 +6,8 @@ real payload shapes so a future schema change fails here instead of quietly
 writing empty columns.
 """
 from backend.scraping.sources.ads.ad_payload import (
-    ad_id_of, google_fields, is_template_body, meta_fields,
+    GOOGLE_COLUMNS, META_COLUMNS, ad_id_of, google_fields, is_template_body,
+    meta_fields,
 )
 
 META_ITEM = {
@@ -59,7 +60,7 @@ def test_dynamic_catalogue_copy_is_not_recorded_as_a_message():
     # 420 of 698 live Meta ads carry only "{{product.brand}}". Counting those as
     # ad copy would invent 420 messages nobody wrote.
     f = meta_fields({"snapshot": {"body": {"text": "{{product.brand}}"}}})
-    assert "body" not in f
+    assert f["body"] is None          # present as NULL, not absent -- PGRST102
     assert f["is_template_ad"] is True
     assert is_template_body("{{product.brand}}")
     assert not is_template_body("Real copy about {{product.brand}} paddles")
@@ -79,19 +80,56 @@ def test_google_exposes_recency_fields():
 
 def test_google_archive_permalink_never_becomes_a_landing_url():
     f = google_fields(GOOGLE_ITEM)
-    assert "landing_url" not in f
+    assert "landing_url" not in GOOGLE_COLUMNS and "landing_url" not in f
     assert f["archive_url"].startswith("https://adstransparency.google.com/")
 
 
 def test_google_has_no_copy_and_does_not_pretend_to():
+    # Absent from EVERY Google row, which is uniform and therefore postable --
+    # unlike a key that is present on some rows and missing on others.
     f = google_fields(GOOGLE_ITEM)
     assert "body" not in f and "cta" not in f
 
 
-def test_partial_payload_never_emits_empty_values():
-    assert meta_fields({}) == {}
-    assert google_fields({}) == {}
-    assert all(v not in (None, "", []) for v in meta_fields(META_ITEM).values())
+def test_every_item_yields_the_same_key_set():
+    """PGRST102 regression guard.
+
+    PostgREST rejects a bulk POST whose objects differ in key set with
+    400 "All object keys must match" and discards the ENTIRE array. On
+    2026-09-12 the builders returned only the keys that carried a value, so one
+    ad with no CTA lost all 168 Meta / 654 Google rows in its batch. Both
+    builders must now return an identical key set for a full item, an empty
+    item, and everything in between.
+    """
+    meta_shapes = {
+        frozenset(meta_fields(i))
+        for i in (META_ITEM, {}, {"snapshot": {}}, {"isActive": False},
+                  {"snapshot": {"body": {"text": "{{product.brand}}"}}},
+                  {"snapshot": {"cards": [{"body": "c", "ctaText": "Buy"}]}})
+    }
+    assert meta_shapes == {frozenset(META_COLUMNS)}, meta_shapes
+
+    google_shapes = {
+        frozenset(google_fields(i))
+        for i in (GOOGLE_ITEM, {}, {"advertiserName": "X"}, {"adFormat": "video"})
+    }
+    assert google_shapes == {frozenset(GOOGLE_COLUMNS)}, google_shapes
+
+
+def test_absent_values_are_null_not_empty_strings():
+    f = meta_fields({})
+    assert f["body"] is None and f["cta"] is None
+    assert f["publisher_platforms"] is None          # never []
+    assert google_fields({})["archive_url"] is None
+
+
+def test_booleans_carry_their_column_default_never_none():
+    # is_template_ad is `DEFAULT false` and is_active is `DEFAULT true`. A NULL
+    # in either makes "is this ad running / is this real copy" unanswerable, so
+    # the builder emits the real boolean rather than padding with None.
+    f = meta_fields({})
+    assert f["is_template_ad"] is False
+    assert f["is_active"] is True
 
 
 def test_ad_id_extraction_per_platform():
