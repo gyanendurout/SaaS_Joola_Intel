@@ -8,6 +8,7 @@ history. If you need something else:
 | What the product is, who it's for, what's in scope | [BRD.md](BRD.md) |
 | Repo map + quickstart | [README.md](README.md) |
 | Where a given file lives, end-to-end data flow | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Every table, column, key and data profile (live introspection) | [docs/DATABASE_REFERENCE.md](docs/DATABASE_REFERENCE.md) |
 | Open work | [TODO.md](TODO.md) |
 | Visual conventions, component contracts | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) |
 | Running / debugging the scrapers | [backend/README.md](backend/README.md) |

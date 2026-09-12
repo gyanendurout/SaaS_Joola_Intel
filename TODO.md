@@ -8,7 +8,10 @@ Scope split: this file owns *engineering tasks and blockers*.
 cron). Don't duplicate across the two.
 
 > Last reviewed 2026-08-24 by a full-repo code audit (see [BRD.md](BRD.md) §17).
-> DB-side items were last verified 2026-08-18 by column probe.
+> DB-side items re-verified **2026-09-12** by live introspection of all 138
+> relations — counts, key coverage and freshness are in
+> [docs/DATABASE_REFERENCE.md](docs/DATABASE_REFERENCE.md). Numbers below carry
+> their own measurement date; trust the newer one.
 
 ---
 
@@ -102,9 +105,33 @@ Expected fill: joola 60–100%, six-zero 50–90%, onix 30–80% (Bazaarvoice
 lazy-render risk), franklin 40–80%, wilson 30–80%, head 0% (no widget —
 intentional), engage ~100%.
 
-If **onix** stays at 0%: raise `extra_wait` in `scrape_catalog_local.py`
+**Measured 2026-09-12** after a full `--module products` run *and* a
+`reviews-crawl4ai` pass (`category = 'paddle'`, all rows):
+
+| brand | paddles | has rating | pct | vs expected |
+|---|---|---|---|---|
+| paddletek | 24 | 24 | 100% | ✓ |
+| six-zero | 23 | 17 | 74% | ✓ in range |
+| franklin | 34 | 21 | 62% | ✓ in range |
+| crbn | 35 | 17 | 49% | — |
+| selkirk | 73 | 30 | 41% | — |
+| engage | 21 | 3 | **14%** | ✗ expected ~100% |
+| joola | 45 | 5 | **11%** | ✗ expected 60–100% |
+| head | 26 | 1 | 4% | ✓ (0% was intentional) |
+| onix | 23 | 1 | **4%** | ✗ expected 30–80% |
+| gamma | 24 | 0 | **0%** | — |
+| wilson | **0** | — | — | ✗ no paddle rows at all |
+| **TOTAL** | **328** | **119** | **36%** | |
+
+So the backport is **not** validated: joola, engage and onix all land far below
+target, gamma is empty, and wilson has no paddle rows whatsoever (consistent with
+the Akamai block noted under Backend / scrapers — its catalog never lands).
+
+Onix confirms the predicted Bazaarvoice lazy-render failure, so apply the remedy
+already written here: raise `extra_wait` in `scrape_catalog_local.py`
 `BRAND_SCRAPERS` from 8000 → 12000 ms and add a scroll-to-bottom step in
-`_scrape_brand`.
+`_scrape_brand`. Joola and engage need diagnosing separately — both have working
+widgets on their PDPs, so 11% / 14% points at the selector set, not at timing.
 
 ### ~~5. Fix `topic_lifecycle` schema-cache error~~ — closed 2026-08-24
 
@@ -116,6 +143,44 @@ topic_lifecycle rows** with no error. Nothing further to do.
 
 `product_aliases.product_id`, `.alias_norm`, and `.is_ambiguous` all exist on the
 live DB (column probe, 2026-08-14) — migration 021 was applied. Nothing to do.
+
+### 8. Un-freeze the three materialized views — `exec_sql` does not exist
+
+Found 2026-09-12. `dim_brand_calendar` and `joola_timeseries_daily` are stuck at
+**2026-05-24**, `joola_timeseries_weekly` at **2026-05-18**. Root cause is not a
+mart bug: `analytics_backend` issues `REFRESH MATERIALIZED VIEW` through an
+`exec_sql(query text)` Postgres RPC that **is defined in no migration and does
+not exist in this project** — every call 404s.
+
+All five statistics modules read `joola_timeseries_daily`, so the analytics pages
+are worse than stale: today's run wrote 79 fresh `analysis_results` rows stamped
+`computed_at = 2026-09-12` that were computed on data ending 2026-05-24. The
+Correlations and Changepoints pages look freshly computed and are 16 weeks behind.
+
+Two ways out — **pick one, this needs a human**:
+
+1. Run the refresh by hand in the Supabase SQL editor after each weekly run:
+   ```sql
+   refresh materialized view dim_brand_calendar;
+   refresh materialized view concurrently joola_timeseries_daily;
+   refresh materialized view concurrently joola_timeseries_weekly;
+   ```
+2. Install the RPC once so the pipeline can do it unattended:
+   ```sql
+   create or replace function exec_sql(query text) returns void
+   language plpgsql security definer as $$ begin execute query; end $$;
+   ```
+   **Read the trade-off first:** this grants arbitrary SQL to any holder of the
+   service-role key. That is a privilege decision, not a chore.
+
+Deadline: after roughly **2026-11-20** the statistics modules' 180-day window
+stops overlapping the frozen views entirely, and all five switch from returning
+stale numbers to returning 0 — silently.
+
+Related decision: `marts/refresh_timeseries.py` and `refresh_calendar.py` now log
+`ERROR  STALE MART … NO-OP` instead of a healthy row count, but still **exit 0**.
+Deliberately left that way pending this decision — make it hard-fail once the
+refresh path works, or the next breakage is invisible again.
 
 ### 7. Reinstall `node.exe` on the build host
 
@@ -200,6 +265,37 @@ live DB (column probe, 2026-08-14) — migration 021 was applied. Nothing to do.
   absent.
 - **Wilson product catalog** — blocked by Akamai bot manager. Needs a
   residential proxy; no scraper covers it today.
+- **5 products never receive review data — URL shadowing.** Found 2026-09-12.
+  `scrape_reviews_crawl4ai._scrape_batch` builds `url_to_product` as a dict keyed
+  by URL, but 5 of the 200 scraped products share a URL with another product
+  (variant query strings: `amped-pro-air-epic…?variant=…`, `dude-perfect-trickshot`,
+  CRBN `counter-…`, `joola-perseus-iv-14mm`, CRBN `best-pickleball-eyewear`). The
+  dict keeps one product per URL, so the twin is silently never updated while the
+  survivor is PATCHed twice. That is also why the module reports 103 writes but
+  only 98 distinct rows change — the count is PATCH calls, not rows. Key the map
+  by product id and fan results out to every product sharing that URL.
+- **`ad_payload.writable_columns()` has never run.** It calls
+  `sb.get(table, "*", {"limit": "1"})`, which PostgREST renders as `?limit=eq.1`
+  — `limit` is a reserved integer param, so the request 400s, a bare
+  `except Exception` swallows it, and the function returns an empty set. That
+  makes `restrict()` a permanent no-op, so the documented safety net ("drop
+  unknown columns so an unapplied migration cannot lose a week of ads") has never
+  once fired. Pass the limit as a real param, or drop the helper and admit the
+  guard does not exist.
+- **Delete the union-fill workaround in `scrape_inventory_crawl4ai.py:412-417`.**
+  It pre-dates `_uniform_batches()` and solves the same ragged-key problem the
+  wrong way: it fills missing keys with `None`, which under
+  `Prefer: resolution=merge-duplicates` becomes `SET col = excluded.col` and
+  blanks previously-captured values, and on insert overrides column DEFAULTs. The
+  shared client now groups rows by key set, so the local workaround is redundant.
+  Give the three row literals one shared shape and remove it. (Audited
+  2026-09-12: today's 8,370 new snapshots have a NULL profile identical to the
+  pre-run rows, so nothing is currently corrupted — this is latent, not active.)
+- **Six unique INDEXes cannot be used as `on_conflict` targets.** PostgREST
+  accepts only unique *constraints*. Affects `promotions`, `marketing_ads`,
+  `influencer_x_snapshots`, `mention_facts` and two on `competitor_switch` —
+  any upsert naming those keys fails at the edge. Convert each to
+  `alter table … add constraint … unique (…)`.
 
 ### Data quality
 
@@ -209,9 +305,11 @@ live DB (column probe, 2026-08-14) — migration 021 was applied. Nothing to do.
 - **Six-zero AUD pricing** — rows carry `price_usd = NULL`, `currency = 'AUD'`,
   so six-zero is absent from price-tier analysis. Add FX conversion or a
   `price_aud` column.
-- **33,742 `product_snapshots` rows have no `product_id`** (measured 2026-08-18
-  by `availability_daily`, which now logs the count). They are not variant-linked,
-  so they cannot be keyed at product grain and `availability_daily` skips them —
+- **42,258 of 46,428 `product_snapshots` rows have no `product_id`** (91%;
+  re-measured 2026-09-12 — was 33,742 on 2026-08-18, so the gap is *growing* with
+  every run, not shrinking: the 8,370 snapshots written on 2026-09-12 were 98%
+  unlinked). 40,684 also lack `variant_id`. They cannot be keyed at product grain
+  and `availability_daily` skips them —
   that mart went 0 → 359 rows once the skip was added, because a single NULL was
   killing the entire 452-row batch. This is the same root cause as the sales
   estimation chain below; fixing the snapshot → variant link is the shared
@@ -327,7 +425,26 @@ scope decisions live in the BRD sections named below; the work is here.
   INCOMPLETE`. This is the "scraped N, wrote 0" guard, placed in the client where
   the row counts exist rather than in `run.py`. `scrape_news.py` and
   `scrape_comments.py` additionally assert at the module level (fetched > 0 but
-  built 0 rows means a field rename upstream).
+  built 0 rows means a field rename upstream). The guard lives in `upsert()` /
+  `insert()` only — **a module writing via `sb.patch()` must assert for itself**
+  (`scrape_reviews_crawl4ai` does), or zero successful writes returns a cheerful 0.
+- **Runner exit codes are a contract, not cosmetic.** `backend/scraping/run.py`
+  exports `EXIT_OK = 0`, `EXIT_CANNOT_RUN = 1`, `EXIT_PARTIAL = 2`, and
+  `scripts/weekly_run.py` branches on them: `1` (credential check failed, nothing
+  ran) aborts the whole weekly run, `2` (ran, some steps failed or write columns
+  were stripped) **continues to the analytics phase** and returns 2 at the end.
+  The distinction matters — the modules that succeeded did write their rows, so a
+  flat `1` would let one blocked brand throw away the entire analytics phase. Do
+  not collapse these to a single non-zero value; pinned by
+  `backend/tests/test_runner_exit_code.py`.
+- **A partial-column update must never be expressed as an upsert.** `products`
+  requires `name` (NOT NULL, no default — verified against PostgREST's OpenAPI,
+  since `products` DDL is not in `migrations/`), and Postgres validates the
+  proposed insert tuple *before* `ON CONFLICT` arbitration, so a payload missing
+  `name` dies with `23502` and takes the whole batch with it. Use `sb.patch()`.
+  Adding `name` to an upsert payload is not the fix either: rows read via SELECT
+  would resurrect any product the dedup job (`migrations/008`,
+  `products_dupe_archive`) deleted in the meantime as a name-only zombie.
 - **`mention_facts._clear_channel_facts(channel)`** deletes the whole channel
   before re-insert. Re-runs are safe, but the frontend sees a transient gap
   during the DELETE → INSERT window.
@@ -378,11 +495,18 @@ Get-Content c:\Workspace\joola-intel-nextjs\.env | ForEach-Object {
 
 ## Product Intel rebuild — follow-ups (2026-08-26)
 
-- [ ] **Franklin specs blocked (HTTP 403).** Cloudflare Managed Challenge defeats
-      plain HTTP. Either point crawl4ai/Playwright at `franklinsports.com`
-      (both already run in this repo for reviews) or accept Franklin having no
-      technology comparison. Its parser is still UNVERIFIED — it is the only
-      brand with no fixture.
+- [ ] **Franklin is blocked in every module, and crawl4ai does NOT fix it.**
+      The earlier suggestion here — "point crawl4ai/Playwright at
+      `franklinsports.com`, both already run in this repo for reviews" — was
+      tested on 2026-09-12 and **does not work**. crawl4ai hit
+      `Blocked by anti-bot protection: Cloudflare JS challenge` on every Franklin
+      PDP, in both the Phase-4 inventory crawl and the reviews crawl (23 of 23
+      failures on that host; zero failures on any other brand). So Franklin is
+      systematically thinner than the other ten brands across specs, inventory
+      and reviews — not one missing page. A real fix needs a challenge-solving
+      path (residential proxy, or a service that executes the JS challenge), the
+      same class of problem as the Wilson/Akamai item. Its parser remains
+      UNVERIFIED — the only brand with no fixture.
 - [ ] **Selkirk price coverage is 2/10 on the ranked paddles** (24% overall).
       Selkirk is served by the Apify catalog scraper, not the local one.
 - [ ] **Replace the manual FX rate.** `fx_rates` holds a hand-seeded

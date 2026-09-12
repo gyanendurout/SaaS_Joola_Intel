@@ -1,5 +1,11 @@
 # Database — schema inventory
 
+> ⚠️ **Superseded as an inventory.** This file lists 56 tables from migrations
+> 001–016. The live database has **138 relations** and 26 migrations. For the
+> current table/column/key/data picture, read
+> [DATABASE_REFERENCE.md](DATABASE_REFERENCE.md) (generated from the running
+> project, 2026-09-12). Keep this file only for the historical narrative below.
+
 > **Snapshot date**: 2026-05-25 (row counts are last-observed, not live — run `python scripts/db_verify.py` for current state)
 > **Supabase project**: `loecyghnkkxyymelgexz`
 > **Source of truth**: `migrations/001-021*.sql` + `backend/scraping/sources/**/scrape_*.py` (writers) + `frontend/lib/v2/data.ts` (readers)
