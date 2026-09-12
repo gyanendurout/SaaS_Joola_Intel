@@ -159,12 +159,18 @@ Correlations and Changepoints pages look freshly computed and are 16 weeks behin
 
 Two ways out — **pick one, this needs a human**:
 
-1. Run the refresh by hand in the Supabase SQL editor after each weekly run:
-   ```sql
-   refresh materialized view dim_brand_calendar;
-   refresh materialized view concurrently joola_timeseries_daily;
-   refresh materialized view concurrently joola_timeseries_weekly;
-   ```
+1. **Ready to paste: [`migrations/027_refresh_analytics_marts.sql`](migrations/027_refresh_analytics_marts.sql).**
+   Operational script, no schema change, idempotent. Refreshes all three views in
+   dependency order (`dim_brand_calendar` FIRST — it is the date spine both
+   timeseries views join onto, so refreshing it second leaves them ending in May),
+   then prints a `days_behind` check per view. Uses plain `REFRESH` on purpose:
+   all three views do have the unique index `CONCURRENTLY` needs, but
+   `CONCURRENTLY` cannot run inside a transaction block and the SQL editor may wrap
+   a multi-statement script in one — the CONCURRENTLY variants are at the bottom of
+   the file to run one at a time if you want zero downtime.
+   **Then re-run `python -m analytics_backend.run --module statistics`** — the
+   refresh fixes the marts but does not recompute `analysis_results`, so the rows
+   written 2026-09-12 stay wrong until the modules run again on fresh input.
 2. Install the RPC once so the pipeline can do it unattended:
    ```sql
    create or replace function exec_sql(query text) returns void
