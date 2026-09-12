@@ -142,10 +142,23 @@ def _parse_reviews_from_html(html: str) -> tuple[float | None, int | None]:
 async def _scrape_batch(
     products: list[dict],
 ) -> list[dict]:
-    """Crawl product URLs and return updated product dicts with rating/review_count."""
-    urls = [p["url"] for p in products if p.get("url")]
-    url_to_product = {p["url"]: p for p in products if p.get("url")}
+    """Crawl product URLs and return updated product dicts with rating/review_count.
 
+    One URL can belong to several products — the catalog carries variant query
+    strings (`…/amped-pro-air-epic-pickleball-paddle?variant=…`) and outright
+    duplicate rows, so 5 of the 200 products scraped on 2026-09-12 shared a URL
+    with another. This used to be a `{url: product}` dict, which kept exactly one
+    product per URL: the twin silently never received review data, and the
+    survivor was emitted once per duplicate (103 PATCH calls for 98 distinct
+    rows). Map URL -> list of products instead, fetch each URL once, and fan the
+    result out to every product on it.
+    """
+    url_to_products: dict[str, list[dict]] = {}
+    for p in products:
+        if p.get("url"):
+            url_to_products.setdefault(p["url"], []).append(p)
+
+    urls = list(url_to_products)          # deduped; insertion-ordered
     if not urls:
         return []
 
@@ -153,30 +166,30 @@ async def _scrape_batch(
 
     updated: list[dict] = []
     for result in results:
-        product = url_to_product.get(result["url"])
-        if not product:
+        matches = url_to_products.get(result["url"])
+        if not matches:
             continue
 
         if not result["success"]:
             log.debug("  miss: %s", result["url"])
             continue
 
-        html = result["html"]
-        rating, count = _parse_reviews_from_html(html)
+        rating, count = _parse_reviews_from_html(result["html"])
+        if rating is None and count is None:
+            continue
 
-        if rating is not None or count is not None:
+        now = datetime.now(timezone.utc).isoformat()
+        for product in matches:
             updated.append({
                 **product,
                 "avg_rating":    rating if rating is not None else product.get("avg_rating"),
                 "review_count":  count  if count  is not None else product.get("review_count"),
-                "last_scraped_at": datetime.now(timezone.utc).isoformat(),
+                "last_scraped_at": now,
             })
-            log.debug(
-                "  ✓ %s — rating=%.2f count=%s",
-                result["url"],
-                rating or 0,
-                count,
-            )
+        log.debug(
+            "  ✓ %s — rating=%.2f count=%s (%d product row(s))",
+            result["url"], rating or 0, count, len(matches),
+        )
 
     return updated
 

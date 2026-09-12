@@ -149,3 +149,95 @@ def test_dry_run_writes_nothing(monkeypatch):
 
     assert mod.run({"dry_run": True}) == 0
     assert fake.patches == [] and fake.upserts == []
+
+
+# ── URL shadowing (found 2026-09-12) ────────────────────────────────────────
+#
+# 5 of the 200 scraped products share a URL with another product (variant query
+# strings: `amped-pro-air-epic…?variant=…`, `dude-perfect-trickshot`, CRBN
+# `counter-…`, `joola-perseus-iv-14mm`, CRBN `best-pickleball-eyewear`).
+# `_scrape_batch` built `url_to_product` as {url: product}, so only ONE product
+# survived per URL: the twin was never updated, and the survivor was PATCHed once
+# per duplicate. That is why the module reported 103 writes while only 98 distinct
+# rows changed — the count was PATCH calls, not rows.
+
+SHARED_URL = "https://joola.com/collections/x/products/perseus-iv-14mm"
+
+TWINS = [
+    {"id": "t1", "brand_id": "b1", "name": "Perseus IV 14mm",
+     "url": SHARED_URL, "avg_rating": None, "review_count": None},
+    {"id": "t2", "brand_id": "b1", "name": "Perseus IV 14mm (dupe row)",
+     "url": SHARED_URL, "avg_rating": None, "review_count": None},
+    {"id": "t3", "brand_id": "b1", "name": "Solo product",
+     "url": "https://joola.com/collections/x/products/solo", "avg_rating": None,
+     "review_count": None},
+]
+
+
+def _fake_fetch(monkeypatch, html_by_url):
+    """Stub fetch_pages_batch: one result per requested URL, in order."""
+    async def fake_batch(urls, timeout=None, max_concurrent=None):
+        return [{"url": u, "success": True, "html": html_by_url[u]} for u in urls]
+    monkeypatch.setattr(mod, "fetch_pages_batch", fake_batch)
+
+
+def test_every_product_sharing_a_url_gets_updated(monkeypatch):
+    """Both twins must receive the rating, not just whichever won the dict."""
+    # JSON-LD form on purpose: _parse_reviews_from_html is the REGEX fallback and
+    # matches `"ratingValue": …`. The meta[itemprop] selectors live in _REVIEW_JS,
+    # which only executes inside the browser.
+    html = '{"ratingValue": "4.6", "reviewCount": "210"}'
+    _fake_fetch(monkeypatch, {
+        SHARED_URL: html,
+        "https://joola.com/collections/x/products/solo": html,
+    })
+
+    updated = mod.run_sync(mod._scrape_batch(TWINS))
+    ids = sorted(p["id"] for p in updated)
+
+    assert ids == ["t1", "t2", "t3"], (
+        "a product sharing its URL with another must still be updated; "
+        f"got {ids}"
+    )
+    assert all(p["avg_rating"] == 4.6 for p in updated)
+    assert all(p["review_count"] == 210 for p in updated)
+
+
+def test_shared_url_is_fetched_once_not_once_per_product(monkeypatch):
+    """Dedupe the crawl: 3 products over 2 URLs must cost 2 page fetches."""
+    seen: list[list[str]] = []
+    html = '{"ratingValue": "4.6", "reviewCount": "210"}'
+
+    async def fake_batch(urls, timeout=None, max_concurrent=None):
+        seen.append(list(urls))
+        return [{"url": u, "success": True, "html": html} for u in urls]
+    monkeypatch.setattr(mod, "fetch_pages_batch", fake_batch)
+
+    mod.run_sync(mod._scrape_batch(TWINS))
+
+    assert len(seen) == 1
+    assert len(seen[0]) == 2, f"expected 2 distinct URLs fetched, got {seen[0]}"
+    assert len(set(seen[0])) == 2
+
+
+def test_no_product_is_emitted_twice_for_one_url(monkeypatch):
+    """The survivor must not be PATCHed once per duplicate."""
+    html = '{"ratingValue": "4.6", "reviewCount": "210"}'
+    _fake_fetch(monkeypatch, {
+        SHARED_URL: html,
+        "https://joola.com/collections/x/products/solo": html,
+    })
+
+    updated = mod.run_sync(mod._scrape_batch(TWINS))
+    ids = [p["id"] for p in updated]
+
+    assert len(ids) == len(set(ids)), f"duplicate PATCH targets: {ids}"
+
+
+def test_failed_page_skips_all_products_on_that_url(monkeypatch):
+    """A blocked page must not fabricate updates for either twin."""
+    async def fake_batch(urls, timeout=None, max_concurrent=None):
+        return [{"url": u, "success": False, "html": ""} for u in urls]
+    monkeypatch.setattr(mod, "fetch_pages_batch", fake_batch)
+
+    assert mod.run_sync(mod._scrape_batch(TWINS)) == []
