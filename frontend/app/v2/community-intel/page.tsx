@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   PageHead, MiniKpi, SortTh, ColumnFilter, LoadingPage, SectionInfo,
   FilterBanner, pgColor, pgName,
@@ -16,7 +16,6 @@ import {
   fetchDefectionSignals,
   fetchTopicLifecycle,
   fetchBrandReplies,
-  computeTrend,
   communityChannelLabel,
   communityChannelColor,
   type CommunityIntelData,
@@ -24,7 +23,6 @@ import {
   type CommunitySentiment,
   type BrandDiscussionRow,
   type SentimentStat,
-  type TrendPoint,
   type HeatmapCell,
   type ComplaintRow,
   type DefectionRow,
@@ -234,18 +232,6 @@ export default function CommunityIntelPage() {
     return applyBrandFilter(data.sentimentStats, filteredBrands, isFiltered)
   }, [data, filteredBrands, isFiltered])
 
-  // Rebuilt from filteredSignals over the *current* window rather than reshaped
-  // from data.trend. data.trend is bucketed to the range that was active when
-  // the fetch ran, so narrowing the date picker used to leave the x-axis
-  // spanning the old, wider period — and the old "snap to the nearest bucket
-  // <= s.date" fallback could push a signal into a bucket outside the window.
-  // computeTrend() derives the buckets from (effectiveFrom, effectiveTo), so the
-  // axis and the counts can no longer disagree.
-  const filteredTrend = useMemo<TrendPoint[]>(
-    () => (data ? computeTrend(filteredSignals, effectiveFrom, effectiveTo) : []),
-    [data, filteredSignals, effectiveFrom, effectiveTo],
-  )
-
   // ─── Section-specific derived data ──────────────────────────────────
 
   const discussionRows = useMemo(() => {
@@ -346,7 +332,6 @@ export default function CommunityIntelPage() {
 
   // ─── Scroll-reveal refs ─────────────────────────────────────────────
   const sec1 = useReveal()
-  const sec2 = useReveal()
   const sec3 = useReveal()
   const sec4 = useReveal()
   const sec5 = useReveal()
@@ -677,31 +662,6 @@ export default function CommunityIntelPage() {
               })}
             </tbody>
           </table>
-        </div>
-      </section>
-
-      {/* ─── Section 3: Community trend over time ──────────────────── */}
-      <section ref={sec2.ref} className={"ov-reveal" + (sec2.vis ? " is-vis" : "")}>
-        <div className="section-head">
-          <div>
-            <h2>
-              Community trend over time
-              <SectionInfo
-                title="Community trend"
-                description="Daily (or weekly, for long windows) volume of community signals — total, crisis, JOOLA-specific, and negative-sentiment overlays. Use this to spot spikes that warrant drill-through into the live feed below."
-                source="All filtered community signals · bucketed by posted_at"
-              />
-            </h2>
-            <div className="sub">Stacked view of every community signal in the active window.</div>
-          </div>
-        </div>
-        {showSentimentLowCoverage && (
-          <div className="price-war" style={{ borderColor: 'rgba(245,230,37,0.3)', marginBottom: 12 }}>
-            Sentiment classification is still being calibrated. Showing volume and crisis signals only until sentiment confidence is available.
-          </div>
-        )}
-        <div className="card" style={{ padding: 16 }}>
-          <CommunityTrendChart points={filteredTrend} />
         </div>
       </section>
 
@@ -1068,7 +1028,7 @@ export default function CommunityIntelPage() {
               JOOLA community mentions
               <SectionInfo
                 title="JOOLA community footprint"
-                description="JOOLA-specific roll-up: total mentions, channel mix, and the top negative signals you need to know about. When the brand filter is set to JOOLA-only, this collapses into a single summary card to avoid duplicating Sections 3/6/7."
+                description="JOOLA-specific roll-up: total mentions, channel mix, and the top negative signals you need to know about. When the brand filter is set to JOOLA-only, this collapses into a single summary card to avoid duplicating Sections 6/7."
                 source="Filtered signals where brand = joola"
               />
             </h2>
@@ -1472,147 +1432,6 @@ function ImpactCards({
   )
 }
 
-function CommunityTrendChart({ points }: { points: TrendPoint[] }) {
-  const w = 920
-  const h = 220
-  const padL = 36
-  const padR = 100
-  const padT = 14
-  const padB = 28
-
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
-  const wrapRef = useRef<HTMLDivElement | null>(null)
-
-  const hasData = points.length > 0 && !points.every((p) => p.crisis === 0 && p.joola === 0 && p.negative === 0)
-  if (!hasData) {
-    return <div style={{ color: '#6b7280', fontSize: 13, padding: '32px 0', textAlign: 'center' }}>No signals in the window.</div>
-  }
-
-  // Series — Total removed per UX feedback (was visually dominant + duplicative of channel-mix view)
-  const series = [
-    { id: 'joola', label: 'JOOLA mentions', color: '#22c55e', desc: 'Conversation specifically about JOOLA' },
-    { id: 'negative', label: 'Negative sentiment', color: '#fb923c', desc: 'Signals classified as negative across all brands' },
-    { id: 'crisis', label: 'Crisis signals', color: '#ef4444', desc: 'Crisis-flagged signals (recalls, warranty issues, public complaints)' },
-  ] as const
-
-  const max = Math.max(1, ...points.flatMap((p) => series.map((s) => p[s.id as 'crisis' | 'joola' | 'negative'])))
-  const N = points.length
-  const x = (i: number) => padL + (i / Math.max(1, N - 1)) * (w - padL - padR)
-  const y = (v: number) => padT + (h - padT - padB) * (1 - v / max)
-
-  function build(key: 'crisis' | 'joola' | 'negative'): string {
-    return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ')
-  }
-
-  const last = points[points.length - 1]
-  const endLabels = series.map((s) => ({ id: s.id, color: s.color, label: s.label, y: y(last[s.id as 'crisis' | 'joola' | 'negative']) }))
-  endLabels.sort((a, b) => a.y - b.y)
-  const minGap = 14
-  for (let i = 1; i < endLabels.length; i++) {
-    if (endLabels[i].y < endLabels[i - 1].y + minGap) endLabels[i].y = endLabels[i - 1].y + minGap
-  }
-
-  const hoverPoint = hoverIdx !== null ? points[hoverIdx] : null
-
-  function onMove(e: React.MouseEvent<HTMLDivElement>) {
-    const el = wrapRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    // Convert mouse x to viewBox x then to index
-    const localX = ((e.clientX - rect.left) / rect.width) * w
-    if (localX < padL || localX > w - padR) { setHoverIdx(null); return }
-    const ratio = (localX - padL) / (w - padL - padR)
-    const idx = Math.max(0, Math.min(N - 1, Math.round(ratio * (N - 1))))
-    setHoverIdx(idx)
-  }
-
-  return (
-    <div ref={wrapRef} style={{ position: 'relative' }} onMouseMove={onMove} onMouseLeave={() => setHoverIdx(null)}>
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 8, fontSize: 11, color: 'var(--fg-2)' }}>
-        {series.map((s) => (
-          <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} title={s.desc}>
-            <span style={{ width: 14, height: 3, background: s.color, borderRadius: 2, display: 'inline-block' }} />
-            <span style={{ color: s.color, fontWeight: 700 }}>{s.label}</span>
-          </span>
-        ))}
-      </div>
-
-      <svg width="100%" viewBox={`0 0 ${w} ${h}`} style={{ display: 'block' }}>
-        {[0, Math.ceil(max / 2), max].map((tick) => (
-          <g key={tick}>
-            <line x1={padL} x2={w - padR} y1={y(tick)} y2={y(tick)} stroke="var(--wb-6)" strokeDasharray="2 4" />
-            <text x={padL - 6} y={y(tick) + 3} textAnchor="end" fontSize={10} fill="#6b7280">{tick}</text>
-          </g>
-        ))}
-        {series.map((s) => (
-          <path key={s.id} d={build(s.id as 'crisis' | 'joola' | 'negative')} fill="none" stroke={s.color} strokeWidth={1.7} strokeLinejoin="round" />
-        ))}
-        {endLabels.map((lb) => (
-          <text key={lb.id} x={w - padR + 6} y={lb.y + 3} fontSize={10} fill={lb.color} fontWeight={700}>
-            {lb.label.split(' ')[0]}: {last[lb.id as 'crisis' | 'joola' | 'negative']}
-          </text>
-        ))}
-        {[0, Math.floor(N / 2), N - 1].map((i) =>
-          points[i] ? (
-            <text key={i} x={x(i)} y={h - padB + 16} textAnchor="middle" fontSize={10} fill="#6b7280">
-              {points[i].date.slice(5)}
-            </text>
-          ) : null,
-        )}
-        {/* Crosshair + dots */}
-        {hoverIdx !== null && hoverPoint && (
-          <g pointerEvents="none">
-            <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={padT} y2={h - padB} stroke="rgba(255,255,255,0.25)" strokeDasharray="2 3" />
-            {series.map((s) => (
-              <circle
-                key={s.id}
-                cx={x(hoverIdx)}
-                cy={y(hoverPoint[s.id as 'crisis' | 'joola' | 'negative'])}
-                r={4}
-                fill={s.color}
-                stroke="var(--bg)"
-                strokeWidth={2}
-              />
-            ))}
-          </g>
-        )}
-      </svg>
-
-      {/* Hover tooltip */}
-      {hoverIdx !== null && hoverPoint && wrapRef.current && (
-        <div
-          style={{
-            position: 'absolute',
-            left: `${Math.min(82, Math.max(2, (x(hoverIdx) / w) * 100))}%`,
-            top: 22,
-            transform: 'translateX(-50%)',
-            background: 'rgba(7,9,14,0.95)',
-            border: '1px solid var(--wb-14)',
-            borderRadius: 6,
-            padding: '8px 10px',
-            fontSize: 11,
-            color: '#cbd1dc',
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap',
-            zIndex: 2,
-            boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
-          }}
-        >
-          <div style={{ fontWeight: 700, color: '#fff', marginBottom: 4 }}>{hoverPoint.date}</div>
-          {series.map((s) => (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 99, background: s.color, display: 'inline-block' }} />
-              <span style={{ color: s.color }}>{s.label}:</span>
-              <span style={{ color: '#fff', fontWeight: 700 }}>{hoverPoint[s.id as 'crisis' | 'joola' | 'negative']}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function ChannelMixDonut({ rows }: { rows: { channel: string; label: string; color: string; total: number; crisis: number }[] }) {
   const [centerHov, setCenterHov] = useState(false)
   const [hovArc, setHovArc] = useState<string | null>(null)
@@ -1826,7 +1645,7 @@ function JoolaSummary({
           />
         </div>
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--fg-4)' }}>
-          Brand filter is JOOLA-only — see Sections 3 / 6 / 7 above for the full trend and per-comment breakdown.
+          Brand filter is JOOLA-only — see Sections 6 / 7 above for the per-comment breakdown.
         </div>
       </div>
     )

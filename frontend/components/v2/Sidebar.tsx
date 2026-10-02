@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
-import { useRecentPages } from '@/hooks/useRecentPages'
 
 const I = {
   home: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
@@ -23,11 +22,8 @@ const I = {
   tt:  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.69a8.22 8.22 0 004.83 1.55V6.79a4.85 4.85 0 01-1.06-.1z"/></svg>,
   trend: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>,
   sales: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
-  corr: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/><rect x="15" y="15" width="6" height="6"/><rect x="15" y="3" width="6" height="6" strokeDasharray="2 2"/><rect x="3" y="15" width="6" height="6" strokeDasharray="2 2"/></svg>,
-  change: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 17 9 11 13 15 21 7"/><line x1="13" y1="3" x2="13" y2="21" strokeDasharray="3 3"/></svg>,
   board: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="5" height="10"/><rect x="9.5" y="6" width="5" height="15"/><rect x="16" y="2" width="5" height="19"/></svg>,
   crisis: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
-  ask: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r="0.5" fill="currentColor"/></svg>,
 }
 
 const ChevronLeft = () => (
@@ -48,15 +44,12 @@ const navGroups: NavGroup[] = [
   {
     heading: 'Analytics',
     items: [
-      { href: '/v2/ask-intel',   label: 'Ask Intel',          ic: I.ask },
       { href: '/v2/community-intel', label: 'Community Intel', ic: I.comments },
       { href: '/v2/influencers', label: 'Influencer Intel', ic: I.inf },
       { href: '/v2/campaign-offer-intel', label: 'Campaign & Offer Intel', ic: I.ads },
       { href: '/v2/product-intel', label: 'Product Intel', ic: I.product },
       { href: '/v2/sales-intel',    label: 'Sales Intel',   ic: I.sales },
       { href: '/v2/market',      label: 'Market Intel',       ic: I.mkt },
-      { href: '/v2/correlations', label: 'Correlations',     ic: I.corr },
-      { href: '/v2/changepoints', label: 'Changepoints',     ic: I.change },
       { href: '/v2/data-health',  label: 'Data Health',      ic: I.health },
     ],
   },
@@ -79,7 +72,6 @@ export function V2Sidebar() {
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('joola-sidebar-collapsed') === '1' } catch { return false } })
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [crisisCount, setCrisisCount] = useState(0)
-  const recentPages = useRecentPages()
 
   useEffect(() => {
     import('@/lib/shared/supabase').then(({ supabase }) => {
@@ -174,21 +166,6 @@ export function V2Sidebar() {
               {!collapsed && <span>Home</span>}
             </Link>
           </div>
-
-          {recentPages.length > 0 && (
-            <div style={{ padding: '8px 0 4px', borderBottom: '1px solid var(--line)', marginBottom: 4 }}>
-              {!collapsed && <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.1em', padding: '0 16px', marginBottom: 4 }}>Recent</div>}
-              {recentPages.slice(0, 4).map(p => (
-                <a key={p.href} href={p.href}
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: collapsed ? '6px 0' : '5px 16px', justifyContent: collapsed ? 'center' : 'flex-start', textDecoration: 'none', color: 'var(--fg-4)', fontSize: 11, borderRadius: 6, margin: '0 4px', transition: 'background 0.15s, color 0.15s', whiteSpace: 'nowrap', overflow: 'hidden' }}
-                  onMouseEnter={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = 'var(--wb-6)'; el.style.color = 'var(--fg)' }}
-                  onMouseLeave={e => { const el = e.currentTarget as HTMLAnchorElement; el.style.background = ''; el.style.color = 'var(--fg-4)' }}>
-                  <span style={{ fontSize: 13, flexShrink: 0 }}>{p.icon}</span>
-                  {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.label}</span>}
-                </a>
-              ))}
-            </div>
-          )}
 
           {navGroups.map((group, gi) => {
             const isGroupCollapsed = !collapsed && !!collapsedGroups[group.heading]

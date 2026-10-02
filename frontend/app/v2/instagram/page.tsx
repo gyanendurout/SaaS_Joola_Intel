@@ -6,7 +6,7 @@ import {
   fetchIGDominantTheme,
   type V2Brand, type V2IGRow, type V2TopIGPost, type V2IGMentionRow, type V2IGTheme,
 } from '@/lib/v2/data'
-import { fmt, LineChart, EngagementQualityMatrix, Sparkline } from '@/components/v2/charts'
+import { fmt, EngagementQualityMatrix, Sparkline } from '@/components/v2/charts'
 import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBanner, ColumnFilter, exportCSV } from '@/components/v2/PageShell'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { instagramPlaybook } from '@/lib/v2/playbook'
@@ -57,7 +57,6 @@ export default function InstagramPage() {
   const [ig, setIg] = useState<V2IGRow[]>([])
   const [posts, setPosts] = useState<V2TopIGPost[]>([])
   const [freq, setFreq] = useState<Record<string, number[][]>>({})
-  const [paddleMentions, setPaddleMentions] = useState<V2IGMentionRow[]>([])
   const [playerMentions, setPlayerMentions] = useState<V2IGMentionRow[]>([])
   const [themes, setThemes] = useState<V2IGTheme[]>([])
   const [loading, setLoading] = useState(true)
@@ -83,17 +82,16 @@ export default function InstagramPage() {
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
-        const [i, p, f, pm, plm, th] = await Promise.all([
+        const [i, p, f, plm, th] = await Promise.all([
           fetchIG(b),
           fetchTopIGPosts(b, 200),
           fetchPostFrequency(b),
-          fetchIGCommentMentions(b, 'paddle', 30),
           fetchIGCommentMentions(b, 'player', 30),
           fetchIGDominantTheme(b),
         ])
         setBrands(b); setAllBrands(b)
         setIg(i); setPosts(p); setFreq(f)
-        setPaddleMentions(pm); setPlayerMentions(plm)
+        setPlayerMentions(plm)
         setThemes(th)
         setLoading(false)
       } catch (err) {
@@ -132,7 +130,6 @@ export default function InstagramPage() {
   const displayPostsBrand = applyBrandFilter(posts, filteredBrands, isFiltered)
   const displayPosts = applyDateRangeCustom(displayPostsBrand, effectiveFrom, effectiveTo)
   const displayFreq = applyBrandFilterRecord(freq, filteredBrands, isFiltered)
-  const displayPaddleMentions = applyBrandFilter(paddleMentions, filteredBrands, isFiltered)
   const displayPlayerMentions = applyBrandFilter(playerMentions, filteredBrands, isFiltered)
 
   // ─── ER (engagement rate) eligible brands ────────────────────────────
@@ -197,15 +194,6 @@ export default function InstagramPage() {
     posts: postsPerBrand[d.brand] ?? 0,
   }))
 
-  // ─── Follower trajectory (now in Additional Insights, compact) ──────
-  const trendLen = Math.max(1, ...displayIg.slice(0, 7).map(d => d.trend.length))
-  const xLabels = Array.from({ length: trendLen }, (_, i) =>
-    new Date(Date.now() - (trendLen - 1 - i) * 7 * 86400000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  )
-  const lineSeries = displayIg.slice(0, 7).map((d) => ({
-    id: d.brand, label: name(d.brand), color: pgColor(d.brand), data: d.trend,
-  }))
-
   const maxER = erSorted[0]?.engRate || 1
   const freqBrands = Object.keys(displayFreq).length > 0
     ? Object.keys(displayFreq)
@@ -220,7 +208,6 @@ export default function InstagramPage() {
     )
   }
 
-  const maxPaddle = displayPaddleMentions[0]?.mentions || 1
   const maxPlayer = displayPlayerMentions[0]?.mentions || 1
 
   return (
@@ -537,12 +524,207 @@ export default function InstagramPage() {
         </div>
       </section>
 
-      <PlatformPlaybook
-        title="Instagram Playbook"
-        sub="Rule-derived competitor moves + recommended JOOLA actions, computed from the same data this page renders."
-        findings={instagramPlaybook(brands, displayIg, displayPosts, themes)}
-        brands={brands}
-      />
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              Engagement quality matrix
+              <SectionInfo
+                title="Reach vs. Resonance Quadrant"
+                description="X-axis = follower count (audience size). Y-axis = engagement rate (audience involvement). Top-right = winning both. Median crosshair divides the grid into the four quadrants; JOOLA's reference lines are green. Hover any dot for full stats and quadrant interpretation."
+                source="ig_posts + ig_profiles_weekly · engagement rate = (avg likes + avg comments) ÷ followers × 100. Brands under 50 followers are excluded."
+              />
+            </h2>
+            <div className="sub">
+              Followers (reach) × engagement rate (resonance). Top-right = winning. Brands with under {ER_MIN_FOLLOWERS} followers are excluded — ER is unreliable on tiny audiences.
+            </div>
+          </div>
+        </div>
+        <div className="card"><div className="card-pad-lg">
+          <EngagementQualityMatrix data={eqData} onBubbleClick={d => setSelectedEQDot(d)} />
+        </div></div>
+
+        {/* ── EQ dot detail modal ── */}
+        {selectedEQDot && (() => {
+          const d = selectedEQDot
+          const bColor = pgColor(d.brand)
+          const isJ = d.brand === 'joola'
+          const igRow = displayIg.find(r => r.brand === d.brand)
+          const erRank = erSorted.findIndex(r => r.brand === d.brand) + 1
+          const erLabel = d.engRate > 3 ? 'Excellent' : d.engRate > 1 ? 'Solid' : 'Low'
+          const erLabelColor = d.engRate > 3 ? '#22c55e' : d.engRate > 1 ? '#F5E625' : '#ef4444'
+          const xMid = 150000 * 0.25
+          const quadrant = d.followers > xMid && d.engRate > (d.engRate / 2)
+            ? (d.followers > xMid ? (d.engRate > 1.25 ? 'High Value' : 'Big Reach · Low Eng') : (d.engRate > 1.25 ? 'High Eng · Small Reach' : 'Underperforming'))
+            : 'Underperforming'
+          const handle = IG_HANDLES[d.brand]
+          return (
+            <div onClick={() => setSelectedEQDot(null)}
+              style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+              <div onClick={e => e.stopPropagation()}
+                style={{ background: 'var(--bg)', border: `1px solid ${bColor}55`, borderRadius: 16, width: '100%', maxWidth: 500, overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px ${bColor}22` }}>
+
+                {/* Header */}
+                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, transparent 70%)`, padding: '20px 22px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: bColor, boxShadow: `0 0 18px ${bColor}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 800, color: isJ ? '#22c55e' : '#fff' }}>{d.name}</div>
+                      {handle && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>@{handle} · Instagram</div>}
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedEQDot(null)}
+                    style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
+                </div>
+
+                {/* Stats */}
+                <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    {[
+                      { label: 'Followers',   value: fmt(d.followers),             color: isJ ? '#22c55e' : bColor },
+                      { label: 'Eng Rate',    value: d.engRate.toFixed(2) + '%',   color: erLabelColor },
+                      { label: 'ER Rank',     value: erRank > 0 ? `#${erRank}` : '—', color: '#F5E625' },
+                      { label: 'Posts Sampled', value: d.posts ? String(d.posts) : '—', color: 'var(--fg-2)' },
+                      { label: 'Flw Growth',  value: igRow?.deltaPct != null ? (igRow.deltaPct >= 0 ? '+' : '') + igRow.deltaPct.toFixed(2) + '%' : '—', color: igRow?.deltaPct != null ? (igRow.deltaPct >= 0 ? '#22c55e' : '#ef4444') : 'var(--fg-4)' },
+                      { label: 'ER Tier',     value: erLabel,                       color: erLabelColor },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} style={{ background: 'var(--line-2)', border: `1px solid var(--line)`, borderRadius: 10, padding: '10px 12px' }}>
+                        <div style={{ fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color, fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Engagement rate bar */}
+                  <div style={{ padding: '12px 14px', background: 'var(--wb-3)', borderRadius: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 11 }}>
+                      <span style={{ color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', fontSize: 9, fontWeight: 700 }}>Engagement rate vs best in class</span>
+                      <span style={{ color: erLabelColor, fontWeight: 700, fontFamily: 'JetBrains Mono' }}>{d.engRate.toFixed(2)}%</span>
+                    </div>
+                    <div style={{ height: 8, background: 'var(--wb-6)', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, (d.engRate / Math.max(1, ...eqData.map(e => e.engRate))) * 100)}%`, background: erLabelColor, borderRadius: 99, transition: 'width 0.5s ease' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 9, color: 'var(--fg-4)' }}>
+                      <span>0%</span><span style={{ color: '#F5E625' }}>3% excellent</span><span>{Math.max(...eqData.map(e => e.engRate)).toFixed(1)}% max</span>
+                    </div>
+                  </div>
+
+                  {/* CTAs */}
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {handle && (
+                      <a href={`https://www.instagram.com/${handle}`} target="_blank" rel="noopener noreferrer"
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)', borderRadius: 10, padding: '10px 0', color: '#fff', fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
+                        View on Instagram ↗
+                      </a>
+                    )}
+                    <button onClick={() => { setSelectedEQDot(null); setIgDrillBrand(d.brand) }}
+                      style={{ flex: 1, background: bColor, border: 'none', borderRadius: 10, padding: '10px 0', color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
+                      Full Brand Detail →
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ padding: '8px 22px', borderTop: '1px solid var(--wb-6)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Instagram Intelligence · {d.name}</span>
+                  <span>Esc or click outside to close</span>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+      </section>
+
+      <section>
+        <div className="two-col-even">
+          <div>
+            <div className="section-head">
+              <div>
+                <h2>
+                  Engagement rate · benchmark
+                  <SectionInfo
+                    title="Engagement Rate Benchmark"
+                    description="Ranked list — 1–3% is solid for large accounts; above 3% is excellent. Click a row to filter the posts table below."
+                    source="ig_posts · (avg likes + avg comments) ÷ followers × 100"
+                  />
+                </h2>
+                <div className="sub">Click a brand to filter the posts table below.</div>
+              </div>
+            </div>
+            <div className="card"><div className="card-pad">
+              {erSorted.length === 0 ? (
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+                  No engagement data yet — run the IG pipeline first.
+                </div>
+              ) : erSorted.map((d) => (
+                <div
+                  key={d.brand}
+                  className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}
+                  style={{ gridTemplateColumns: '110px 1fr 70px 70px', cursor: 'pointer' }}
+                  title={`Click to filter the posts table below to ${name(d.brand)}`}
+                  onClick={() => {
+                    setColFilter(p => ({ ...p, brand: name(d.brand) }))
+                    document.getElementById('instagram-posts-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                >
+                  <div className="lbl">{name(d.brand)} <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>↓ filter</span></div>
+                  <div className="track">
+                    <div className="fill" style={{
+                      width: (d.engRate / maxER * 100) + '%',
+                      background: d.brand === 'joola' ? '#22c55e' : `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
+                    }} />
+                  </div>
+                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--fg)' }}>{d.engRate.toFixed(2)}%</div>
+                  <div className="delta-mini flat">{fmt(d.followers)}</div>
+                </div>
+              ))}
+            </div></div>
+          </div>
+          <div>
+            <div className="section-head">
+              <div>
+                <h2>
+                  Player mentions · IG comments
+                  <SectionInfo
+                    title="Athlete Mentions in IG Comments"
+                    description="Which sponsored players get name-checked most in Instagram comments. The brand column shows the player's sponsoring brand. Useful for measuring athlete ROI per dollar of sponsorship."
+                    source="mention_facts · channel='ig_comment' · grouped by athlete_id × sponsoring brand"
+                  />
+                </h2>
+                <div className="sub">Top players mentioned in IG comments · brand = sponsoring brand.</div>
+              </div>
+            </div>
+            <div className="card"><div className="card-pad">
+              {displayPlayerMentions.length === 0 ? (
+                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
+                  No player mentions yet — run AI enrichment + populate_mention_facts.
+                </div>
+              ) : displayPlayerMentions.slice(0, 15).map((d, i) => (
+                <div key={i} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}
+                  style={{ gridTemplateColumns: '160px 1fr 50px 70px' }}>
+                  <div className="lbl" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 12 }}>{d.entityName}</span>
+                    <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{name(d.brand)}</span>
+                  </div>
+                  <div className="track">
+                    <div className="fill" style={{
+                      width: Math.max(2, d.mentions / maxPlayer * 100) + '%',
+                      background: `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
+                    }} />
+                  </div>
+                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(d.mentions)}</div>
+                  <div className="delta-mini flat" title={`${d.positive} positive · ${d.negative} negative`}>
+                    <span style={{ color: '#22c55e' }}>+{d.positive}</span>
+                    {' / '}
+                    <span style={{ color: '#ef4444' }}>-{d.negative}</span>
+                  </div>
+                </div>
+              ))}
+            </div></div>
+          </div>
+        </div>
+      </section>
 
       <section ref={sec2.ref} className={revealCls(sec2.vis)} style={{ marginBottom: 28 }}>
         <div className="two-col-even">
@@ -766,6 +948,37 @@ export default function InstagramPage() {
         </div>
       </section>
 
+      <section>
+        <div className="section-head">
+          <div>
+            <h2>
+              Posting cadence · recent activity
+              <SectionInfo
+                title="Posting Frequency"
+                description="Daily posts per brand over the last 4 weeks. Spikes reveal campaign bursts; flat lines indicate dormant periods. Consistent posting maintains algorithmic visibility."
+                source="ig_posts · post timestamps refreshed every Monday"
+              />
+            </h2>
+            <div className="sub">Daily posts per brand · last 4 weeks.</div>
+          </div>
+        </div>
+        <div className="card"><div className="card-pad">
+          {(() => {
+            const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+            const cadenceLabels = Array.from({ length: 28 }, (_, i) =>
+              `W${Math.floor(i / 7) + 1} ${DAY_NAMES[i % 7]}`
+            )
+            const cadenceSeries = freqBrands.map(b => ({
+              id: b,
+              label: name(b),
+              color: pgColor(b),
+              data: (displayFreq[b] || Array.from({ length: 4 }, () => Array(7).fill(0))).flat() as number[],
+            }))
+            return <PostingCadenceChart series={cadenceSeries} dayLabels={cadenceLabels} />
+          })()}
+        </div></div>
+      </section>
+
       <section id="instagram-posts-table" ref={sec3.ref} className={revealCls(sec3.vis)}>
         <div className="section-head">
           <div>
@@ -884,379 +1097,12 @@ export default function InstagramPage() {
         </div>
       </section>
 
-      <section>
-        <div className="section-head">
-          <div>
-            <h2>
-              Engagement quality matrix
-              <SectionInfo
-                title="Reach vs. Resonance Quadrant"
-                description="X-axis = follower count (audience size). Y-axis = engagement rate (audience involvement). Top-right = winning both. Median crosshair divides the grid into the four quadrants; JOOLA's reference lines are green. Hover any dot for full stats and quadrant interpretation."
-                source="ig_posts + ig_profiles_weekly · engagement rate = (avg likes + avg comments) ÷ followers × 100. Brands under 50 followers are excluded."
-              />
-            </h2>
-            <div className="sub">
-              Followers (reach) × engagement rate (resonance). Top-right = winning. Brands with under {ER_MIN_FOLLOWERS} followers are excluded — ER is unreliable on tiny audiences.
-            </div>
-          </div>
-        </div>
-        <div className="card"><div className="card-pad-lg">
-          <EngagementQualityMatrix data={eqData} onBubbleClick={d => setSelectedEQDot(d)} />
-        </div></div>
-
-        {/* ── EQ dot detail modal ── */}
-        {selectedEQDot && (() => {
-          const d = selectedEQDot
-          const bColor = pgColor(d.brand)
-          const isJ = d.brand === 'joola'
-          const igRow = displayIg.find(r => r.brand === d.brand)
-          const erRank = erSorted.findIndex(r => r.brand === d.brand) + 1
-          const erLabel = d.engRate > 3 ? 'Excellent' : d.engRate > 1 ? 'Solid' : 'Low'
-          const erLabelColor = d.engRate > 3 ? '#22c55e' : d.engRate > 1 ? '#F5E625' : '#ef4444'
-          const xMid = 150000 * 0.25
-          const quadrant = d.followers > xMid && d.engRate > (d.engRate / 2)
-            ? (d.followers > xMid ? (d.engRate > 1.25 ? 'High Value' : 'Big Reach · Low Eng') : (d.engRate > 1.25 ? 'High Eng · Small Reach' : 'Underperforming'))
-            : 'Underperforming'
-          const handle = IG_HANDLES[d.brand]
-          return (
-            <div onClick={() => setSelectedEQDot(null)}
-              style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-              <div onClick={e => e.stopPropagation()}
-                style={{ background: 'var(--bg)', border: `1px solid ${bColor}55`, borderRadius: 16, width: '100%', maxWidth: 500, overflow: 'hidden', boxShadow: `0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px ${bColor}22` }}>
-
-                {/* Header */}
-                <div style={{ background: `linear-gradient(135deg, ${bColor}22 0%, transparent 70%)`, padding: '20px 22px 18px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: bColor, boxShadow: `0 0 18px ${bColor}66`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1112.63 8 4 4 0 0116 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 16, fontWeight: 800, color: isJ ? '#22c55e' : '#fff' }}>{d.name}</div>
-                      {handle && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>@{handle} · Instagram</div>}
-                    </div>
-                  </div>
-                  <button onClick={() => setSelectedEQDot(null)}
-                    style={{ background: 'var(--line)', border: '1px solid var(--wb-12)', borderRadius: 8, width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, flexShrink: 0 }}>×</button>
-                </div>
-
-                {/* Stats */}
-                <div style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                    {[
-                      { label: 'Followers',   value: fmt(d.followers),             color: isJ ? '#22c55e' : bColor },
-                      { label: 'Eng Rate',    value: d.engRate.toFixed(2) + '%',   color: erLabelColor },
-                      { label: 'ER Rank',     value: erRank > 0 ? `#${erRank}` : '—', color: '#F5E625' },
-                      { label: 'Posts Sampled', value: d.posts ? String(d.posts) : '—', color: 'var(--fg-2)' },
-                      { label: 'Flw Growth',  value: igRow?.deltaPct != null ? (igRow.deltaPct >= 0 ? '+' : '') + igRow.deltaPct.toFixed(2) + '%' : '—', color: igRow?.deltaPct != null ? (igRow.deltaPct >= 0 ? '#22c55e' : '#ef4444') : 'var(--fg-4)' },
-                      { label: 'ER Tier',     value: erLabel,                       color: erLabelColor },
-                    ].map(({ label, value, color }) => (
-                      <div key={label} style={{ background: 'var(--line-2)', border: `1px solid var(--line)`, borderRadius: 10, padding: '10px 12px' }}>
-                        <div style={{ fontSize: 9, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
-                        <div style={{ fontSize: 18, fontWeight: 800, color, fontFamily: 'JetBrains Mono', lineHeight: 1 }}>{value}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Engagement rate bar */}
-                  <div style={{ padding: '12px 14px', background: 'var(--wb-3)', borderRadius: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 11 }}>
-                      <span style={{ color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', fontSize: 9, fontWeight: 700 }}>Engagement rate vs best in class</span>
-                      <span style={{ color: erLabelColor, fontWeight: 700, fontFamily: 'JetBrains Mono' }}>{d.engRate.toFixed(2)}%</span>
-                    </div>
-                    <div style={{ height: 8, background: 'var(--wb-6)', borderRadius: 99, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${Math.min(100, (d.engRate / Math.max(1, ...eqData.map(e => e.engRate))) * 100)}%`, background: erLabelColor, borderRadius: 99, transition: 'width 0.5s ease' }} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 9, color: 'var(--fg-4)' }}>
-                      <span>0%</span><span style={{ color: '#F5E625' }}>3% excellent</span><span>{Math.max(...eqData.map(e => e.engRate)).toFixed(1)}% max</span>
-                    </div>
-                  </div>
-
-                  {/* CTAs */}
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    {handle && (
-                      <a href={`https://www.instagram.com/${handle}`} target="_blank" rel="noopener noreferrer"
-                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'linear-gradient(135deg,#833ab4,#fd1d1d,#fcb045)', borderRadius: 10, padding: '10px 0', color: '#fff', fontWeight: 700, fontSize: 12, textDecoration: 'none' }}>
-                        View on Instagram ↗
-                      </a>
-                    )}
-                    <button onClick={() => { setSelectedEQDot(null); setIgDrillBrand(d.brand) }}
-                      style={{ flex: 1, background: bColor, border: 'none', borderRadius: 10, padding: '10px 0', color: '#000', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}>
-                      Full Brand Detail →
-                    </button>
-                  </div>
-                </div>
-
-                <div style={{ padding: '8px 22px', borderTop: '1px solid var(--wb-6)', fontSize: 10, color: 'var(--fg-4)', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Instagram Intelligence · {d.name}</span>
-                  <span>Esc or click outside to close</span>
-                </div>
-              </div>
-            </div>
-          )
-        })()}
-      </section>
-
-      {/* ── Brand-wise Analysis ── */}
-
-      <h3 style={{ marginTop: 56, marginBottom: 8, color: 'var(--fg)', fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-        Additional Instagram Insights
-      </h3>
-      <div style={{ borderTop: '1px solid var(--line-2)', marginBottom: 16 }} />
-
-      <section>
-        <div className="two-col-even">
-          <div>
-            <div className="section-head">
-              <div>
-                <h2>
-                  Follower trajectory
-                  <SectionInfo
-                    title="Follower Growth Over Time"
-                    description="Each brand's Instagram follower count plotted week by week. Upward slopes show momentum."
-                    source="ig_profiles_weekly · updated every Monday"
-                  />
-                </h2>
-                <div className="sub">Weekly snapshot trend lines across tracked brands.</div>
-              </div>
-            </div>
-            <div className="card"><div className="card-pad">
-              <LineChart series={lineSeries} xLabels={xLabels} />
-            </div></div>
-          </div>
-          <div>
-            <div className="section-head">
-              <div>
-                <h2>
-                  Engagement rate · benchmark
-                  <SectionInfo
-                    title="Engagement Rate Benchmark"
-                    description="Ranked list — 1–3% is solid for large accounts; above 3% is excellent. Click a row to filter the posts table above."
-                    source="ig_posts · (avg likes + avg comments) ÷ followers × 100"
-                  />
-                </h2>
-                <div className="sub">Click a brand to filter the posts table above.</div>
-              </div>
-            </div>
-            <div className="card"><div className="card-pad">
-              {erSorted.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
-                  No engagement data yet — run the IG pipeline first.
-                </div>
-              ) : erSorted.map((d) => (
-                <div
-                  key={d.brand}
-                  className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}
-                  style={{ gridTemplateColumns: '110px 1fr 70px 70px', cursor: 'pointer' }}
-                  title={`Click to filter the posts table above to ${name(d.brand)}`}
-                  onClick={() => {
-                    setColFilter(p => ({ ...p, brand: name(d.brand) }))
-                    document.getElementById('instagram-posts-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                  }}
-                >
-                  <div className="lbl">{name(d.brand)} <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>↓ filter</span></div>
-                  <div className="track">
-                    <div className="fill" style={{
-                      width: (d.engRate / maxER * 100) + '%',
-                      background: d.brand === 'joola' ? '#22c55e' : `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
-                    }} />
-                  </div>
-                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700, color: 'var(--fg)' }}>{d.engRate.toFixed(2)}%</div>
-                  <div className="delta-mini flat">{fmt(d.followers)}</div>
-                </div>
-              ))}
-            </div></div>
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <div className="section-head">
-          <div>
-            <h2>
-              Posting cadence · recent activity
-              <SectionInfo
-                title="Posting Frequency"
-                description="Daily posts per brand over the last 4 weeks. Spikes reveal campaign bursts; flat lines indicate dormant periods. Consistent posting maintains algorithmic visibility."
-                source="ig_posts · post timestamps refreshed every Monday"
-              />
-            </h2>
-            <div className="sub">Daily posts per brand · last 4 weeks.</div>
-          </div>
-        </div>
-        <div className="card"><div className="card-pad">
-          {(() => {
-            const DAY_NAMES = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-            const cadenceLabels = Array.from({ length: 28 }, (_, i) =>
-              `W${Math.floor(i / 7) + 1} ${DAY_NAMES[i % 7]}`
-            )
-            const cadenceSeries = freqBrands.map(b => ({
-              id: b,
-              label: name(b),
-              color: pgColor(b),
-              data: (displayFreq[b] || Array.from({ length: 4 }, () => Array(7).fill(0))).flat() as number[],
-            }))
-            return <PostingCadenceChart series={cadenceSeries} dayLabels={cadenceLabels} />
-          })()}
-        </div></div>
-      </section>
-
-      <section>
-        <div className="two-col-even">
-          <div>
-            <div className="section-head">
-              <div>
-                <h2>
-                  Paddle mentions · IG comments
-                  <SectionInfo
-                    title="Paddle Mentions in IG Comments"
-                    description="Which paddles get talked about most in Instagram comments across all brand posts. Aggregated from the AI-enriched mention_facts table (channel = ig_comment, product_id extracted by GPT-4o NER)."
-                    source="mention_facts · channel='ig_comment' · grouped by product_id × target brand"
-                  />
-                </h2>
-                <div className="sub">Top paddles mentioned in IG comments · brand = mention target.</div>
-              </div>
-            </div>
-            <div className="card"><div className="card-pad">
-              {displayPaddleMentions.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
-                  No paddle mentions yet — run AI enrichment + populate_mention_facts.
-                </div>
-              ) : displayPaddleMentions.slice(0, 15).map((d, i) => (
-                <div key={i} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}
-                  style={{ gridTemplateColumns: '160px 1fr 50px 70px' }}>
-                  <div className="lbl" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ fontSize: 12 }}>{d.entityName}</span>
-                    <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{name(d.brand)}</span>
-                  </div>
-                  <div className="track">
-                    <div className="fill" style={{
-                      width: Math.max(2, d.mentions / maxPaddle * 100) + '%',
-                      background: `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
-                    }} />
-                  </div>
-                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(d.mentions)}</div>
-                  <div className="delta-mini flat" title={`${d.positive} positive · ${d.negative} negative`}>
-                    <span style={{ color: '#22c55e' }}>+{d.positive}</span>
-                    {' / '}
-                    <span style={{ color: '#ef4444' }}>-{d.negative}</span>
-                  </div>
-                </div>
-              ))}
-            </div></div>
-          </div>
-          <div>
-            <div className="section-head">
-              <div>
-                <h2>
-                  Player mentions · IG comments
-                  <SectionInfo
-                    title="Athlete Mentions in IG Comments"
-                    description="Which sponsored players get name-checked most in Instagram comments. The brand column shows the player's sponsoring brand. Useful for measuring athlete ROI per dollar of sponsorship."
-                    source="mention_facts · channel='ig_comment' · grouped by athlete_id × sponsoring brand"
-                  />
-                </h2>
-                <div className="sub">Top players mentioned in IG comments · brand = sponsoring brand.</div>
-              </div>
-            </div>
-            <div className="card"><div className="card-pad">
-              {displayPlayerMentions.length === 0 ? (
-                <div style={{ padding: 24, textAlign: 'center', color: 'var(--fg-4)', fontSize: 12 }}>
-                  No player mentions yet — run AI enrichment + populate_mention_facts.
-                </div>
-              ) : displayPlayerMentions.slice(0, 15).map((d, i) => (
-                <div key={i} className={'bar-row ' + (d.brand === 'joola' ? 'joola' : '')}
-                  style={{ gridTemplateColumns: '160px 1fr 50px 70px' }}>
-                  <div className="lbl" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ fontSize: 12 }}>{d.entityName}</span>
-                    <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{name(d.brand)}</span>
-                  </div>
-                  <div className="track">
-                    <div className="fill" style={{
-                      width: Math.max(2, d.mentions / maxPlayer * 100) + '%',
-                      background: `linear-gradient(90deg, ${pgColor(d.brand)}, ${pgColor(d.brand)}99)`,
-                    }} />
-                  </div>
-                  <div className="spark-mini" style={{ textAlign: 'right', fontWeight: 700 }}>{fmt(d.mentions)}</div>
-                  <div className="delta-mini flat" title={`${d.positive} positive · ${d.negative} negative`}>
-                    <span style={{ color: '#22c55e' }}>+{d.positive}</span>
-                    {' / '}
-                    <span style={{ color: '#ef4444' }}>-{d.negative}</span>
-                  </div>
-                </div>
-              ))}
-            </div></div>
-          </div>
-        </div>
-      </section>
-
-      {/* Dev-only audit table: an inventory of pre-existing IG sections kept for
-          reviewer context. Not customer-facing — gated so it never ships to prod. */}
-      {process.env.NODE_ENV !== 'production' && (<>
-      <h3 style={{ marginTop: 56, marginBottom: 8, color: 'var(--fg)', fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-        Review required — existing Instagram sections not included in this change request
-      </h3>
-      <div style={{ borderTop: '1px solid var(--line-2)', marginBottom: 16 }} />
-
-      <section>
-        <div className="card"><div className="card-pad">
-          <table className="data" style={{ width: '100%' }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left' }}>Section</th>
-                <th style={{ textAlign: 'left' }} title={tipFor('Original purpose')}>Original purpose</th>
-                <th style={{ textAlign: 'left' }} title={tipFor('Data source')}>Data source</th>
-                <th style={{ textAlign: 'left' }} title={tipFor('Status')}>Status</th>
-                <th style={{ textAlign: 'left' }} title={tipFor('Recommended action')}>Recommended action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>JOOLA followers KPI</td>
-                <td>Headline number for JOOLA's IG follower count with WoW delta</td>
-                <td>ig_profiles_weekly (latest)</td>
-                <td><span className="pill pill-ghost">Working</span></td>
-                <td>Keep later — duplicates info available in Engagement Benchmark</td>
-              </tr>
-              <tr>
-                <td>JOOLA engagement rate KPI</td>
-                <td>JOOLA's ER score with rank vs other brands</td>
-                <td>ig_posts (avg likes+comments) / followers</td>
-                <td><span className="pill pill-ghost">Working</span></td>
-                <td>Keep later — already conveyed by the EQ Matrix + benchmark</td>
-              </tr>
-              <tr>
-                <td>Total tracked posts KPI</td>
-                <td>Count of all IG posts scraped across brands</td>
-                <td>ig_posts.count</td>
-                <td><span className="pill pill-ghost">Working</span></td>
-                <td>Improve later — meaningful only if shown per-brand</td>
-              </tr>
-              <tr>
-                <td>Total audience KPI</td>
-                <td>Sum of all brand follower counts</td>
-                <td>ig_profiles_weekly.followers SUM</td>
-                <td><span className="pill pill-ghost">Working</span></td>
-                <td>Remove later — sum across competitors is not actionable</td>
-              </tr>
-              <tr>
-                <td>JOOLA chip filter</td>
-                <td>Quick chip to filter the posts table to JOOLA only</td>
-                <td>UI state</td>
-                <td><span className="pill pill-info">Replaced</span></td>
-                <td>Use the brand filter (top right) instead — clearer scope</td>
-              </tr>
-              <tr>
-                <td>Caption search box</td>
-                <td>Single search field hitting caption/handle/brand</td>
-                <td>UI state</td>
-                <td><span className="pill pill-info">Replaced</span></td>
-                <td>Replaced by per-column ColumnFilter (brand + caption) on the table itself</td>
-              </tr>
-            </tbody>
-          </table>
-        </div></div>
-      </section>
-      </>)}
+      <PlatformPlaybook
+        title="Instagram Playbook"
+        sub="Rule-derived competitor moves + recommended JOOLA actions, computed from the same data this page renders."
+        findings={instagramPlaybook(brands, displayIg, displayPosts, themes)}
+        brands={brands}
+      />
     </div>
   )
 }

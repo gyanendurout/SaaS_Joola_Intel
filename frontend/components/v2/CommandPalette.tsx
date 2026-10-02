@@ -8,15 +8,12 @@ import { BRAND_COLORS } from '@/lib/v2/data'
 // ─── Static data ────────────────────────────────────────────────────────────
 
 const PAGES: { label: string; href: string; keywords?: string }[] = [
-  { label: 'Ask Intel',              href: '/v2/ask-intel',            keywords: 'ai chat gpt question' },
   { label: 'Community Intel',        href: '/v2/community-intel',      keywords: 'community sentiment reddit comments' },
   { label: 'Influencer Intel',       href: '/v2/influencers',          keywords: 'athletes players influencers bubble' },
   { label: 'Campaign & Offer Intel', href: '/v2/campaign-offer-intel', keywords: 'campaign offer promotions deals' },
   { label: 'Product Intel',          href: '/v2/product-intel',        keywords: 'products paddles catalog' },
   { label: 'Sales Intel',            href: '/v2/sales-intel',          keywords: 'sales revenue market' },
   { label: 'Market Intel',           href: '/v2/market',               keywords: 'market share overview competitive' },
-  { label: 'Correlations',           href: '/v2/correlations',         keywords: 'correlation analysis stats' },
-  { label: 'Changepoints',           href: '/v2/changepoints',         keywords: 'changepoints anomaly trend detection' },
   { label: 'Data Health',            href: '/v2/data-health',          keywords: 'data quality health pipeline' },
   { label: 'Instagram',              href: '/v2/instagram',            keywords: 'instagram social ig posts reels' },
   { label: 'YouTube',                href: '/v2/youtube',              keywords: 'youtube video yt channel' },

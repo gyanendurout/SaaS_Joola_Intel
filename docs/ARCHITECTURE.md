@@ -80,11 +80,10 @@ custom CSS in `app/v2.css`; Tailwind is installed but unused by v2.
 
 | Group | Routes |
 |---|---|
-| Q&A | `ask-intel` |
 | Social | `instagram`, `youtube`, `reddit`, `twitter`, `tiktok` |
 | Commercial | `ads`, `promotions`, `campaign-offer-intel`, `products`, `products-intel`, `product-intel`, `sales-intel` |
 | Intel | `market`, `community-intel`, `crisis`, `influencers`, `leaderboard`, `overview` |
-| Analytics | `correlations`, `changepoints`, `data-health` |
+| Analytics | `data-health` |
 | Misc | `comments` |
 
 `/v2` redirects to `/v2/overview` — Executive Overview is the home page. Seven
@@ -92,17 +91,14 @@ of the routes above (`ads`, `comments`, `crisis`, `leaderboard`, `products`,
 `products-intel`, `promotions`) are superseded legacy pages with no sidebar or
 command-palette entry; see BRD.md §10.10.
 
-None of the four non-`ask-intel` API routes below is called by any page,
-component, or test; see BRD.md §4.1.
+None of the API routes below is called by any page, component, or test; see
+BRD.md §4.1. (Ask Intel and its four `v2/ask-intel` routes were removed
+2026-10-02.)
 
 ### API routes — `frontend/app/api/`
 
 | Route | Job |
 |---|---|
-| `v2/ask-intel/route.ts` | Planner → executor → answerer over the warehouse |
-| `v2/ask-intel/schema/route.ts` | Serves the queryable schema to the planner |
-| `v2/ask-intel/suggestions/route.ts` | Suggested-question list |
-| `v2/ask-intel/feedback/route.ts` | Thumbs up/down log (migration 017) |
 | `generate-content/route.ts` | OpenAI content generation |
 | `content-brief/route.ts` | SEO content-brief generator |
 | `keyword-research/route.ts` | Keyword research agent |
@@ -113,7 +109,7 @@ component, or test; see BRD.md §4.1.
 | File | Job |
 |---|---|
 | `data.ts` | Core Supabase fetchers + `BRAND_COLORS` |
-| `analytics.ts` | Correlation / changepoint / seasonality readers |
+| `analytics.ts` | Lag-scan reader (`analysis_results`) for Product Intel |
 | `campaignOfferIntel.ts` | Ads + promotions intel |
 | `communityIntel.ts` | Reddit / comments / defection intel |
 | `influencerIntel.ts` | Athlete roster metrics |
@@ -122,7 +118,6 @@ component, or test; see BRD.md §4.1.
 | `crisis.ts` | Crisis-flagged mention readers |
 | `playbook.ts`, `playerRoster.ts` | Static reference data |
 | `tooltips.ts` | Layman-language glossary + `tipFor(label)` for shared column headers |
-| `askIntel/` | Planner schema (`schema.ts`), `sqlSafety.ts`, executor helpers |
 | `BrandFilterContext.tsx` | Global brand filter + localStorage persistence |
 | `DateRangeContext.tsx` | Global date-range state |
 | `format.ts`, `animations.ts`, `urlState.ts`, `useBookmarks.ts` | Utilities |
@@ -143,7 +138,7 @@ routes.
 | `CommandPalette.tsx`, `CmdKPalette.tsx`, `Breadcrumb.tsx`, `BackButton.tsx`, `BackToTop.tsx` | Navigation |
 | `StatCard.tsx`, `StatusBadge.tsx`, `ActionFrame.tsx`, `PlatformPlaybook.tsx`, `FooterLinks.tsx` | Presentation |
 | `CustomerVoiceSection.tsx` | Retail-review KPI strip + per-paddle table (BRD §7.1) |
-| `charts/`, `product-detail/`, `askIntel/` | Per-feature component subtrees |
+| `charts/`, `product-detail/` | Per-feature component subtrees |
 | `ThemeToggle.tsx`, `LayoutClientExtras.tsx`, `AgentationFeedback.tsx` | Shell extras |
 
 ### Supporting dirs
@@ -183,7 +178,7 @@ state is `pipeline_v2_state.json` at the repo root.
 | `marts/` | `refresh_calendar`, `refresh_timeseries`, `refresh_helpers` |
 | `statistics/` | `correlation_scan` (Pearson + Spearman lag scans), `cross_correlation` (statsmodels CCF), `granger` (ADF + VAR order + Granger), `changepoints` (ruptures PELT), `seasonality` (STL) |
 
-Writes to `analysis_results`, read by `/v2/correlations` and `/v2/changepoints`.
+Writes to `analysis_results`. Only the `lag_scan` rows are read by the dashboard (Product Intel, via `lib/v2/analytics.ts`); the Correlations and Changepoints pages were removed 2026-10-02.
 
 ---
 
@@ -195,7 +190,6 @@ Writes to `analysis_results`, read by `/v2/correlations` and `/v2/changepoints`.
 | `deploy.ps1` | QA-gated deploy (typecheck → build → commit → push) |
 | `db_verify.py` | 4-phase pipeline health check with per-table remediation commands |
 | `launch_pipeline.ps1`, `run_unattended.py`, `progress_monitor.py` | Unattended run helpers |
-| `test_ask_intel.py` | 29-question Ask Intel regression harness |
 | `apply_migration.py`, `apply_migration_013.py` | Migration appliers |
 | `backfill_product_images.py`, `consolidate_catalog_images.py`, `fix_product_prices.py` | One-off data repairs |
 
@@ -218,7 +212,7 @@ matching forward migration. Highlights:
 | `013_analytics_foundation` | Marts + `analysis_results` |
 | `015_expand_products_catalog` | Catalog to 86 paddles |
 | `016_product_reviews` | Review-velocity table |
-| `017_ask_intel_feedback` | `ask_intel_qa_log` |
+| `017_ask_intel_feedback` | `ask_intel_qa_log` (Ask Intel removed 2026-10-02; table left in place) |
 | `018`–`021` | Engagement links, product images, price/lifecycle fixes, alias + switch fixes |
 
 Per-table columns, writers, and readers: [DATABASE.md](DATABASE.md).
@@ -248,7 +242,7 @@ with `git config core.hooksPath .husky`.
 | `PAGES` | `frontend/e2e/smoke.spec.ts` | every `frontend/app/v2/**/page.tsx` |
 | `API_ROUTES` | `frontend/e2e/smoke.spec.ts` | every `frontend/app/api/**/route.ts` |
 | `$ROUTES` | `frontend/qa/regression.ps1` | matches `PAGES` |
-| `PAGES` | `frontend/qa/tooltip-check.mjs` | matches `PAGES`; `/v2/ask-intel` is excluded by design (chat page, no static sections) |
+| `PAGES` | `frontend/qa/tooltip-check.mjs` | matches `PAGES` |
 
 ---
 

@@ -1994,8 +1994,7 @@ html { scroll-behavior: smooth; }
 /* ==========================================================
    Analytics — VIZ
    Styles for analytics MVP chart components
-   (CorrelationHeatmap, LagScanChart, ChangepointTimeline,
-    IndexedTimeSeries, LeaderboardTable)
+   (IndexedTimeSeries, LeaderboardTable)
    Re-uses existing .tip, .scatter-wrap, .scatter-axis,
    .scatter-label primitives where possible.
    ========================================================== */
@@ -2010,28 +2009,6 @@ html { scroll-behavior: smooth; }
   margin-bottom: 8px;
   border-radius: 0 4px 4px 0;
   line-height: 1.45;
-}
-
-/* ---- CorrelationHeatmap ---- */
-.v2-root .heatmap-wrap { width: 100%; }
-.v2-root .heatmap-cell {
-  shape-rendering: crispEdges;
-}
-.v2-root .heatmap-cell:hover {
-  filter: drop-shadow(0 0 6px rgba(245, 230, 37, 0.5));
-}
-
-/* ---- LagScanChart ---- */
-.v2-root .lag-scan { width: 100%; }
-
-/* ---- ChangepointTimeline ---- */
-.v2-root .changepoint-timeline { width: 100%; }
-.v2-root .changepoint-line {
-  transition: stroke-width 140ms ease;
-}
-.v2-root .changepoint-timeline g:hover .changepoint-line {
-  stroke-width: 2.4;
-  filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.6));
 }
 
 /* ---- IndexedTimeSeries ---- */

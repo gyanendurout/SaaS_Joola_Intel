@@ -8,7 +8,6 @@ const SHORTCUTS: Record<string, string> = {
   'g r': '/v2/reddit',
   'g x': '/v2/twitter',
   'g t': '/v2/tiktok',
-  'g a': '/v2/ask-intel',
   'g c': '/v2/community-intel',
   'g f': '/v2/influencers',
   'g p': '/v2/product-intel',

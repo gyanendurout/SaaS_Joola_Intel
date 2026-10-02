@@ -52,7 +52,6 @@ function useReveal(threshold = 0.1) {
 // ─── Page constants ────────────────────────────────────────────────────────
 
 const NAV_SECTIONS = [
-  { label: 'Ask Intel',         href: '/v2/ask-intel',            icon: '💬', color: '#818cf8' },
   { label: 'Community Intel',   href: '/v2/community-intel',      icon: '📡', color: '#22c55e' },
   { label: 'Influencer Intel',  href: '/v2/influencers',          icon: '⭐', color: '#F5E625' },
   { label: 'Campaign & Offers', href: '/v2/campaign-offer-intel', icon: '📢', color: '#fb923c' },

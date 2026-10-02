@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 const PAGES = [
-  { label: 'Ask Intel',          href: '/v2/ask-intel',            icon: '💬', keywords: 'ai chat sql query' },
   { label: 'Community Intel',    href: '/v2/community-intel',      icon: '📡', keywords: 'reddit sentiment defection crisis' },
   { label: 'Influencer Intel',   href: '/v2/influencers',          icon: '⭐', keywords: 'athletes players sponsored roster' },
   { label: 'Campaign & Offers',  href: '/v2/campaign-offer-intel', icon: '📢', keywords: 'ads promotions discounts campaigns' },
@@ -15,8 +14,6 @@ const PAGES = [
   { label: 'Reddit & Community', href: '/v2/reddit',               icon: '🔶', keywords: 'reddit mentions subreddit community' },
   { label: 'X / Twitter',        href: '/v2/twitter',              icon: '𝕏',  keywords: 'twitter x tweets followers' },
   { label: 'TikTok',             href: '/v2/tiktok',               icon: '🎵', keywords: 'tiktok videos hearts viral' },
-  { label: 'Correlations',       href: '/v2/correlations',         icon: '🔗', keywords: 'lag correlation cross-channel' },
-  { label: 'Changepoints',       href: '/v2/changepoints',         icon: '📈', keywords: 'statistical changepoint detection' },
   { label: 'Data Health',        href: '/v2/data-health',          icon: '🩺', keywords: 'data freshness tables counts health' },
   { label: 'Overview',           href: '/v2/overview',             icon: '🏠', keywords: 'home dashboard overview summary' },
 ]

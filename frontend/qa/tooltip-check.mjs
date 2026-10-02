@@ -16,12 +16,9 @@ const BASE = process.argv[2] || 'http://localhost:3000'
 const PAGES = [
   '/v2',
   '/v2/ads',
-  // '/v2/ask-intel' — chat UI, no static sections to annotate
   '/v2/campaign-offer-intel',
-  '/v2/changepoints',
   '/v2/comments',
   '/v2/community-intel',
-  '/v2/correlations',
   '/v2/crisis',
   '/v2/data-health',
   '/v2/influencers',

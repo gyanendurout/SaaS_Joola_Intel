@@ -429,32 +429,69 @@ export function ScatterChart({ data, w = 760, h = 380 }: { data: ScatterDatum[];
 
 // ─── Engagement Quality Matrix (Instagram-tuned scatter) ──────────────
 //
-// Drop-in replacement for ScatterChart on the Instagram page. Key
-// differences vs the generic ScatterChart:
-//   • X axis auto-switches to log scale when >2 brands AND follower range
-//     crosses ≥1 order of magnitude (fMax/fMin >= 10)
-//   • Y axis uses raw min/max of ER values (no percentile clipping); floor 0;
-//     ceiling Math.min(100, max + 20% headroom)
-//   • Median crosshairs ONLY (dashed gray) — no JOOLA reference crosshairs.
-//     JOOLA dot is enlarged with white stroke instead, so it still stands out
-//   • All brand labels rendered (not hover-only) with iterative collision
-//     repulsion (60 iters, 14px min gap)
-//   • Tooltip carries followers / engagement rate / post count /
-//     quadrant interpretation
+// Instagram reach × resonance scatter.
+//   • Both axes are log scales fitted to the data, padded half a step past the
+//     smallest and largest value, so every brand sits inside the plot. Linear
+//     axes let one outlier (a ~100% ER account, or a 150K-follower brand)
+//     squash every other dot onto an edge.
+//   • Quadrants split at the median followers and median ER (BRD §10).
+//   • JOOLA gets green reference lines, a white stroke and a permanent label.
+//   • Tooltip carries followers / engagement rate / post count / quadrant.
 export type EQMatrixDatum = {
   brand: string; name: string; followers: number; engRate: number;
   color: string; posts?: number
 }
 
+// Log-space domain around the positive values, padded so the extreme dots
+// clear the plot edges. A single value (or all-equal values) gets ±half a decade.
+function logDomain(values: number[]): [number, number] {
+  const pos = values.filter(v => v > 0)
+  if (pos.length === 0) return [1, 10]
+  const lo = Math.log10(Math.min(...pos))
+  const hi = Math.log10(Math.max(...pos))
+  const pad = Math.max(0.15, (hi - lo) * 0.12)
+  return [10 ** (lo - pad), 10 ** (hi + pad)]
+}
+
+// 1-2-5 ticks inside [lo, hi], thinned to 1-3 then to powers of ten when the
+// span is wide, so the axis never carries more than six labels.
+function logTicks(lo: number, hi: number): number[] {
+  const within = (mults: number[]) => {
+    const out: number[] = []
+    for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) {
+      for (const m of mults) {
+        const v = m * 10 ** e
+        if (v >= lo && v <= hi) out.push(v)
+      }
+    }
+    return out
+  }
+  for (const mults of [[1, 2, 5], [1, 3], [1]]) {
+    const t = within(mults)
+    if (t.length <= 6) return t
+  }
+  return within([1])
+}
+
+function median(values: number[]): number {
+  const s = values.filter(v => v > 0).sort((a, b) => a - b)
+  if (s.length === 0) return 0
+  const m = Math.floor(s.length / 2)
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
+const fmtErTick = (v: number) => `${v < 1 ? v.toFixed(1) : v < 10 ? v.toFixed(1).replace(/\.0$/, '') : Math.round(v)}%`
+
 export function EngagementQualityMatrix({ data, w = 760, h = 380, onBubbleClick }: { data: EQMatrixDatum[]; w?: number; h?: number; onBubbleClick?: (d: EQMatrixDatum) => void }) {
   const padL = 60, padR = 30, padT = 30, padB = 52
   const innerW = w - padL - padR
   const innerH = h - padT - padB
-  const xMax = Math.max(150000, ...data.map(d => d.followers))
-  const yMax = Math.max(2.5, ...data.map(d => d.engRate))
-  const yMid = yMax / 2
-  const x = (v: number) => padL + Math.sqrt(Math.min(v, xMax) / xMax) * innerW
-  const y = (v: number) => padT + innerH - (Math.min(v, yMax) / yMax) * innerH
+  const [xLo, xHi] = logDomain(data.map(d => d.followers))
+  const [yLo, yHi] = logDomain(data.map(d => d.engRate))
+  const toUnit = (v: number, lo: number, hi: number) =>
+    (Math.log10(Math.min(Math.max(v, lo), hi)) - Math.log10(lo)) / (Math.log10(hi) - Math.log10(lo))
+  const x = (v: number) => padL + toUnit(v, xLo, xHi) * innerW
+  const y = (v: number) => padT + innerH - toUnit(v, yLo, yHi) * innerH
   const r = (v: number) => 5 + Math.min(v, 100) / 12
   const [hover, setHover] = useState<(EQMatrixDatum & { cx: number; cy: number }) | null>(null)
   const [tipPos, setTipPos] = useState<{x:number,y:number}|null>(null)
@@ -468,9 +505,10 @@ export function EngagementQualityMatrix({ data, w = 760, h = 380, onBubbleClick 
   }
 
   const joola = data.find(d => d.brand === 'joola')
-  const xMidVal = xMax * 0.25
-  const xTickVals = [xMax * 0.0625, xMax * 0.25, xMax * 0.5625, xMax]
-  const yTickVals = [yMax * 0.25, yMax * 0.5, yMax * 0.75, yMax]
+  const xMidVal = median(data.map(d => d.followers))
+  const yMid = median(data.map(d => d.engRate))
+  const xTickVals = logTicks(xLo, xHi)
+  const yTickVals = logTicks(yLo, yHi)
   const quadrant = (d: EQMatrixDatum) => {
     const highReach = d.followers >= xMidVal
     const highEng = d.engRate >= yMid
@@ -492,11 +530,11 @@ export function EngagementQualityMatrix({ data, w = 760, h = 380, onBubbleClick 
         <rect x={x(xMidVal)} y={y(yMid)} width={padL + innerW - x(xMidVal)} height={padT + innerH - y(yMid)} fill="rgba(245,158,11,0.04)" />
         {/* Grid lines */}
         <g className="scatter-grid">
-          {[0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'x' + i} x1={padL + t * innerW} x2={padL + t * innerW} y1={padT} y2={padT + innerH} />
+          {xTickVals.map((v, i) => (
+            <line key={'x' + i} x1={x(v)} x2={x(v)} y1={padT} y2={padT + innerH} />
           ))}
-          {[0, 0.25, 0.5, 0.75, 1].map((t, i) => (
-            <line key={'y' + i} x1={padL} x2={padL + innerW} y1={padT + t * innerH} y2={padT + t * innerH} />
+          {yTickVals.map((v, i) => (
+            <line key={'y' + i} x1={padL} x2={padL + innerW} y1={y(v)} y2={y(v)} />
           ))}
         </g>
         {/* Median crosshairs */}
@@ -512,13 +550,13 @@ export function EngagementQualityMatrix({ data, w = 760, h = 380, onBubbleClick 
           <text key={i} x={x(v)} y={h - 30} textAnchor="middle" className="scatter-axis">{fmt(v)}</text>
         ))}
         <text x={padL + innerW / 2} y={h - 12} textAnchor="middle" className="scatter-axis"
-          style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>FOLLOWERS →</text>
+          style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>FOLLOWERS (LOG SCALE) →</text>
         {/* Y axis ticks + label */}
         {yTickVals.map((v, i) => (
-          <text key={i} x={padL - 8} y={y(v) + 3} textAnchor="end" className="scatter-axis">{v.toFixed(1)}%</text>
+          <text key={i} x={padL - 8} y={y(v) + 3} textAnchor="end" className="scatter-axis">{fmtErTick(v)}</text>
         ))}
         <text transform={`translate(14 ${padT + innerH / 2}) rotate(-90)`} textAnchor="middle" className="scatter-axis"
-          style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>ENGAGEMENT →</text>
+          style={{ fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>ENGAGEMENT (LOG SCALE) →</text>
         {/* JOOLA reference crosshairs */}
         {joola && (
           <>

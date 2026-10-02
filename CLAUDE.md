@@ -142,11 +142,6 @@ with `git config core.hooksPath .husky`.
 
 ## Known soft spots
 
-- **`/v2` redirects to `/v2/overview`, not `/v2/ask-intel`.** The comment at the
-  top of `frontend/app/v2/page.tsx` still says otherwise — Executive Overview
-  was retired in May 2026 and later reinstated as the home page. Trust the
-  `redirect()` call, not the comment.
-
 - **`docs/DATABASE_RECOVERY.md`, `docs/FRONTEND_REBUILD.md`, `docs/RUNBOOK.md`,
   `docs/DEPLOYMENT.md`** still carry some pre-split paths in their command
   blocks. Trust `backend/README.md` and `docs/ARCHITECTURE.md` over them.

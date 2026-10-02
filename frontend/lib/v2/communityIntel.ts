@@ -94,14 +94,6 @@ export type SentimentStat = {
   risk: 'low' | 'moderate' | 'high' | 'critical'
 }
 
-export type TrendPoint = {
-  date: string
-  total: number
-  crisis: number
-  joola: number
-  negative: number
-}
-
 export type CommunityIntelData = {
   brands: V2Brand[]
   signals: CommunitySignal[]              // unified, deduped, sorted by date desc
@@ -111,7 +103,6 @@ export type CommunityIntelData = {
   channelStats: ChannelStat[]
   heatmap: HeatmapCell[]
   sentimentStats: SentimentStat[]
-  trend: TrendPoint[]
   summary: {
     totalSignals: number
     commentsAnalyzed: number
@@ -279,7 +270,7 @@ export async function fetchCommunityIntel(
   // a single broken pipeline doesn't black-hole the whole page.
   //
   // Every row below feeds an aggregate (brand discussion counts, channel
-  // stats, heatmap, sentiment split, trend), so a truncated read is a wrong
+  // stats, heatmap, sentiment split), so a truncated read is a wrong
   // number rather than a shorter list. They are therefore *paged* — PostgREST
   // caps a single response at 1,000 rows regardless of `.limit()`.
   const [
@@ -528,7 +519,6 @@ export async function fetchCommunityIntel(
   const channelStats = computeChannelStats(rawSignals)
   const heatmap = computeHeatmap(rawSignals)
   const sentimentStats = computeSentimentStats(rawSignals)
-  const trend = computeTrend(rawSignals, opts.from, opts.to)
 
   const crisisSignals = rawSignals.filter((s) => s.isCrisis)
   const joolaSignals = rawSignals.filter((s) => s.brand === 'joola')
@@ -563,7 +553,6 @@ export async function fetchCommunityIntel(
     channelStats,
     heatmap,
     sentimentStats,
-    trend,
     summary: {
       totalSignals: rawSignals.length,
       commentsAnalyzed,
@@ -725,60 +714,6 @@ function computeRisk(crisis: number, negPct: number, total: number): SentimentSt
   if (crisis >= 2 || (total >= 10 && negPct >= 30)) return 'high'
   if (crisis >= 1 || (total >= 5 && negPct >= 15)) return 'moderate'
   return 'low'
-}
-
-/**
- * Bucket signals into a trend series spanning [from, to].
- *
- * Exported so the page can rebuild the series from its *filtered* signal list
- * and its *current* date window. Reusing this instead of re-deriving buckets in
- * the component is what keeps the x-axis aligned to the window the user picked.
- */
-export function computeTrend(
-  signals: CommunitySignal[],
-  from: Date,
-  to: Date,
-): TrendPoint[] {
-  const fromUtc = new Date(Date.UTC(from.getFullYear(), from.getMonth(), from.getDate()))
-  const toUtc = new Date(Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()))
-  const days = Math.max(
-    1,
-    Math.floor((toUtc.getTime() - fromUtc.getTime()) / 86_400_000) + 1,
-  )
-  // Cap at ~120 days to keep the chart readable; for longer windows we bucket
-  // to weeks instead of days.
-  const cap = 120
-  const bucketDays = days > cap ? Math.ceil(days / cap) : 1
-
-  const buckets = new Map<string, TrendPoint>()
-  const today = new Date()
-  today.setUTCHours(0, 0, 0, 0)
-  for (let d = new Date(fromUtc); d.getTime() <= toUtc.getTime(); d.setUTCDate(d.getUTCDate() + bucketDays)) {
-    const k = d.toISOString().slice(0, 10)
-    buckets.set(k, { date: k, total: 0, crisis: 0, joola: 0, negative: 0 })
-  }
-
-  for (const s of signals) {
-    if (!s.date) continue
-    let bucketKey = s.date
-    if (bucketDays > 1) {
-      const sDate = new Date(s.date + 'T00:00:00Z')
-      if (Number.isNaN(sDate.getTime())) continue
-      const offsetDays = Math.floor((sDate.getTime() - fromUtc.getTime()) / 86_400_000)
-      if (offsetDays < 0) continue
-      const bucketIdx = Math.floor(offsetDays / bucketDays)
-      const bucketStart = new Date(fromUtc)
-      bucketStart.setUTCDate(bucketStart.getUTCDate() + bucketIdx * bucketDays)
-      bucketKey = bucketStart.toISOString().slice(0, 10)
-    }
-    const point = buckets.get(bucketKey)
-    if (!point) continue
-    point.total += 1
-    if (s.isCrisis) point.crisis += 1
-    if (s.brand === 'joola') point.joola += 1
-    if (s.sentiment === 'negative') point.negative += 1
-  }
-  return Array.from(buckets.values()).sort((a, b) => a.date.localeCompare(b.date))
 }
 
 // ─── Extended fetchers for new community-intel sections ───────────────
