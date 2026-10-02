@@ -306,7 +306,7 @@ export async function fetchCommunityIntel(
     safeQueryAll(
       () => supabase
         .from('reddit_mentions')
-        .select('id,brand_id,subreddit,title,body,score,num_comments,url,posted_at,sentiment:sentiment_label')
+        .select('id,brand_id,subreddit,title:post_title,body:content_text,score:upvotes,url:post_url,posted_at,sentiment:sentiment_label')
         .gte('posted_at', fromIso)
         .lte('posted_at', toIso)
         .order('posted_at', { ascending: false })

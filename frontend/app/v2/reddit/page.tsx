@@ -57,17 +57,16 @@ export default function RedditPage() {
   useEffect(() => {
     fetchBrands().then(async (b) => {
       try {
-        const [r, t, s, m, vi, rm, cc, rv] = await Promise.all([
+        const [r, t, s, vi, rm, cc, rv] = await Promise.all([
           fetchReddit(b),
           fetchRedditTrend(b),
           fetchRedditSubreddits(b),
-          fetchTopRedditMentions(b, 20),
           fetchRedditViral(b, 20),
           fetchRedditRemoved(b),
           fetchRedditCrisisClusters(b, 20),
           fetchRedditReplyVsOp(b, 120),
         ])
-        setBrands(b); setAllBrands(b); setReddit(r); setTrend(t); setSubreddits(s); setMentions(m)
+        setBrands(b); setAllBrands(b); setReddit(r); setTrend(t); setSubreddits(s)
         setViral(vi); setRemoved(rm); setCrisisClusters(cc); setReplyVsOp(rv)
         setLoading(false)
       } catch (err) {
@@ -81,6 +80,17 @@ export default function RedditPage() {
       setLoading(false)
     })
   }, [setAllBrands])
+
+  // Top posts follow the date picker: they are fetched for the active window
+  // rather than taken all-time and filtered afterwards.
+  useEffect(() => {
+    if (brands.length === 0) return
+    let cancelled = false
+    fetchTopRedditMentions(brands, 20, { maxDays })
+      .then((m) => { if (!cancelled) setMentions(m) })
+      .catch((err) => console.error('Top Reddit mentions fetch failed', err))
+    return () => { cancelled = true }
+  }, [brands, maxDays])
 
   const sec1 = useReveal()
   const sec2 = useReveal()
@@ -572,7 +582,7 @@ export default function RedditPage() {
                           </div>
                         </td>
                         <td className="cell-num" style={{ textAlign: 'right', color: '#F5E625' }}>{fmt(m.score)}</td>
-                        <td className="cell-num" style={{ textAlign: 'right' }}>{fmt(m.comments)}</td>
+                        <td className="cell-num" style={{ textAlign: 'right' }} title={m.comments > 0 ? 'Replies captured by our Reddit comment scrape' : 'No replies captured for this post'}>{m.comments > 0 ? fmt(m.comments) : '—'}</td>
                         <td className="cell-num" title={relativeLabel(m.days)}>{formatCalendarDateFromDaysAgo(m.days)}</td>
                       </tr>
                     )

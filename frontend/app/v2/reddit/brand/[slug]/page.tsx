@@ -32,7 +32,7 @@ function PostCard({ m, color }: { m: V2RedditMention; color: string }) {
       )}
       <div style={{ display: 'flex', gap: 14, paddingTop: 8, borderTop: '1px solid var(--wb-6)' }}>
         <span style={{ fontSize: 11, color: '#F5E625', fontFamily: 'JetBrains Mono', fontWeight: 700 }}>↑ {fmt(m.score)}</span>
-        <span style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'JetBrains Mono' }}>💬 {fmt(m.comments)}</span>
+        <span style={{ fontSize: 11, color: '#a78bfa', fontFamily: 'JetBrains Mono' }}>💬 {m.comments > 0 ? fmt(m.comments) : '—'}</span>
       </div>
     </a>
   )
@@ -56,7 +56,7 @@ export default function RedditBrandPage() {
       const [rd, tr, ment, vir, cc] = await Promise.all([
         fetchReddit(b),
         fetchRedditTrend(b),
-        fetchTopRedditMentions(b, 200),
+        fetchTopRedditMentions(b, 200, { brandSlug }),
         fetchRedditViral(b, 50),
         fetchRedditCrisisClusters(b, 30),
       ])

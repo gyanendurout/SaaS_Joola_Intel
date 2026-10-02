@@ -285,6 +285,21 @@ const REDDIT_BRAND_CONTEXT_REQUIRED: Record<string, string[]> = {
  * For generic-name brands we require a pickleball-context token in the
  * combined text (subreddit + title + body). Other brands always pass.
  */
+// reddit_mentions stores post_title / content_text / upvotes / post_url. Every
+// reader below aliases them back to title / body / score / url so the shapes and
+// the brand-context guard keep working. Selecting the bare names 400s (42703)
+// and fetchPaged swallows that into an empty array — which silently blanked the
+// whole Reddit page.
+const RM_TEXT = 'title:post_title,body:content_text'
+
+/** reddit_mentions sentiment is five-level; fold very_* into positive / negative. */
+function redditSentiment(raw: unknown): 'positive' | 'neutral' | 'negative' {
+  const s = String(raw || '').toLowerCase()
+  if (s.includes('positive')) return 'positive'
+  if (s.includes('negative')) return 'negative'
+  return 'neutral'
+}
+
 function redditRowPassesBrandContext(slug: string, row: any): boolean {
   const required = REDDIT_BRAND_CONTEXT_REQUIRED[slug]
   if (!required) return true
@@ -303,7 +318,7 @@ export async function fetchReddit(brands: V2Brand[]): Promise<V2RedditRow[]> {
   const data = await fetchPaged<any>(
     () => supabase
       .from('reddit_mentions')
-      .select('brand_id,sentiment:sentiment_label,subreddit,title,body')
+      .select(`brand_id,sentiment:sentiment_label,subreddit,${RM_TEXT}`)
       .order('id', { ascending: true }),
     { maxRows: 20_000, label: 'data.fetchReddit.redditMentions' },
   )
@@ -314,8 +329,9 @@ export async function fetchReddit(brands: V2Brand[]): Promise<V2RedditRow[]> {
     if (!redditRowPassesBrandContext(slug, r)) return
     if (!agg[slug]) agg[slug] = { brand: slug, mentions: 0, positive: 0, neutral: 0, negative: 0, delta: null }
     agg[slug].mentions++
-    if (r.sentiment === 'positive') agg[slug].positive++
-    else if (r.sentiment === 'negative') agg[slug].negative++
+    const sentiment = redditSentiment(r.sentiment)
+    if (sentiment === 'positive') agg[slug].positive++
+    else if (sentiment === 'negative') agg[slug].negative++
     else agg[slug].neutral++
   })
   return Object.values(agg).sort((a, b) => b.mentions - a.mentions)
@@ -598,7 +614,7 @@ export async function fetchTopRedditComments(brands: V2Brand[], limit = 30): Pro
   // Resolve parent_post_id → url so we can link comments back to their thread.
   const parentIds = Array.from(new Set((data || []).map((c: any) => c.parent_post_id).filter(Boolean)))
   const { data: parents } = parentIds.length
-    ? await supabase.from('reddit_mentions').select('id,url,subreddit').in('id', parentIds)
+    ? await supabase.from('reddit_mentions').select('id,url:post_url,subreddit').in('id', parentIds)
     : { data: [] as any[] }
   const parentMap: Record<string, { url: string }> = {}
   ;(parents || []).forEach((p: any) => { parentMap[p.id] = { url: p.url || '' } })
@@ -663,7 +679,7 @@ export async function fetchRedditTrend(brands: V2Brand[]): Promise<Record<string
   const data = await fetchPaged<any>(
     () => supabase
       .from('reddit_mentions')
-      .select('brand_id,posted_at,subreddit,title,body')
+      .select(`brand_id,posted_at,subreddit,${RM_TEXT}`)
       .order('id', { ascending: true }),
     { maxRows: 20_000, label: 'data.fetchRedditTrend.redditMentions' },
   )
@@ -694,7 +710,7 @@ export async function fetchRedditSubreddits(brands: V2Brand[]): Promise<V2Subred
   const data = await fetchPaged<any>(
     () => supabase
       .from('reddit_mentions')
-      .select('brand_id,subreddit,title,body')
+      .select(`brand_id,subreddit,${RM_TEXT}`)
       .order('id', { ascending: true }),
     { maxRows: 20_000, label: 'data.fetchRedditSubreddits.redditMentions' },
   )
@@ -723,33 +739,72 @@ export type V2RedditMention = {
   score: number; comments: number; url: string; days: number
 }
 
-export async function fetchTopRedditMentions(brands: V2Brand[], limit = 20): Promise<V2RedditMention[]> {
+export async function fetchTopRedditMentions(
+  brands: V2Brand[],
+  limit = 20,
+  opts: { maxDays?: number | null; brandSlug?: string } = {},
+): Promise<V2RedditMention[]> {
   const slugByBid: Record<string, string> = Object.fromEntries(brands.map((b) => [b.brand_id, b.id]))
+  // The date window and brand are applied in the query, not afterwards: the
+  // all-time top posts are months old, so "top 20, then filter to the last 90
+  // days" left the page with nothing to show.
+  let query = supabase
+    .from('reddit_mentions')
+    .select(`id,brand_id,subreddit,${RM_TEXT},score:upvotes,url:post_url,posted_at`)
+  if (opts.maxDays != null) {
+    query = query.gte('posted_at', new Date(Date.now() - opts.maxDays * 86_400_000).toISOString())
+  }
+  if (opts.brandSlug) {
+    const bid = brands.find((b) => b.id === opts.brandSlug)?.brand_id
+    if (bid) query = query.eq('brand_id', bid)
+  }
   // Over-fetch so the post-filter still returns ~limit rows after dropping
   // generic-name brand false positives (gamma in r/spain, head/tennis, etc.)
-  const { data } = await supabase
-    .from('reddit_mentions')
-    .select('brand_id,subreddit,title,body,score,num_comments,url,posted_at')
-    .order('score', { ascending: false })
+  const { data } = await query
+    .order('upvotes', { ascending: false })
+    .order('posted_at', { ascending: false })
     .limit(Math.max(limit * 3, 60))
-  return (data || [])
+  const top = (data || [])
     .filter((m: any) => {
       const slug = slugByBid[m.brand_id]
       return !slug || redditRowPassesBrandContext(slug, m)
     })
     .slice(0, limit)
-    .map((m: any) => ({
+
+  // reddit_mentions has no comment-count column. Count the captured replies in
+  // reddit_comments instead — about half of them carry parent_post_id, so this
+  // is a floor, not Reddit's own total. Paged: a few busy threads can exceed
+  // PostgREST's 1,000-row response cap on their own.
+  const ids = top.map((m: any) => m.id)
+  const replies = ids.length > 0
+    ? await fetchPaged<any>(
+      () => supabase
+        .from('reddit_comments')
+        .select('id,parent_post_id')
+        .in('parent_post_id', ids)
+        .order('id', { ascending: true }),
+      { maxRows: 20_000, label: 'data.fetchTopRedditMentions.redditComments' },
+    )
+    : []
+  const replyCount: Record<string, number> = {}
+  replies.forEach((c: any) => { replyCount[c.parent_post_id] = (replyCount[c.parent_post_id] || 0) + 1 })
+
+  return top.map((m: any) => {
+    const body = String(m.body || '').trim()
+    return {
       brand: slugByBid[m.brand_id] || 'unknown',
       subreddit: m.subreddit || '',
-      title: m.title || '',
-      body: m.body || '',
+      // ~30% of rows (comments and some link posts) have no post_title.
+      title: String(m.title || '').trim() || body.slice(0, 120),
+      body,
       score: m.score || 0,
-      comments: m.num_comments || 0,
+      comments: replyCount[m.id] || 0,
       url: m.url || '',
       days: m.posted_at
         ? Math.max(0, Math.floor((Date.now() - new Date(m.posted_at).getTime()) / 86400000))
         : 0,
-    }))
+    }
+  })
 }
 
 // ─── IG comment mentions (paddle/player NER from mention_facts) ──────
@@ -1592,7 +1647,7 @@ export async function fetchRedditViral(
     const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
     const { data, error } = await supabase
       .from('reddit_mentions')
-      .select('brand_id,subreddit,title,body,velocity_per_hour,score,url,posted_at')
+      .select(`brand_id,subreddit,${RM_TEXT},velocity_per_hour,score:upvotes,url:post_url,posted_at`)
       .gte('posted_at', cutoff)
       .not('velocity_per_hour', 'is', null)
       .order('velocity_per_hour', { ascending: false, nullsFirst: false })
@@ -1658,7 +1713,7 @@ export async function fetchRedditCrisisClusters(
     const data = await fetchPaged<any>(
       () => supabase
         .from('reddit_mentions')
-        .select('brand_id,crisis_keywords,subreddit,title,body')
+        .select(`brand_id,crisis_keywords,subreddit,${RM_TEXT}`)
         .not('crisis_keywords', 'is', null)
         .order('id', { ascending: true }),
       { maxRows: 20_000, label: 'data.fetchRedditCrisisClusters.redditMentions' },
@@ -1716,7 +1771,7 @@ export async function fetchRedditReplyVsOp(
       const slug = slugByBid[c.brand_id]
       if (!slug || !c.parent_post_id) return
       if (!parents[c.parent_post_id]) parents[c.parent_post_id] = { brand: slug, pos: 0, neg: 0, total: 0 }
-      const s = String(c.sentiment_label || '').toLowerCase()
+      const s = redditSentiment(c.sentiment_label)
       if (s === 'positive') parents[c.parent_post_id].pos++
       else if (s === 'negative') parents[c.parent_post_id].neg++
       parents[c.parent_post_id].total++
@@ -1727,7 +1782,7 @@ export async function fetchRedditReplyVsOp(
     // can never reach PostgREST's 1,000-row ceiling.
     const { data: mentions, error: mErr } = await supabase
       .from('reddit_mentions')
-      .select('id,sentiment_label:sentiment_label,brand_id,subreddit,title,body')
+      .select(`id,sentiment_label,brand_id,subreddit,${RM_TEXT}`)
       .in('id', parentIds)
     if (mErr || !mentions) return []
     const out: V2RedditReplyVsOp[] = []
@@ -1737,9 +1792,7 @@ export async function fetchRedditReplyVsOp(
       if (!redditRowPassesBrandContext(slug, m)) return
       const stats = parents[m.id]
       if (!stats || stats.total < 2) return
-      const sLabel = String(m.sentiment_label || '').toLowerCase() as 'positive' | 'neutral' | 'negative'
-      const opSentiment: 'positive' | 'neutral' | 'negative' =
-        sLabel === 'positive' || sLabel === 'negative' ? sLabel : 'neutral'
+      const opSentiment = redditSentiment(m.sentiment_label)
       const opNumeric = opSentiment === 'positive' ? 1 : opSentiment === 'negative' ? -1 : 0
       const replyNet = (stats.pos - stats.neg) / stats.total
       out.push({
