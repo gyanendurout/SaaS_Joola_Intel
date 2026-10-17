@@ -94,17 +94,20 @@ async def fetch_pages_batch(
 
 
 def run_sync(coro) -> Any:
-    """Run an async coroutine from synchronous code."""
+    """Run an async coroutine from synchronous code.
+
+    Decide how to run *before* touching the coroutine, so an error raised
+    inside it propagates unchanged. (The old version caught every
+    RuntimeError — including the coroutine's own — and re-ran an already-
+    awaited coroutine, which hid the real failure.)
+    """
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, coro)
-                return future.result()
-        return loop.run_until_complete(coro)
+        asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(coro)
+        return asyncio.run(coro)          # no loop in this thread: the normal case
+    import concurrent.futures             # a loop is running: use a fresh thread
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 # ── Shopify-specific extraction helpers ───────────────────────────────────────
