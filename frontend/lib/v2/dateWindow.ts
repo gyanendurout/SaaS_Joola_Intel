@@ -7,6 +7,13 @@
  *
  * IST is a fixed UTC+05:30 with no DST, so a constant offset is exact.
  * No function here reads the current time — callers pass the anchor day.
+ *
+ * Contract: every helper except `isValidIsoDay` assumes well-formed IsoDay
+ * input and throws `RangeError` on an invalid one. Callers MUST validate
+ * persisted / URL / user-supplied values with `isValidIsoDay` first.
+ *
+ * Reversed windows (from > to) are normalized via `normalizeWindow`, so
+ * `toQueryBounds`, `formatWindow` and `matchPreset` all agree on them.
  */
 
 export type IsoDay = string
@@ -43,9 +50,17 @@ export function addDays(day: IsoDay, n: number): IsoDay {
   return new Date(utcMidnight(day) + n * DAY_MS).toISOString().slice(0, 10)
 }
 
-/** Half-open UTC bounds covering IST days From..To inclusive. Swaps reversed input. */
+/** Orders a window so `from <= to` (swaps reversed input). */
+export function normalizeWindow(from: IsoDay, to: IsoDay): { from: IsoDay; to: IsoDay } {
+  return from <= to ? { from, to } : { from: to, to: from }
+}
+
+/**
+ * Half-open UTC bounds covering IST days From..To inclusive.
+ * `gte` is inclusive; `lt` is EXCLUSIVE — SQL must use `< p_to`, never `<=`.
+ */
 export function toQueryBounds(from: IsoDay, to: IsoDay): { gte: string; lt: string } {
-  const [start, end] = from <= to ? [from, to] : [to, from]
+  const { from: start, to: end } = normalizeWindow(from, to)
   return {
     gte: new Date(utcMidnight(start) - IST_OFFSET_MS).toISOString(),
     lt: new Date(utcMidnight(addDays(end, 1)) - IST_OFFSET_MS).toISOString(),
@@ -60,15 +75,17 @@ export function presetWindow(p: Preset, anchor: IsoDay): { from: IsoDay; to: Iso
 
 /** Which preset (if any) exactly matches the window. */
 export function matchPreset(from: IsoDay, to: IsoDay, anchor: IsoDay): Preset | null {
+  const win = normalizeWindow(from, to)
   for (const p of PRESETS) {
     const w = presetWindow(p, anchor)
-    if (w.from === from && w.to === to) return p
+    if (w.from === win.from && w.to === win.to) return p
   }
   return null
 }
 
 /** Human label, e.g. 'Jul 14 – Oct 12, 2026' or 'All time to Oct 12, 2026'. */
-export function formatWindow(from: IsoDay, to: IsoDay): string {
+export function formatWindow(rawFrom: IsoDay, rawTo: IsoDay): string {
+  const { from, to } = normalizeWindow(rawFrom, rawTo)
   const toLabel = MONTH_DAY_YEAR.format(utcMidnight(to))
   if (from === ALL_TIME_START) return `All time to ${toLabel}`
   if (from === to) return toLabel
@@ -77,8 +94,12 @@ export function formatWindow(from: IsoDay, to: IsoDay): string {
   return `${fromLabel} – ${toLabel}`
 }
 
-/** Strict `YYYY-MM-DD` that names a real calendar day. */
-export function isValidIsoDay(s: unknown): s is IsoDay {
+/**
+ * Strict `YYYY-MM-DD` that names a real calendar day. Returns plain boolean
+ * (a `s is IsoDay` guard would narrow to `never` in the false branch, since
+ * IsoDay = string); callers cast after checking.
+ */
+export function isValidIsoDay(s: unknown): boolean {
   if (typeof s !== 'string' || !ISO_DAY_RE.test(s)) return false
   const t = utcMidnight(s)
   return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s

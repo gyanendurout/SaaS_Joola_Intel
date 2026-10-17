@@ -6,6 +6,7 @@ import {
   isValidIsoDay,
   isoDay,
   matchPreset,
+  normalizeWindow,
   presetWindow,
   toQueryBounds,
 } from './dateWindow'
@@ -123,5 +124,50 @@ describe('isValidIsoDay', () => {
     expect(isValidIsoDay(123)).toBe(false)
     expect(isValidIsoDay(null)).toBe(false)
     expect(isValidIsoDay(undefined)).toBe(false)
+  })
+})
+
+describe('invalid IsoDay contract', () => {
+  it('addDays throws RangeError on garbage', () => {
+    expect(() => addDays('garbage', 1)).toThrow(RangeError)
+  })
+  it('toQueryBounds throws RangeError on garbage', () => {
+    expect(() => toQueryBounds('x', '2026-10-12')).toThrow(RangeError)
+  })
+})
+
+describe('normalizeWindow', () => {
+  it('keeps an ordered window', () => {
+    expect(normalizeWindow('2026-07-14', '2026-10-12')).toEqual({ from: '2026-07-14', to: '2026-10-12' })
+  })
+  it('swaps a reversed window', () => {
+    expect(normalizeWindow('2026-10-12', '2026-07-14')).toEqual({ from: '2026-07-14', to: '2026-10-12' })
+  })
+})
+
+describe('reversed input agreement', () => {
+  it('formatWindow treats reversed input like ordered input', () => {
+    expect(formatWindow('2026-10-12', '2026-07-14')).toBe(formatWindow('2026-07-14', '2026-10-12'))
+  })
+  it('matchPreset treats reversed input like ordered input', () => {
+    expect(matchPreset('2026-10-12', '2026-10-06', '2026-10-12')).toBe('7d')
+  })
+})
+
+describe('toQueryBounds edges', () => {
+  it('spans a year end', () => {
+    expect(toQueryBounds('2025-12-31', '2026-01-01')).toEqual({
+      gte: '2025-12-30T18:30:00.000Z',
+      lt: '2026-01-01T18:30:00.000Z',
+    })
+  })
+  it('all-time start begins at 1999-12-31T18:30Z', () => {
+    expect(toQueryBounds(ALL_TIME_START, '2026-10-12').gte).toBe('1999-12-31T18:30:00.000Z')
+  })
+})
+
+describe('matchPreset edges', () => {
+  it('returns null for a 7-day span not ending on the anchor', () => {
+    expect(matchPreset('2026-10-04', '2026-10-10', '2026-10-12')).toBeNull()
   })
 })
