@@ -117,7 +117,7 @@ jobs:
 
       # ── Analytics ────────────────────────────────────────────────────────
       - name: Analytics backend (marts + statistics)
-        if: contains(fromJSON('["all", "analytics-only"]'), steps.stage.outputs.stage) && !cancelled()
+        if: contains(fromJSON('["all", "analytics-only"]'), steps.stage.outputs.stage) && !cancelled() && (steps.scrape.outcome == 'success' || steps.scrape.outcome == 'skipped')
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -125,7 +125,7 @@ jobs:
           python -m analytics_backend.run --module all ${{ steps.stage.outputs.dry_flag }}
 
       - name: Fail if scraping was partial
-        if: steps.scrape.outputs.code == '2'
+        if: always() && steps.scrape.outputs.code == '2'
         run: |
           echo "::error::Scraping finished with failed steps (exit 2). See logs."
           exit 1
