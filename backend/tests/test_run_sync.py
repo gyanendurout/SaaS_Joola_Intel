@@ -22,7 +22,8 @@ def test_returns_value_from_main_thread():
 def test_returns_value_from_worker_thread():
     out = {}
     t = threading.Thread(target=lambda: out.setdefault("v", run_sync(_ok())))
-    t.start(); t.join()
+    t.start()
+    t.join()
     assert out["v"] == 42
 
 
@@ -38,7 +39,9 @@ def test_inner_runtime_error_in_worker_thread_is_not_masked():
             run_sync(_boom())
         except RuntimeError as e:
             err["msg"] = str(e)
-    t = threading.Thread(target=work); t.start(); t.join()
+    t = threading.Thread(target=work)
+    t.start()
+    t.join()
     assert err["msg"] == "chromium executable not found"
 
 
@@ -46,3 +49,10 @@ def test_works_when_a_loop_is_already_running():
     async def outer():
         return run_sync(_ok())
     assert asyncio.run(outer()) == 42
+
+
+def test_inner_error_when_loop_running_is_not_masked():
+    async def outer():
+        return run_sync(_boom())
+    with pytest.raises(RuntimeError, match="chromium executable not found"):
+        asyncio.run(outer())
