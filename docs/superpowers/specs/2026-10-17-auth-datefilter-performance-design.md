@@ -53,6 +53,8 @@ allowed domains.
 | D8 | **Supabase Auth email OTP** + `@supabase/ssr` + middleware | Self-built OTP (hashed codes + `jose` cookie); Auth.js | The least new code, and the security-critical parts (code generation, expiry, single use, rate limits) are battle-tested. Free, and it uses the existing Supabase project. |
 | D9 | **Read-only Postgres functions + SWR cache**, page by page | Pass dates into the existing raw queries; pre-built summary tables | The only option that delivers a date filter that works everywhere *and* <2 s pages. Raw queries stay slow on wide ranges; summary tables can't serve arbitrary From–To. |
 | D10 | Ship the performance work heaviest-page-first, one page per change | A big-bang rewrite | Each step is testable, revertible and measurable. |
+| D11 | No extra anti-abuse on code requests (rely on Supabase's 30 emails/hour limit) | Cloudflare Turnstile; in-app per-IP/daily cap; both | Owner's choice (2026-10-17). **Accepted risk:** a script requesting codes for many @joola addresses could mail-bomb staff and block logins for a while. Fix if it happens: enable Turnstile (free; Supabase Attack Protection). |
+| D12 | Session age from `user.last_sign_in_at`, not a cookie | Signed-in-at cookie | Code review: a plain cookie could be edited to extend the 7-day limit. |
 
 ## 4. Design
 
