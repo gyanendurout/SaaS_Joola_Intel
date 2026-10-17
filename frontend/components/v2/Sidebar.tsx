@@ -43,14 +43,6 @@ const LogOutIcon = () => (
   </svg>
 )
 
-async function handleSignOut() {
-  try {
-    await signOut()
-  } catch (err) {
-    console.error('[sidebar] sign-out failed', err)
-  }
-  window.location.assign('/login')
-}
 
 type NavItem = { href: string; label: string; ic: ReactNode; badge?: string }
 type NavGroup = { heading: string; items: NavItem[] }
@@ -87,6 +79,18 @@ export function V2Sidebar() {
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('joola-sidebar-collapsed') === '1' } catch { return false } })
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const [crisisCount, setCrisisCount] = useState(0)
+  const [signingOut, setSigningOut] = useState(false)
+
+  const handleSignOut = async () => {
+    if (signingOut) return
+    setSigningOut(true)
+    try {
+      await signOut()
+    } catch (err) {
+      console.error('[sidebar] sign-out failed', err)
+    }
+    window.location.assign('/login') // stay disabled: the page is navigating away
+  }
 
   useEffect(() => {
     import('@/lib/shared/supabase').then(({ supabase }) => {
@@ -283,11 +287,13 @@ export function V2Sidebar() {
             type="button"
             className="btn btn-ghost sidebar-signout"
             onClick={handleSignOut}
+            disabled={signingOut}
+            aria-busy={signingOut || undefined}
             aria-label="Sign out"
             title="Sign out"
           >
             <LogOutIcon />
-            {!collapsed && <span>Sign out</span>}
+            {!collapsed && <span>{signingOut ? 'Signing out…' : 'Sign out'}</span>}
           </button>
         </div>
       </aside>

@@ -6,9 +6,8 @@ describe('safeNext', () => {
     expect(safeNext('/v2/reddit?x=1')).toBe('/v2/reddit?x=1')
     expect(safeNext('/v2')).toBe('/v2')
     expect(safeNext('/')).toBe('/')
+    expect(safeNext('/v2?x=1')).toBe('/v2?x=1')
     expect(safeNext('/v2/%0d%0a')).toBe('/v2/%0d%0a')
-    // Starts with /v2 and has no scheme: a harmless same-origin path.
-    expect(safeNext('/v2@evil.com')).toBe('/v2@evil.com')
   })
 
   it('defaults when missing', () => {
@@ -36,7 +35,9 @@ describe('safeNext', () => {
   it('rejects paths outside the dashboard', () => {
     expect(safeNext('/login')).toBe(DEFAULT_NEXT)
     expect(safeNext('/api/x')).toBe(DEFAULT_NEXT)
-    expect(safeNext('/v2x')).toBe('/v2x') // documented: prefix match on /v2
+    expect(safeNext('/v2x')).toBe(DEFAULT_NEXT)
+    expect(safeNext('/v2@evil.com')).toBe(DEFAULT_NEXT)
+    expect(safeNext('/v2#top')).toBe(DEFAULT_NEXT)
     expect(safeNext('v2/overview')).toBe(DEFAULT_NEXT)
   })
 })

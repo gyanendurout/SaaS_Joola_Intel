@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { requestCode, verifyCode } from './actions'
@@ -15,14 +15,24 @@ async function run(action: () => Promise<ActionResult>): Promise<ActionResult> {
   try { return await action() } catch { return { ok: false, error: NETWORK_ERROR } }
 }
 
-/** Seconds left until `until` (epoch ms), re-rendering once per second. */
+/**
+ * Seconds left until `until` (epoch ms), re-rendering once per second and
+ * stopping at 0. `now` is re-based in render when `until` changes, so a new
+ * cooldown never shows a stale value (e.g. "61s") for a frame.
+ */
 function useCountdown(until: number): number {
-  const [now, setNow] = useState(() => Date.now())
+  const [clock, setClock] = useState(() => ({ until, now: Date.now() }))
+  if (clock.until !== until) setClock({ until, now: Date.now() })
   useEffect(() => {
     if (until <= Date.now()) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
+    const id = setInterval(() => {
+      const t = Date.now()
+      setClock({ until, now: t })
+      if (t >= until) clearInterval(id)
+    }, 1000)
     return () => clearInterval(id)
   }, [until])
+  const now = clock.until === until ? clock.now : Date.now()
   return Math.max(0, Math.ceil((until - now) / 1000))
 }
 
@@ -71,6 +81,7 @@ function EmailStep({ initialEmail, onSent }: { initialEmail: string; onSent: (em
   const [value, setValue] = useState(initialEmail)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -78,8 +89,9 @@ function EmailStep({ initialEmail, onSent }: { initialEmail: string; onSent: (em
     setError('')
     const res = await run(() => requestCode(value))
     setBusy(false)
-    if (res.ok) onSent(value.trim())
-    else setError(res.error)
+    if (res.ok) { onSent(value.trim()); return }
+    setError(res.error)
+    inputRef.current?.focus()
   }
 
   return (
@@ -88,7 +100,7 @@ function EmailStep({ initialEmail, onSent }: { initialEmail: string; onSent: (em
       <div className="login-field">
         <label htmlFor="login-email">Work email</label>
         <input
-          id="login-email" className="login-input" type="email" autoComplete="email"
+          ref={inputRef} id="login-email" className="login-input" type="email" autoComplete="email"
           required autoFocus placeholder="you@joola.com" value={value}
           onChange={e => setValue(e.target.value)}
           aria-invalid={error ? true : undefined}
@@ -117,6 +129,7 @@ function CodeStep({ email, resendAt, onResent, onBack, onSignedIn }: CodeStepPro
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState<'verify' | 'resend' | null>(null)
   const secondsLeft = useCountdown(resendAt)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -137,6 +150,7 @@ function CodeStep({ email, resendAt, onResent, onBack, onSignedIn }: CodeStepPro
     setBusy(null)
     if (res.ok) { onResent(); setNotice('A new code is on its way.') }
     else setError(res.error)
+    inputRef.current?.focus() // the resend button is now disabled; keep focus useful
   }
 
   return (
@@ -145,7 +159,7 @@ function CodeStep({ email, resendAt, onResent, onBack, onSignedIn }: CodeStepPro
       <div className="login-field">
         <label htmlFor="login-code">6-digit code</label>
         <input
-          id="login-code" className="login-input login-code" type="text"
+          ref={inputRef} id="login-code" className="login-input login-code" type="text"
           inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6}
           required autoFocus value={code}
           onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -153,7 +167,7 @@ function CodeStep({ email, resendAt, onResent, onBack, onSignedIn }: CodeStepPro
           aria-describedby={error ? 'login-code-error' : undefined}
         />
         {error && <p id="login-code-error" className="login-error" role="alert">{error}</p>}
-        {notice && <p className="login-notice" role="status">{notice}</p>}
+        <p className="login-notice" aria-live="polite">{notice}</p>
       </div>
       <button type="submit" className="btn btn-yellow login-submit" disabled={busy !== null}>
         {busy === 'verify' ? 'Checking…' : 'Sign in'}

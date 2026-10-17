@@ -180,6 +180,7 @@
   display: flex; align-items: center; gap: 8px;
 }
 .v2-root .sidebar-signout { margin-left: auto; padding: 6px 9px; font-size: 11px; gap: 6px; color: var(--fg-3); }
+.v2-root .sidebar-signout:disabled { opacity: 0.6; cursor: progress; }
 .v2-root .sidebar-signout:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
 .v2-root .sidebar.sidebar-collapsed .sidebar-foot { flex-direction: column; padding: 14px 0; gap: 12px; }
 .v2-root .sidebar.sidebar-collapsed .sidebar-signout { margin-left: 0; padding: 6px; }
