@@ -62,3 +62,21 @@ export function rpcKey(
 ): RpcKey {
   return ['rpc', fn, stableStringify(args), dataVersion ?? 'unknown'] as const
 }
+
+/** Error thrown by useRpc: the PostgREST error plus the HTTP status. */
+export type RpcErrorLike = { code?: string; status?: number }
+
+const TRANSIENT_4XX = new Set([408, 429])
+
+/**
+ * Only transient failures are worth retrying: network errors (status 0 / no
+ * status), 5xx, 408 and 429. PostgREST errors (`PGRST*`) and other 4xx
+ * responses (missing function, bad params, auth) will fail the same way again.
+ */
+export function isRetryableRpcError(err: unknown): boolean {
+  const e = (err ?? {}) as RpcErrorLike
+  if (typeof e.code === 'string' && e.code.startsWith('PGRST')) return false
+  const status = typeof e.status === 'number' ? e.status : 0
+  if (status >= 400 && status < 500) return TRANSIENT_4XX.has(status)
+  return true
+}

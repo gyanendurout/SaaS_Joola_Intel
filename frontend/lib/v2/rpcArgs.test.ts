@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rpcArgs, brandParam, rpcKey, stableStringify } from './rpcArgs'
+import { rpcArgs, brandParam, rpcKey, stableStringify, isRetryableRpcError } from './rpcArgs'
 
 const bounds = { gte: '2026-01-01T00:00:00.000Z', lt: '2026-02-01T00:00:00.000Z' }
 const brand = (id: string, brand_id: string) => ({ id, brand_id }) as never
@@ -69,5 +69,23 @@ describe('rpcKey', () => {
 describe('stableStringify', () => {
   it('drops undefined object values like JSON.stringify', () => {
     expect(stableStringify({ b: undefined, a: null })).toBe('{"a":null}')
+  })
+})
+
+describe('isRetryableRpcError', () => {
+  it('does not retry PostgREST errors or permanent 4xx responses', () => {
+    expect(isRetryableRpcError({ code: 'PGRST202', status: 404 })).toBe(false)
+    expect(isRetryableRpcError({ code: 'PGRST301' })).toBe(false)
+    expect(isRetryableRpcError({ code: '42883', status: 404 })).toBe(false)
+    expect(isRetryableRpcError({ code: '22P02', status: 400 })).toBe(false)
+    expect(isRetryableRpcError({ status: 401 })).toBe(false)
+  })
+  it('retries network failures, 5xx, 408 and 429', () => {
+    expect(isRetryableRpcError({ code: '', status: 0 })).toBe(true)
+    expect(isRetryableRpcError(new TypeError('Failed to fetch'))).toBe(true)
+    expect(isRetryableRpcError({ code: '57014', status: 500 })).toBe(true)
+    expect(isRetryableRpcError({ status: 503 })).toBe(true)
+    expect(isRetryableRpcError({ status: 408 })).toBe(true)
+    expect(isRetryableRpcError({ status: 429 })).toBe(true)
   })
 })
