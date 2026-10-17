@@ -5,8 +5,12 @@
  * follows. The default is the 90 days ending on the latest data date
  * (`rpc_latest_data_date`), falling back to today (IST) when unknown.
  *
- * Persistence: STORAGE_KEY is written only after the user changes the
- * window, so the default keeps following new data until then.
+ * State is a WindowChoice: a preset (re-resolved against the anchor, so it
+ * follows new data) or a fixed custom window. It is persisted under
+ * STORAGE_KEY only when the user changes it.
+ *
+ * Children render only once the final window is known (stored choice read,
+ * and for presets the anchor fetched or timed out), so pages fetch once.
  *
  * The deprecated fields (range, maxDays, mode, customFrom, ...) are derived
  * from the window so older pages keep working; new code should read
@@ -15,27 +19,25 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { supabase } from '@/lib/shared/supabase'
+import { formatWindow, isValidIsoDay, isoDay, toQueryBounds, type IsoDay, type Preset } from './dateWindow'
 import {
-  formatWindow,
-  isValidIsoDay,
-  isoDay,
-  normalizeWindow,
-  presetWindow,
-  toQueryBounds,
-  type IsoDay,
-  type Preset,
-} from './dateWindow'
-import {
+  DEFAULT_CHOICE,
   LEGACY_KEYS,
+  LEGACY_V2_KEY,
   STORAGE_KEY,
+  choiceForWindow,
   compatFields,
   filterRowsByWindow,
-  parseStoredWindow,
+  loadStoredChoice,
+  parseStoredChoice,
   presetFromLegacyKey,
+  resolveWindow,
   type DateRangeKey,
   type DateRangeMode,
   type DayWindow,
+  type WindowChoice,
 } from './dateWindowState'
+import { cacheSuccessful, parseRpcDay, withTimeout } from './latestDataDate'
 
 export type { DateRangeKey, DateRangeMode } from './dateWindowState'
 
@@ -92,58 +94,40 @@ export const DATE_RANGE_LABEL: Record<DateRangeKey, string> = {
   'custom': 'Custom range',
 }
 
-// ─── Latest data date (fetched once per browser session) ───────────────
-let latestDataDateCache: Promise<IsoDay | null> | null = null
+// ─── Latest data date (successful result cached per browser session) ───
+const ANCHOR_TIMEOUT_MS = 1500
 
-/** Latest data day from the DB, or null on error / no data. Never rejects. */
-function fetchLatestDataDate(): Promise<IsoDay | null> {
-  if (latestDataDateCache) return latestDataDateCache
-  latestDataDateCache = (async () => {
-    try {
-      const { data, error } = await supabase.rpc('rpc_latest_data_date')
-      if (error) return null
-      const day = typeof data === 'string' ? data.slice(0, 10) : null
-      return day && isValidIsoDay(day) ? day : null
-    } catch {
-      return null
-    }
-  })()
-  return latestDataDateCache
-}
+const fetchLatestDataDate = cacheSuccessful<IsoDay>(async () => {
+  const { data, error } = await supabase.rpc('rpc_latest_data_date')
+  return error ? null : parseRpcDay(data)
+})
 
 // ─── Storage helpers (all failures are non-fatal) ──────────────────────
-function readStored(): DayWindow | null {
+/** Reads the persisted choice; migrates a legacy v2 window into v3; deletes legacy keys. */
+function loadChoiceFromStorage(): WindowChoice | null {
   try {
-    return parseStoredWindow(localStorage.getItem(STORAGE_KEY))
+    const v3Raw = localStorage.getItem(STORAGE_KEY)
+    const choice = loadStoredChoice(v3Raw, localStorage.getItem(LEGACY_V2_KEY))
+    // Migration only: carry a v2 window forward before its key is deleted.
+    if (choice && !parseStoredChoice(v3Raw)) writeStored(choice)
+    for (const k of LEGACY_KEYS) localStorage.removeItem(k)
+    return choice
   } catch {
     return null
   }
 }
 
-function writeStored(win: DayWindow): void {
+function writeStored(choice: WindowChoice): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(win))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(choice))
   } catch {}
 }
 
-function clearLegacyKeys(): void {
-  try {
-    for (const k of LEGACY_KEYS) localStorage.removeItem(k)
-  } catch {}
-}
+type ChoiceState = { choice: WindowChoice; persist: boolean }
 
-type WindowState = DayWindow & { userChosen: boolean }
+type Setters = Pick<DateRangeCtx, 'setWindow' | 'applyPreset' | 'setRange' | 'setCustomFrom' | 'setCustomTo'>
 
-function defaultState(anchor: IsoDay): WindowState {
-  return { ...presetWindow('90d', anchor), userChosen: false }
-}
-
-function buildValue(
-  win: DayWindow,
-  today: IsoDay,
-  latestDataDate: IsoDay | null,
-  setters: Pick<DateRangeCtx, 'setWindow' | 'applyPreset' | 'setRange' | 'setCustomFrom' | 'setCustomTo'>,
-): DateRangeCtx {
+function buildValue(win: DayWindow, today: IsoDay, latestDataDate: IsoDay | null, setters: Setters): DateRangeCtx {
   const anchor = latestDataDate ?? today
   const c = compatFields(win.from, win.to, today, anchor)
   return {
@@ -165,83 +149,130 @@ function buildValue(
   }
 }
 
-const noop = () => {}
+// ─── Context default (used only outside a provider) ────────────────────
+let warnedNoProvider = false
+function warnNoProvider(): void {
+  if (process.env.NODE_ENV === 'production' || warnedNoProvider) return
+  warnedNoProvider = true
+  // eslint-disable-next-line no-console
+  console.warn('[DateRangeContext] date setter called outside <DateRangeProvider>; the change is ignored.')
+}
+
 const MODULE_TODAY = isoDay(new Date())
 const DateRangeContext = createContext<DateRangeCtx>(
-  buildValue(defaultState(MODULE_TODAY), MODULE_TODAY, null, {
-    setWindow: noop,
-    applyPreset: noop,
-    setRange: noop,
-    setCustomFrom: noop,
-    setCustomTo: noop,
+  buildValue(resolveWindow(DEFAULT_CHOICE, MODULE_TODAY), MODULE_TODAY, null, {
+    setWindow: warnNoProvider,
+    applyPreset: warnNoProvider,
+    setRange: warnNoProvider,
+    setCustomFrom: warnNoProvider,
+    setCustomTo: warnNoProvider,
   }),
 )
 
+function legacyKeyChoice(r: DateRangeKey, anchor: IsoDay): WindowChoice | null {
+  if (r === '7d' || r === '30d' || r === '90d' || r === 'all') return { kind: 'preset', preset: r }
+  const w = presetFromLegacyKey(r, anchor)
+  return w ? choiceForWindow(w.from, w.to, anchor) : null
+}
+
+/** Today (IST), refreshed when the tab becomes visible on a new day. */
+function useTodayIst(): IsoDay {
+  const [today, setToday] = useState<IsoDay>(() => isoDay(new Date()))
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      const t = isoDay(new Date())
+      setToday((prev) => (prev === t ? prev : t))
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+  return today
+}
+
 export function DateRangeProvider({ children }: { children: ReactNode }) {
-  // Deterministic start (today's 90d window); storage + anchor load in an effect.
-  const [today] = useState<IsoDay>(() => isoDay(new Date()))
-  const [win, setWin] = useState<WindowState>(() => defaultState(today))
+  const today = useTodayIst()
+  const [state, setState] = useState<ChoiceState>({ choice: DEFAULT_CHOICE, persist: false })
   const [latestDataDate, setLatestDataDate] = useState<IsoDay | null>(null)
+  // Children wait until the final window is known, so pages fetch once.
+  const [ready, setReady] = useState(false)
   const anchor = latestDataDate ?? today
 
   useEffect(() => {
     let cancelled = false
-    clearLegacyKeys()
-    const stored = readStored()
-    if (stored) setWin({ ...stored, userChosen: true })
-    fetchLatestDataDate().then((day) => {
-      if (cancelled) return
-      setLatestDataDate(day)
-      // Re-derive the default window only if the user never chose one.
-      setWin((prev) => (prev.userChosen ? prev : defaultState(day ?? today)))
-    })
+    const stored = loadChoiceFromStorage()
+    if (stored) setState({ choice: stored, persist: false })
+    const lookup = fetchLatestDataDate()
+    const applyLate = (day: IsoDay | null) => {
+      if (!cancelled && day) setLatestDataDate(day)
+    }
+    if (stored?.kind === 'custom') {
+      // A fixed window doesn't depend on the anchor; only the hint does.
+      setReady(true)
+      lookup.then(applyLate)
+    } else {
+      withTimeout(lookup, ANCHOR_TIMEOUT_MS, null).then((day) => {
+        if (cancelled) return
+        setLatestDataDate(day)
+        setReady(true)
+        if (day === null) lookup.then(applyLate)
+      })
+    }
     return () => { cancelled = true }
-  }, [today])
-
-  // Persist only user-chosen windows.
-  useEffect(() => {
-    if (win.userChosen) writeStored({ from: win.from, to: win.to })
-  }, [win])
-
-  const setWindow = useCallback((from: IsoDay, to: IsoDay) => {
-    if (!isValidIsoDay(from) || !isValidIsoDay(to)) return
-    const next = normalizeWindow(from, to)
-    setWin((prev) =>
-      prev.userChosen && prev.from === next.from && prev.to === next.to ? prev : { ...next, userChosen: true },
-    )
   }, [])
 
-  const applyPreset = useCallback(
-    (p: Preset) => {
-      const w = presetWindow(p, anchor)
-      setWindow(w.from, w.to)
+  // Persist only choices made by the user (never on load).
+  useEffect(() => {
+    if (state.persist) writeStored(state.choice)
+  }, [state])
+
+  const applyPreset = useCallback((p: Preset) => {
+    setState({ choice: { kind: 'preset', preset: p }, persist: true })
+  }, [])
+
+  const setWindow = useCallback(
+    (from: IsoDay, to: IsoDay) => {
+      if (!isValidIsoDay(from) || !isValidIsoDay(to)) return
+      setState({ choice: choiceForWindow(from, to, anchor), persist: true })
     },
-    [anchor, setWindow],
+    [anchor],
   )
 
   const setRange = useCallback(
     (r: DateRangeKey) => {
-      const w = presetFromLegacyKey(r, anchor)
-      if (w) setWindow(w.from, w.to)
+      const choice = legacyKeyChoice(r, anchor)
+      if (choice) setState({ choice, persist: true })
     },
-    [anchor, setWindow],
+    [anchor],
   )
 
-  const setCustomFrom = useCallback((d: Date) => {
-    if (Number.isNaN(d.getTime())) return
-    const day = isoDay(d)
-    setWin((prev) => ({ ...normalizeWindow(day, prev.to), userChosen: true }))
-  }, [])
+  const setCustomFrom = useCallback(
+    (d: Date) => {
+      if (Number.isNaN(d.getTime())) return
+      const day = isoDay(d)
+      setState((prev) => {
+        const w = resolveWindow(prev.choice, anchor)
+        return { choice: choiceForWindow(day, w.to, anchor), persist: true }
+      })
+    },
+    [anchor],
+  )
 
-  const setCustomTo = useCallback((d: Date) => {
-    if (Number.isNaN(d.getTime())) return
-    const day = isoDay(d)
-    setWin((prev) => ({ ...normalizeWindow(prev.from, day), userChosen: true }))
-  }, [])
+  const setCustomTo = useCallback(
+    (d: Date) => {
+      if (Number.isNaN(d.getTime())) return
+      const day = isoDay(d)
+      setState((prev) => {
+        const w = resolveWindow(prev.choice, anchor)
+        return { choice: choiceForWindow(w.from, day, anchor), persist: true }
+      })
+    },
+    [anchor],
+  )
 
   // Date objects depend only on (from, to) so pages' effects keyed on
-  // effectiveFrom / effectiveTo don't refetch when only the anchor changes.
-  const { from, to } = win
+  // effectiveFrom / effectiveTo don't refetch when nothing moved.
+  const { from, to } = resolveWindow(state.choice, anchor)
   const dayWindow = useMemo(() => ({ from, to }), [from, to])
   const dates = useMemo(() => {
     const c = compatFields(dayWindow.from, dayWindow.to, today)
@@ -259,7 +290,11 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
     [dayWindow, today, latestDataDate, dates, setWindow, applyPreset, setRange, setCustomFrom, setCustomTo],
   )
 
-  return <DateRangeContext.Provider value={value}>{children}</DateRangeContext.Provider>
+  return (
+    <DateRangeContext.Provider value={value}>
+      {ready ? children : <div className="drp-pending" aria-busy="true" />}
+    </DateRangeContext.Provider>
+  )
 }
 
 export function useDateRange(): DateRangeCtx {

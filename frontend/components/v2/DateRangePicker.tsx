@@ -54,7 +54,6 @@ export function DateRangePicker() {
               const v = e.target.value
               if (isValidIsoDay(v)) setWindow(v, to)
             }}
-            aria-label="From date"
           />
         </div>
 
@@ -73,7 +72,6 @@ export function DateRangePicker() {
               const v = e.target.value
               if (isValidIsoDay(v) && v <= today) setWindow(from, v)
             }}
-            aria-label="To date"
           />
         </div>
       </div>

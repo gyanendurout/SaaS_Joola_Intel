@@ -15,10 +15,15 @@ import {
   presetWindow,
   toQueryBounds,
   type IsoDay,
+  type Preset,
 } from './dateWindow'
 
-export const STORAGE_KEY = 'joola-window-v2'
+export const STORAGE_KEY = 'joola-window-v3'
+/** Previous format: a bare `{from, to}` window. Read once, then deleted. */
+export const LEGACY_V2_KEY = 'joola-window-v2'
+/** Keys deleted on load (after the v2 value has been migrated). */
 export const LEGACY_KEYS: readonly string[] = [
+  LEGACY_V2_KEY,
   'joola-date-range',
   'joola-date-mode',
   'joola-date-from',
@@ -43,8 +48,19 @@ function dayDiff(a: IsoDay, b: IsoDay): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS)
 }
 
-/** Validated `{from, to}` from the raw STORAGE_KEY value, or null. */
-export function parseStoredWindow(raw: string | null): DayWindow | null {
+/**
+ * What the user picked. A preset re-resolves against the anchor (so it
+ * follows new data); a custom window is fixed.
+ */
+export type WindowChoice =
+  | { kind: 'preset'; preset: Preset }
+  | { kind: 'custom'; from: IsoDay; to: IsoDay }
+
+export const DEFAULT_CHOICE: WindowChoice = { kind: 'preset', preset: '90d' }
+
+const PRESETS: readonly Preset[] = ['7d', '30d', '90d', 'all']
+
+function parseJsonObject(raw: string | null): Record<string, unknown> | null {
   if (!raw) return null
   let parsed: unknown
   try {
@@ -53,18 +69,53 @@ export function parseStoredWindow(raw: string | null): DayWindow | null {
     return null
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
-  const { from, to } = parsed as { from?: unknown; to?: unknown }
+  return parsed as Record<string, unknown>
+}
+
+function validWindow(from: unknown, to: unknown): DayWindow | null {
   if (!isValidIsoDay(from) || !isValidIsoDay(to)) return null
   return normalizeWindow(from as IsoDay, to as IsoDay)
 }
 
-/** Stored window if any (user-chosen), else the default 90 days ending on the anchor. */
-export function initialWindow(
-  stored: DayWindow | null,
-  anchor: IsoDay,
-): DayWindow & { userChosen: boolean } {
-  if (stored) return { ...stored, userChosen: true }
-  return { ...presetWindow('90d', anchor), userChosen: false }
+/** Legacy v2 value: validated `{from, to}`, or null. */
+export function parseStoredWindow(raw: string | null): DayWindow | null {
+  const obj = parseJsonObject(raw)
+  return obj ? validWindow(obj.from, obj.to) : null
+}
+
+/** v3 value: a validated WindowChoice, or null. */
+export function parseStoredChoice(raw: string | null): WindowChoice | null {
+  const obj = parseJsonObject(raw)
+  if (!obj) return null
+  if (obj.kind === 'preset') {
+    return PRESETS.includes(obj.preset as Preset) ? { kind: 'preset', preset: obj.preset as Preset } : null
+  }
+  if (obj.kind === 'custom') {
+    const w = validWindow(obj.from, obj.to)
+    return w ? { kind: 'custom', ...w } : null
+  }
+  return null
+}
+
+/** The persisted choice: v3 if valid, else a valid legacy v2 window as custom, else null. */
+export function loadStoredChoice(v3Raw: string | null, v2Raw: string | null): WindowChoice | null {
+  const v3 = parseStoredChoice(v3Raw)
+  if (v3) return v3
+  const v2 = parseStoredWindow(v2Raw)
+  return v2 ? { kind: 'custom', ...v2 } : null
+}
+
+/** The concrete window a choice selects for `anchor`. */
+export function resolveWindow(choice: WindowChoice, anchor: IsoDay): DayWindow {
+  if (choice.kind === 'preset') return presetWindow(choice.preset, anchor)
+  return { from: choice.from, to: choice.to }
+}
+
+/** Choice to store for an explicit window: the preset it equals for `anchor`, else custom. */
+export function choiceForWindow(from: IsoDay, to: IsoDay, anchor: IsoDay): WindowChoice {
+  const w = normalizeWindow(from, to)
+  const preset = matchPreset(w.from, w.to, anchor)
+  return preset ? { kind: 'preset', preset } : { kind: 'custom', ...w }
 }
 
 /** Legacy key for a window: a shared preset, the old 6mo / 1y spans, or 'custom'. */

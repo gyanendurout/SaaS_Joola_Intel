@@ -1,22 +1,117 @@
 import { describe, it, expect } from 'vitest'
 import {
+  DEFAULT_CHOICE,
   LEGACY_KEYS,
+  LEGACY_V2_KEY,
   STORAGE_KEY,
+  choiceForWindow,
   compatFields,
   filterRowsByWindow,
-  initialWindow,
+  loadStoredChoice,
+  parseStoredChoice,
   parseStoredWindow,
   presetFromLegacyKey,
+  resolveWindow,
 } from './dateWindowState'
 
 describe('storage keys', () => {
-  it('uses a fresh v2 key and lists every legacy key', () => {
-    expect(STORAGE_KEY).toBe('joola-window-v2')
-    expect(LEGACY_KEYS).toEqual(['joola-date-range', 'joola-date-mode', 'joola-date-from', 'joola-date-to'])
+  it('uses the v3 key and lists every key to delete', () => {
+    expect(STORAGE_KEY).toBe('joola-window-v3')
+    expect(LEGACY_V2_KEY).toBe('joola-window-v2')
+    expect(LEGACY_KEYS).toEqual([
+      'joola-window-v2',
+      'joola-date-range',
+      'joola-date-mode',
+      'joola-date-from',
+      'joola-date-to',
+    ])
   })
 })
 
-describe('parseStoredWindow', () => {
+describe('parseStoredChoice (v3)', () => {
+  it('parses a preset choice', () => {
+    expect(parseStoredChoice(JSON.stringify({ kind: 'preset', preset: '30d' }))).toEqual({
+      kind: 'preset',
+      preset: '30d',
+    })
+  })
+  it('parses a custom choice and normalizes it', () => {
+    expect(parseStoredChoice(JSON.stringify({ kind: 'custom', from: '2026-09-30', to: '2026-09-01' }))).toEqual({
+      kind: 'custom',
+      from: '2026-09-01',
+      to: '2026-09-30',
+    })
+  })
+  it('rejects garbage', () => {
+    expect(parseStoredChoice(null)).toBeNull()
+    expect(parseStoredChoice('{oops')).toBeNull()
+    expect(parseStoredChoice('42')).toBeNull()
+    expect(parseStoredChoice('null')).toBeNull()
+    expect(parseStoredChoice(JSON.stringify({ kind: 'preset', preset: '6mo' }))).toBeNull()
+    expect(parseStoredChoice(JSON.stringify({ kind: 'custom', from: '2026-02-30', to: '2026-03-01' }))).toBeNull()
+    expect(parseStoredChoice(JSON.stringify({ kind: 'other' }))).toBeNull()
+    expect(parseStoredChoice(JSON.stringify({ from: '2026-09-01', to: '2026-09-30' }))).toBeNull()
+  })
+})
+
+describe('loadStoredChoice', () => {
+  const v2 = JSON.stringify({ from: '2026-09-01', to: '2026-09-30' })
+  it('prefers a valid v3 value', () => {
+    expect(loadStoredChoice(JSON.stringify({ kind: 'preset', preset: '7d' }), v2)).toEqual({ kind: 'preset', preset: '7d' })
+  })
+  it('accepts a valid legacy v2 window as custom', () => {
+    expect(loadStoredChoice(null, v2)).toEqual({ kind: 'custom', from: '2026-09-01', to: '2026-09-30' })
+  })
+  it('falls back to v2 when v3 is garbage', () => {
+    expect(loadStoredChoice('garbage', v2)?.kind).toBe('custom')
+  })
+  it('returns null when neither is valid', () => {
+    expect(loadStoredChoice(null, null)).toBeNull()
+    expect(loadStoredChoice('x', '{"from":"bad","to":"2026-01-01"}')).toBeNull()
+  })
+})
+
+describe('DEFAULT_CHOICE', () => {
+  it('is the 90d preset', () => {
+    expect(DEFAULT_CHOICE).toEqual({ kind: 'preset', preset: '90d' })
+  })
+})
+
+describe('resolveWindow', () => {
+  it('resolves a preset against the anchor', () => {
+    expect(resolveWindow({ kind: 'preset', preset: '90d' }, '2026-10-12')).toEqual({ from: '2026-07-15', to: '2026-10-12' })
+    expect(resolveWindow({ kind: 'preset', preset: 'all' }, '2026-10-12')).toEqual({ from: '2000-01-01', to: '2026-10-12' })
+  })
+  it('returns a custom window unchanged regardless of anchor', () => {
+    expect(resolveWindow({ kind: 'custom', from: '2026-09-01', to: '2026-09-30' }, '2026-10-12')).toEqual({
+      from: '2026-09-01',
+      to: '2026-09-30',
+    })
+  })
+})
+
+describe('choiceForWindow', () => {
+  it('stores a preset when the window equals one for the anchor', () => {
+    expect(choiceForWindow('2026-09-13', '2026-10-12', '2026-10-12')).toEqual({ kind: 'preset', preset: '30d' })
+    expect(choiceForWindow('2000-01-01', '2026-10-12', '2026-10-12')).toEqual({ kind: 'preset', preset: 'all' })
+  })
+  it('stores custom otherwise, normalized', () => {
+    expect(choiceForWindow('2026-09-30', '2026-09-01', '2026-10-12')).toEqual({
+      kind: 'custom',
+      from: '2026-09-01',
+      to: '2026-09-30',
+    })
+  })
+  it('keeps a preset-shaped window for a different anchor as custom', () => {
+    expect(choiceForWindow('2026-09-13', '2026-10-12', '2026-10-15')).toEqual({
+      kind: 'custom',
+      from: '2026-09-13',
+      to: '2026-10-12',
+    })
+  })
+})
+
+describe('parseStoredWindow (legacy v2)', () => {
   it('returns null for missing input', () => {
     expect(parseStoredWindow(null)).toBeNull()
     expect(parseStoredWindow('')).toBeNull()
@@ -44,23 +139,6 @@ describe('parseStoredWindow', () => {
     expect(parseStoredWindow(JSON.stringify({ from: '2026-09-30', to: '2026-09-01' }))).toEqual({
       from: '2026-09-01',
       to: '2026-09-30',
-    })
-  })
-})
-
-describe('initialWindow', () => {
-  it('uses a stored window and marks it user-chosen', () => {
-    expect(initialWindow({ from: '2026-09-01', to: '2026-09-30' }, '2026-10-12')).toEqual({
-      from: '2026-09-01',
-      to: '2026-09-30',
-      userChosen: true,
-    })
-  })
-  it('falls back to the 90-day window ending on the anchor', () => {
-    expect(initialWindow(null, '2026-10-12')).toEqual({
-      from: '2026-07-15',
-      to: '2026-10-12',
-      userChosen: false,
     })
   })
 })

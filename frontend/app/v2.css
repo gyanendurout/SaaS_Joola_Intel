@@ -581,6 +581,8 @@ html.theme-light .v2-root .drd-segment + .drd-segment { border-color: rgba(0,0,0
   .v2-root .drd-label-inline { display: none; }
   .v2-root .drd-date { min-width: 80px; }
 }
+/* Placeholder while DateRangeProvider resolves the initial window (keeps layout height) */
+.v2-root .drp-pending { min-height: 100vh; }
 /* Quick preset buttons + data-freshness hint beside the From/To pill */
 .v2-root .drd-bar {
   display: inline-flex; align-items: center; flex-wrap: wrap;
