@@ -37,7 +37,7 @@ $LogFile     = 'c:\tmp\joola-intel-qa-run.log'
 
 # Keep this in sync with e2e/smoke.spec.ts PAGES and the live sidebar.
 $ROUTES = @(
-  '/v2',
+  '/v2/overview',  # /v2 itself is a 307 redirect here (next.config.js)
   '/v2/instagram',
   '/v2/youtube',
   '/v2/reddit',
@@ -160,13 +160,37 @@ try {
       SkipStage 'routes' "dev server not reachable at $BaseUrl"
     } else {
       $failedRoutes = @()
-      foreach ($route in $ROUTES) {
-        try {
-          $r = Invoke-WebRequest -Uri "$BaseUrl$route" -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop
-          if ($r.StatusCode -ne 200) { $failedRoutes += "$route -> $($r.StatusCode)" }
-        } catch {
-          $failedRoutes += "$route -> $($_.Exception.Message)"
+      # Pages are behind the login: sign the QA account in (no email is sent)
+      # and send its cookies. No redirects are followed, so a 307 to /login
+      # counts as a failure instead of a false 200 from the login page.
+      # (Windows PowerShell drops a hand-set Cookie header, so use a session.)
+      $qaSession = $null
+      $sessionOut = & node qa/qa-session.mjs $BaseUrl 2>&1
+      if ($LASTEXITCODE -eq 0) {
+        $state = Get-Content 'qa/.auth/state.json' -Raw | ConvertFrom-Json
+        $qaSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+        $qaHost = ([Uri]$BaseUrl).Host
+        foreach ($c in $state.cookies) {
+          $qaSession.Cookies.Add((New-Object System.Net.Cookie($c.name, $c.value, '/', $qaHost)))
         }
+      } else {
+        $failedRoutes += "QA sign-in failed: $($sessionOut -join ' ')"
+      }
+      if ($qaSession) {
+        foreach ($route in $ROUTES) {
+          try {
+            $r = Invoke-WebRequest -Uri "$BaseUrl$route" -TimeoutSec 15 -UseBasicParsing -MaximumRedirection 0 -WebSession $qaSession -ErrorAction Stop
+            if ($r.StatusCode -ne 200) { $failedRoutes += "$route -> $($r.StatusCode)" }
+          } catch {
+            $failedRoutes += "$route -> $($_.Exception.Message)"
+          }
+        }
+      }
+      try {
+        $r = Invoke-WebRequest -Uri "$BaseUrl/login" -TimeoutSec 15 -UseBasicParsing -MaximumRedirection 0 -ErrorAction Stop
+        if ($r.StatusCode -ne 200) { $failedRoutes += "/login -> $($r.StatusCode)" }
+      } catch {
+        $failedRoutes += "/login -> $($_.Exception.Message)"
       }
       $sw.Stop()
       if ($failedRoutes.Count -eq 0) {

@@ -11,6 +11,7 @@
  */
 
 import { chromium } from 'playwright-core'
+import { ensureQaSession } from './qa-session.mjs'
 
 const BASE = process.argv[2] || 'http://localhost:3000'
 const PAGES = [
@@ -38,7 +39,9 @@ const PAGES = [
 ]
 
 const browser = await chromium.launch()
-const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+// Pages are behind the login — reuse the QA session (no email sent).
+const storageState = await ensureQaSession(BASE)
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, storageState })
 
 let failures = 0
 let checked = 0

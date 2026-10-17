@@ -72,3 +72,6 @@ DATA/
 # Generated knowledge-graph output from the graphify tool (5.5 MB of AST cache).
 # Regenerate with /graphify; never belongs in history.
 graphify-out/
+
+# QA login session (Playwright storageState) — contains auth cookies
+frontend/qa/.auth/
