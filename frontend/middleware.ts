@@ -9,20 +9,23 @@ export async function middleware(req: NextRequest) {
   const ok = !!user && !!user.email && isAllowedEmail(user.email) && !isSessionExpired(user.last_sign_in_at)
   if (ok) return session.res
 
-  if (user) await supabase.auth.signOut()            // expired or foreign: end it
-  const denied = req.nextUrl.pathname.startsWith('/api/')
+  if (user) await supabase.auth.signOut({ scope: 'local' }) // expired or foreign: end this browser's session
+  const { pathname } = req.nextUrl
+  const isApi = pathname === '/api' || pathname.startsWith('/api/')
+  const denied = isApi
     ? NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     : redirectToLogin(req)
-  // Carry refreshed/cleared auth cookies (e.g. from signOut) so a stale session can't survive.
-  session.res.cookies.getAll().forEach((c) => denied.cookies.set(c))
-  return denied
+  // Carry cleared cookies + no-cache headers so a stale session can't survive or be cached.
+  return session.applyAuthTo(denied)
 }
 
 function redirectToLogin(req: NextRequest) {
+  const back = req.nextUrl.clone()
+  back.searchParams.delete('_rsc') // RSC cache-buster, not part of the user's URL
   const url = req.nextUrl.clone()
   url.pathname = '/login'
-  url.search = `?next=${encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search)}`
+  url.search = `?next=${encodeURIComponent(back.pathname + back.search)}`
   return NextResponse.redirect(url)
 }
 
-export const config = { matcher: ['/', '/v2/:path*', '/api/:path*'] }
+export const config = { matcher: ['/', '/v2/:path*', '/api/:path*', '/architecture.html'] }
