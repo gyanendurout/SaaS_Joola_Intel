@@ -9,7 +9,7 @@
  * follows new data) or a fixed custom window. It is persisted under
  * STORAGE_KEY only when the user changes it.
  *
- * Children render only once the final window is known (stored choice read,
+ * `DateRangeReady` holds page content until the final window is known (stored choice read,
  * and for presets the anchor fetched or timed out), so pages fetch once.
  *
  * The deprecated fields (range, maxDays, mode, customFrom, ...) are derived
@@ -27,6 +27,7 @@ import {
   STORAGE_KEY,
   choiceForWindow,
   compatFields,
+  effectiveDates,
   filterRowsByWindow,
   loadStoredChoice,
   parseStoredChoice,
@@ -60,6 +61,8 @@ type DateRangeCtx = {
   label: string
   /** Half-open UTC bounds: `>= gte` and `< lt` (lt is EXCLUSIVE). */
   bounds: { gte: string; lt: string }
+  /** False until the stored choice is read and (for presets) the anchor is known. */
+  ready: boolean
 
   /** @deprecated Legacy preset key ('custom' when no preset matches). Use `from` / `to`. */
   range: DateRangeKey
@@ -108,19 +111,25 @@ function loadChoiceFromStorage(): WindowChoice | null {
   try {
     const v3Raw = localStorage.getItem(STORAGE_KEY)
     const choice = loadStoredChoice(v3Raw, localStorage.getItem(LEGACY_V2_KEY))
-    // Migration only: carry a v2 window forward before its key is deleted.
-    if (choice && !parseStoredChoice(v3Raw)) writeStored(choice)
-    for (const k of LEGACY_KEYS) localStorage.removeItem(k)
+    // Migration only: carry a v2 window forward; drop old keys only once v3 holds it.
+    const migrated = choice !== null && !parseStoredChoice(v3Raw)
+    if (!migrated || writeStored(choice)) {
+      for (const k of LEGACY_KEYS) localStorage.removeItem(k)
+    }
     return choice
   } catch {
     return null
   }
 }
 
-function writeStored(choice: WindowChoice): void {
+/** Writes the choice; false when storage is unavailable or full. */
+function writeStored(choice: WindowChoice): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(choice))
-  } catch {}
+    return true
+  } catch {
+    return false
+  }
 }
 
 type ChoiceState = { choice: WindowChoice; persist: boolean }
@@ -138,6 +147,7 @@ function buildValue(win: DayWindow, today: IsoDay, latestDataDate: IsoDay | null
     today,
     label: formatWindow(win.from, win.to),
     bounds: toQueryBounds(win.from, win.to),
+    ready: true,
     range: c.range,
     maxDays: c.maxDays,
     mode: c.mode,
@@ -274,27 +284,30 @@ export function DateRangeProvider({ children }: { children: ReactNode }) {
   // effectiveFrom / effectiveTo don't refetch when nothing moved.
   const { from, to } = resolveWindow(state.choice, anchor)
   const dayWindow = useMemo(() => ({ from, to }), [from, to])
-  const dates = useMemo(() => {
-    const c = compatFields(dayWindow.from, dayWindow.to, today)
-    return { effectiveFrom: c.effectiveFrom, effectiveTo: c.effectiveTo }
-  }, [dayWindow, today])
+  const dates = useMemo(() => effectiveDates(dayWindow.from, dayWindow.to), [dayWindow])
 
   const value = useMemo<DateRangeCtx>(
     () => ({
       ...buildValue(dayWindow, today, latestDataDate, { setWindow, applyPreset, setRange, setCustomFrom, setCustomTo }),
+      ready,
       customFrom: dates.effectiveFrom,
       customTo: dates.effectiveTo,
       effectiveFrom: dates.effectiveFrom,
       effectiveTo: dates.effectiveTo,
     }),
-    [dayWindow, today, latestDataDate, dates, setWindow, applyPreset, setRange, setCustomFrom, setCustomTo],
+    [dayWindow, today, latestDataDate, ready, dates, setWindow, applyPreset, setRange, setCustomFrom, setCustomTo],
   )
 
-  return (
-    <DateRangeContext.Provider value={value}>
-      {ready ? children : <div className="drp-pending" aria-busy="true" />}
-    </DateRangeContext.Provider>
-  )
+  return <DateRangeContext.Provider value={value}>{children}</DateRangeContext.Provider>
+}
+
+/**
+ * Renders its children once the initial window is final (so pages fetch
+ * once); until then a placeholder sized to the content area.
+ */
+export function DateRangeReady({ children }: { children: ReactNode }) {
+  const { ready } = useDateRange()
+  return ready ? <>{children}</> : <div className="drp-pending" aria-busy="true" />
 }
 
 export function useDateRange(): DateRangeCtx {

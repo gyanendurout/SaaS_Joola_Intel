@@ -17,11 +17,11 @@ function formatMonthDay(day: IsoDay): string {
 }
 
 export function DateRangePicker() {
-  const { from, to, setWindow, applyPreset, anchor, today, latestDataDate } = useDateRange()
+  const { from, to, setWindow, applyPreset, anchor, today, latestDataDate, ready } = useDateRange()
   const active = matchPreset(from, to, anchor)
 
   return (
-    <div className="drd-bar">
+    <div className={'drd-bar' + (ready ? '' : ' is-pending')} aria-busy={!ready}>
       <div className="drd-presets" role="group" aria-label="Quick date ranges">
         {PRESET_BUTTONS.map(({ p, label, title }) => (
           <button
@@ -30,6 +30,7 @@ export function DateRangePicker() {
             className={'drd-preset' + (active === p ? ' is-active' : '')}
             aria-pressed={active === p}
             title={title}
+            disabled={!ready}
             onClick={() => applyPreset(p)}
           >
             {label}
@@ -48,6 +49,7 @@ export function DateRangePicker() {
             id="v2-date-from"
             type="date"
             className="drd-date"
+            disabled={!ready}
             value={from}
             max={to}
             onChange={(e) => {
@@ -65,6 +67,7 @@ export function DateRangePicker() {
             id="v2-date-to"
             type="date"
             className="drd-date"
+            disabled={!ready}
             value={to}
             min={from}
             max={today}

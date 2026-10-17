@@ -578,11 +578,15 @@ html.theme-light .v2-root .drd-date { color: var(--fg); color-scheme: light; }
 html.theme-light .v2-root .drd-arrow { background: rgba(0,0,0,0.03); }
 html.theme-light .v2-root .drd-segment + .drd-segment { border-color: rgba(0,0,0,0.08); }
 @media (max-width: 768px) {
-  .v2-root .drd-label-inline { display: none; }
+  /* Visually hidden but still the inputs' accessible name */
+  .v2-root .drd-label-inline {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
   .v2-root .drd-date { min-width: 80px; }
 }
 /* Placeholder while DateRangeProvider resolves the initial window (keeps layout height) */
-.v2-root .drp-pending { min-height: 100vh; }
+.v2-root .drp-pending { min-height: 60vh; }
 /* Quick preset buttons + data-freshness hint beside the From/To pill */
 .v2-root .drd-bar {
   display: inline-flex; align-items: center; flex-wrap: wrap;
@@ -607,6 +611,9 @@ html.theme-light .v2-root .drd-segment + .drd-segment { border-color: rgba(0,0,0
 .v2-root .drd-preset:hover { color: var(--fg); background: rgba(255,255,255,0.06); }
 .v2-root .drd-preset:focus-visible { outline: 2px solid rgba(245,230,37,0.7); outline-offset: 1px; }
 .v2-root .drd-preset.is-active { background: rgba(245,230,37,0.14); color: #F5E625; }
+.v2-root .drd-bar.is-pending { opacity: 0.6; }
+.v2-root .drd-preset:disabled, .v2-root .drd-date:disabled { cursor: default; }
+.v2-root .drd-preset:disabled:hover { background: transparent; color: var(--fg-3); }
 .v2-root .drd-date:focus-visible { outline: 2px solid rgba(245,230,37,0.7); outline-offset: 2px; border-radius: 3px; }
 .v2-root .drd-hint {
   font-size: 10px; font-weight: 600; color: var(--fg-4);

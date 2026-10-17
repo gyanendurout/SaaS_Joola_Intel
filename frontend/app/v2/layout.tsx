@@ -4,7 +4,7 @@ import { V2Sidebar } from '@/components/v2/Sidebar'
 import { FooterLinks } from '@/components/v2/FooterLinks'
 import { BrandFilterProvider } from '@/lib/v2/BrandFilterContext'
 import { BrandFilterDropdown } from '@/components/v2/BrandFilterDropdown'
-import { DateRangeProvider } from '@/lib/v2/DateRangeContext'
+import { DateRangeProvider, DateRangeReady } from '@/lib/v2/DateRangeContext'
 import { DateRangePicker } from '@/components/v2/DateRangePicker'
 import { AgentationFeedback } from '@/components/v2/AgentationFeedback'
 import { CommandPalette } from '@/components/v2/CommandPalette'
@@ -37,7 +37,7 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
           <V2Sidebar />
           <main className="main">
             <div className="main-inner">
-              {children}
+              <DateRangeReady>{children}</DateRangeReady>
               <footer className="foot">
                 <div>
                   <strong style={{ color: 'var(--fg-2)' }}>JOOLA INTEL</strong> · live data ·

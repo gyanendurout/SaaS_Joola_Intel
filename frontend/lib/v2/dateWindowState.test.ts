@@ -6,6 +6,7 @@ import {
   STORAGE_KEY,
   choiceForWindow,
   compatFields,
+  effectiveDates,
   filterRowsByWindow,
   loadStoredChoice,
   parseStoredChoice,
@@ -220,5 +221,16 @@ describe('filterRowsByWindow', () => {
     const a = new Date(now - 10 * DAY)
     const b = new Date(now - 3 * DAY)
     expect(filterRowsByWindow(rows, b, a, now).map((r) => r.days)).toEqual([3, 4, 5, 10])
+  })
+})
+
+describe('effectiveDates', () => {
+  it('matches compatFields and depends only on the window', () => {
+    const d = effectiveDates('2026-10-01', '2026-10-12')
+    expect(d.effectiveFrom.toISOString()).toBe('2026-09-30T18:30:00.000Z')
+    expect(d.effectiveTo.toISOString()).toBe('2026-10-12T18:29:59.999Z')
+    const c = compatFields('2026-10-01', '2026-10-12', '2026-10-17')
+    expect(c.effectiveFrom.getTime()).toBe(d.effectiveFrom.getTime())
+    expect(c.effectiveTo.getTime()).toBe(d.effectiveTo.getTime())
   })
 })

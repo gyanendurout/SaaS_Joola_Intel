@@ -139,10 +139,17 @@ export type CompatFields = {
 }
 
 /**
+ * Window-only instants: IST midnight of From, and the last millisecond of
+ * the To day in IST (so `.lte()` callers include the whole To day).
+ */
+export function effectiveDates(from: IsoDay, to: IsoDay): { effectiveFrom: Date; effectiveTo: Date } {
+  const { gte, lt } = toQueryBounds(from, to)
+  return { effectiveFrom: new Date(gte), effectiveTo: new Date(Date.parse(lt) - 1) }
+}
+
+/**
  * Deprecated fields derived from the window.
- * - effectiveFrom: instant of IST midnight of From.
- * - effectiveTo: last millisecond of the To day in IST, so `.lte()` callers
- *   include the whole To day.
+ * - effectiveFrom / effectiveTo: see `effectiveDates`.
  * - maxDays: inclusive days from From to `today` (null for all time), so
  *   day-age filters (`days <= maxDays`) reach back to From.
  * - range / mode: matched against `anchor` (defaults to `today`).
@@ -154,11 +161,9 @@ export function compatFields(
   anchor: IsoDay = today,
 ): CompatFields {
   const win = normalizeWindow(from, to)
-  const { gte, lt } = toQueryBounds(win.from, win.to)
   const range = legacyKeyFor(win.from, win.to, anchor)
   return {
-    effectiveFrom: new Date(gte),
-    effectiveTo: new Date(Date.parse(lt) - 1),
+    ...effectiveDates(win.from, win.to),
     maxDays: win.from === ALL_TIME_START ? null : Math.max(1, dayDiff(win.from, today) + 1),
     range,
     mode: range === 'custom' ? 'custom' : 'preset',
