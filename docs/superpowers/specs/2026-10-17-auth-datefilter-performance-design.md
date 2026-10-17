@@ -1,6 +1,6 @@
 # JOOLA Intel — Login, working date filter, speed, data catch-up
 
-**Status:** design approved 2026-10-17 · implementation not started
+**Status:** design approved 2026-10-17 · Phases 0–2 + speed foundation **live** (pushed `cedf16f`, 17 Oct 2026) · Tasks 6, 21–37 open — see §6
 **Owner:** Gyanendu Rout
 **Implementation plan:** [`../plans/2026-10-17-auth-datefilter-performance.md`](../plans/2026-10-17-auth-datefilter-performance.md)
 
@@ -175,3 +175,33 @@ sign out plus the 7-day cap.
 | Supabase Free egress or compute limits | Smaller responses from the RPCs plus caching cut egress sharply. |
 | RPC numbers differ from today's figures | Each page's numbers are compared before switching; the differences are explained in the change. |
 | Regression suite blocked by the login | Test session set up as part of the login work. |
+
+## 6. Progress (updated 17 Oct 2026)
+
+| Plan task(s) | What | Status |
+|---|---|---|
+| 1–5 | Pipeline fixes: schedule removed, browser install, run_sync crash, partial-success handling | ✅ live |
+| 6 | One-off data catch-up to Oct 12 (sales-intelligence, reviews-crawl4ai, product-specs, analytics) | ⏸ waits for the owner's **"go"** |
+| 7–13 | Login: OTP form, middleware gate, 7-day session, sign-out, domain hook, Next.js 14.2.35 | ✅ live |
+| 14 | QA behind the gate: `qa/qa-session.mjs` (qa-bot@joola.in, no email sent), `e2e/auth.spec.ts` | ✅ live |
+| 15 | Ship the login; owner signed in on production | ✅ verified 17 Oct 2026 |
+| 16–19 | Date filter: one From–To, presets, "Data through", real labels | ✅ live |
+| 20 | Speed foundation: parallel paging, SWR + `useRpc`, cache keyed on data date | ✅ live |
+| 21–30 | Per-page RPCs (start with Sales Intel; Community Intel has another session's uncommitted edits) | ⏳ next |
+| 31–37 | Remove the compat layer, small speed fixes, docs, final verification | ⏳ open |
+
+**Supabase/Brevo setup** (done by the owner): every setting, the troubleshooting log and the
+screenshots are in [`../../AUTH_EMAIL_SETUP.md`](../../AUTH_EMAIL_SETUP.md).
+
+**Changes made during rollout (not in the original plan):**
+- `/v2` → `/v2/overview` is now a server redirect (`next.config.js`). The page-level redirect
+  ran after the date gate, and a click in that window crashed the client router.
+- The login page says the code email can take 2–3 minutes, and Resend unlocks after 180 s.
+  The emails are slow because joola.com isn't domain-authenticated in Brevo yet. That needs IT.
+- The route smoke check now hits `/v2/overview` (not `/v2`) and doesn't follow redirects.
+- The plan's Task 14 said to fill in the email on the real form. That would send a real email
+  and replace the code, so the QA session verifies the generated code server-side instead.
+- The wrong-code UI test was not added: it would send a real email on every push.
+
+**Open owner items:** IT domain authentication for joola.com in Brevo · "go" for Task 6 ·
+Vercel Hobby licence decision (§5).
