@@ -179,6 +179,10 @@
   font-size: 11px; color: var(--fg-4);
   display: flex; align-items: center; gap: 8px;
 }
+.v2-root .sidebar-signout { margin-left: auto; padding: 6px 9px; font-size: 11px; gap: 6px; color: var(--fg-3); }
+.v2-root .sidebar-signout:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.v2-root .sidebar.sidebar-collapsed .sidebar-foot { flex-direction: column; padding: 14px 0; gap: 12px; }
+.v2-root .sidebar.sidebar-collapsed .sidebar-signout { margin-left: 0; padding: 6px; }
 .v2-root .live-dot {
   width: 7px; height: 7px; border-radius: 50%; background: var(--up);
   box-shadow: 0 0 0 4px rgba(34,197,94,0.18);

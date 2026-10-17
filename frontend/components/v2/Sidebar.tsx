@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
+import { signOut } from '@/app/login/actions'
 
 const I = {
   home: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
@@ -36,6 +37,20 @@ const ChevronRight = () => (
     <polyline points="9 18 15 12 9 6" />
   </svg>
 )
+const LogOutIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
+  </svg>
+)
+
+async function handleSignOut() {
+  try {
+    await signOut()
+  } catch (err) {
+    console.error('[sidebar] sign-out failed', err)
+  }
+  window.location.assign('/login')
+}
 
 type NavItem = { href: string; label: string; ic: ReactNode; badge?: string }
 type NavGroup = { heading: string; items: NavItem[] }
@@ -261,9 +276,19 @@ export function V2Sidebar() {
           {!collapsed && (
             <div>
               <div style={{ color: '#cbd1dc', fontWeight: 600, fontSize: 12 }}>Live data</div>
-              <div>Mon · 07:00 IST · synced</div>
+              <div>Refreshed on demand</div>
             </div>
           )}
+          <button
+            type="button"
+            className="btn btn-ghost sidebar-signout"
+            onClick={handleSignOut}
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <LogOutIcon />
+            {!collapsed && <span>Sign out</span>}
+          </button>
         </div>
       </aside>
     </>
