@@ -156,7 +156,8 @@ async function fetchAds(): Promise<{ rows: RawAd[]; rich: boolean }> {
     () => supabase
         .from('marketing_ads')
         .select('brand_id,platform,ad_id,body,cta,creative_url,landing_url,started_at,is_active,ad_title,publisher_platforms,last_shown,approx_days_shown,ad_format,archive_url,is_template_ad,advertiser_id:raw->>advertiserId,page_id:raw->>pageId')
-        .order('started_at', { ascending: false }),
+        .order('started_at', { ascending: false })
+        .order('id', { ascending: true }),
     { label: 'marketing_ads (026)' },
   )
   if (rich.ok) return { rows: rich.data, rich: true }
@@ -164,7 +165,8 @@ async function fetchAds(): Promise<{ rows: RawAd[]; rich: boolean }> {
     () => supabase
         .from('marketing_ads')
         .select('brand_id,platform,ad_id,body,cta,creative_url,landing_url,started_at,is_active,advertiser_id:raw->>advertiserId,page_id:raw->>pageId')
-        .order('started_at', { ascending: false }),
+        .order('started_at', { ascending: false })
+        .order('id', { ascending: true }),
     { label: 'marketing_ads (pre-026)' },
   )
   return { rows: base, rich: false }
@@ -208,7 +210,8 @@ export async function fetchCampaignIntel(brandList: V2Brand[]): Promise<Campaign
       supabase
         .from('promotions')
         .select('brand_id,banner_text,promo_type,discount_pct,source_url,detected_at')
-        .order('detected_at', { ascending: false }),
+        .order('detected_at', { ascending: false })
+        .order('id', { ascending: true }),
     ),
   ])
   const adRows = adResult.rows
