@@ -58,6 +58,11 @@ jobs:
       - name: Install analytics_backend dependencies
         run: pip install -r analytics_backend/requirements.txt
 
+      - name: Install browsers (crawl4ai + local catalog)
+        run: |
+          python -m playwright install --with-deps chromium
+          python -m patchright install --with-deps chromium
+
       - name: Resolve stage
         id: stage
         run: |
@@ -74,14 +79,22 @@ jobs:
 
       # ── Scraping ─────────────────────────────────────────────────────────
       - name: Backend scraping pipeline
+        id: scrape
         if: contains(fromJSON('["all", "scraping-only"]'), steps.stage.outputs.stage)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        # Exit 2 = partial success (some steps failed, others wrote rows).
+        # Let analytics still run; the "Fail if scraping was partial" step
+        # marks the job failed afterwards.
         run: |
+          set +e
           python -m backend.scraping.run --module all --restart ${{ steps.stage.outputs.dry_flag }}
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ $code -ne 0 ] && [ $code -ne 2 ]; then exit $code; fi
 
       # ── Enrichment-only path (replays AI enrichment without re-scraping) ─
       - name: Enrichment only
@@ -104,12 +117,18 @@ jobs:
 
       # ── Analytics ────────────────────────────────────────────────────────
       - name: Analytics backend (marts + statistics)
-        if: contains(fromJSON('["all", "analytics-only"]'), steps.stage.outputs.stage)
+        if: contains(fromJSON('["all", "analytics-only"]'), steps.stage.outputs.stage) && !cancelled()
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           python -m analytics_backend.run --module all ${{ steps.stage.outputs.dry_flag }}
+
+      - name: Fail if scraping was partial
+        if: steps.scrape.outputs.code == '2'
+        run: |
+          echo "::error::Scraping finished with failed steps (exit 2). See logs."
+          exit 1
 
       # ── Logs as artifact regardless of outcome ───────────────────────────
       - name: Upload pipeline logs

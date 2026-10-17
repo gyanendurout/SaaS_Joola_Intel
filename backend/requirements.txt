@@ -2,3 +2,9 @@ requests>=2.31.0
 python-dotenv>=1.0.0
 pyyaml>=6.0
 apscheduler>=3.10.4
+
+# Needed by the crawl4ai scrapers (core/crawl4ai_client.py) and the local Playwright catalog scraper
+crawl4ai==0.9.1
+playwright==1.60.0
+patchright==1.60.1
+playwright-stealth==2.0.3
