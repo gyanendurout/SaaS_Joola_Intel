@@ -30,6 +30,12 @@
  *
  * Note the argument is a FACTORY, not a builder. Each page needs a fresh
  * builder because `.range()` mutates the one it is called on.
+ *
+ * Pages after the first are fetched in parallel batches (see CONCURRENCY), so
+ * a 40k-row read is ~8 round trips instead of 40. There is deliberately no
+ * count query: an `estimated` count can be wrong under filters and would
+ * silently truncate. The factory's query should carry an `.order()` on a
+ * stable key, or rows can shift between pages.
  */
 import type { PostgrestError } from '@supabase/supabase-js'
 
@@ -66,10 +72,47 @@ export interface PagedOptions {
   label?: string
 }
 
+/** Pages requested at once after page 0 comes back full. */
+const CONCURRENCY = 6
+
+type PageOutcome<T> =
+  | { kind: 'rows'; rows: T[]; full: boolean }
+  | { kind: 'failed' }
+
+/** Fetch one page. Never throws; failures are logged and reported as 'failed'. */
+async function fetchPage<T>(
+  build: () => Pageable<T>,
+  from: number,
+  to: number,
+  label: string,
+): Promise<PageOutcome<T>> {
+  try {
+    const { data, error } = await build().range(from, to)
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.warn(`[paged] ${label} failed at rows ${from}-${to}:`, error)
+      return { kind: 'failed' }
+    }
+    const rows = data ?? []
+    return { kind: 'rows', rows, full: rows.length === to - from + 1 }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(`[paged] ${label} threw at rows ${from}-${to}:`, err)
+    return { kind: 'failed' }
+  }
+}
+
 /**
  * Page through a Supabase query until exhausted, erroring, or hitting maxRows.
  *
- * Never throws — a failed page ends the loop and is reported via `ok`, matching
+ * Page 0 is fetched alone, so a small result costs one round trip. If it comes
+ * back full, the following pages are requested speculatively in batches of
+ * CONCURRENCY and then consumed strictly in index order: the first page that
+ * fails or comes back short ends the read, and any later pages in that batch
+ * are discarded (after a failure they would leave a gap; after a short page
+ * they are empty). Rows are therefore identical to a serial read.
+ *
+ * Never throws — a failed page ends the read and is reported via `ok`, matching
  * the existing `safeQuery`/`safeSelect` convention in this codebase, where a
  * broken panel degrades rather than taking down the whole page.
  */
@@ -81,37 +124,31 @@ export async function fetchPagedResult<T>(
   const label = options.label ?? 'query'
   const out: T[] = []
   let ok = true
+  let next = 0
+  let batchSize = 1 // page 0 alone, then CONCURRENCY at a time
 
-  for (let from = 0; from < maxRows; from += PGREST_MAX_ROWS) {
-    const to = Math.min(from + PGREST_MAX_ROWS, maxRows) - 1
-
-    let data: T[] | null = null
-    let error: PostgrestError | null = null
-    try {
-      ;({ data, error } = await build().range(from, to))
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.warn(`[paged] ${label} threw at rows ${from}-${to}:`, err)
-      ok = false
-      break
+  outer: while (next < maxRows) {
+    const ranges: Array<[number, number]> = []
+    for (let k = 0; k < batchSize && next < maxRows; k++) {
+      ranges.push([next, Math.min(next + PGREST_MAX_ROWS, maxRows) - 1])
+      next += PGREST_MAX_ROWS
     }
+    const outcomes = await Promise.all(
+      ranges.map(([from, to]) => fetchPage(build, from, to, label)),
+    )
 
-    if (error) {
-      // eslint-disable-next-line no-console
-      console.warn(`[paged] ${label} failed at rows ${from}-${to}:`, error)
-      ok = false
-      break
+    for (const outcome of outcomes) {
+      if (outcome.kind === 'failed') {
+        ok = false
+        break outer
+      }
+      // Push one at a time: `out.push(...rows)` spreads 1,000 args onto the
+      // call stack, which degrades badly if the page size is ever raised.
+      for (const row of outcome.rows) out.push(row)
+      // A short page means the source is exhausted.
+      if (!outcome.full) break outer
     }
-    if (!data || data.length === 0) break
-
-    // Push in chunks: `out.push(...data)` spreads 1,000 args onto the call
-    // stack, which is fine at this size but degrades badly if the page size
-    // is ever raised.
-    for (const row of data) out.push(row)
-
-    // A short page means the source is exhausted; stop rather than spend a
-    // round trip proving it.
-    if (data.length < to - from + 1) break
+    batchSize = CONCURRENCY
   }
 
   const truncated = out.length >= maxRows
