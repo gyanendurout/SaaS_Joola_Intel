@@ -8,10 +8,16 @@
 --   public.hook_joola_domain_only
 -- Keep the domain list in sync with frontend/lib/auth/rules.ts (ALLOWED_DOMAINS).
 -- backend/tests/test_auth_hook_regex.py fails if the two regexes drift.
+--
+-- Also rejected, by design: users with no email (phone, anonymous, OAuth
+-- without an email) and dashboard invites to non-JOOLA addresses. Intended,
+-- since email OTP is the only sign-in method.
+--
+-- Runs as invoker (supabase_auth_admin): it touches no tables, so it needs no
+-- elevated privileges.
 create or replace function public.hook_joola_domain_only(event jsonb)
 returns jsonb
 language plpgsql
-security definer
 set search_path = ''
 as $$
 declare
@@ -26,6 +32,7 @@ begin
 end;
 $$;
 
+grant usage on schema public to supabase_auth_admin;
 grant execute on function public.hook_joola_domain_only(jsonb) to supabase_auth_admin;
 revoke execute on function public.hook_joola_domain_only(jsonb) from authenticated, anon, public;
 
