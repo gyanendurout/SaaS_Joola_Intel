@@ -396,7 +396,8 @@ describe('isSessionExpired', () => {
 export const ALLOWED_DOMAINS = ['joola.com', 'joola.in'] as const
 /** Session lifetime (D5). Enforced in middleware: Supabase Free can't time-box sessions. */
 export const SESSION_MAX_MS = 7 * 24 * 60 * 60 * 1000
-export const SIGNED_IN_AT_COOKIE = 'ji_signed_in_at'
+// (Superseded in review: no cookie. Session age comes from user.last_sign_in_at;
+//  see commit after 60b11c5. Also added parseAllowedEmail + strict regex.)
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
@@ -481,12 +482,12 @@ Typecheck: `npx tsc --noEmit` → clean. **Commit:** `feat(auth): supabase ssr c
 ```ts
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSessionInMiddleware } from '@/lib/auth/supabase-middleware'
-import { isAllowedEmail, isSessionExpired, SIGNED_IN_AT_COOKIE } from '@/lib/auth/rules'
+import { isAllowedEmail, isSessionExpired } from '@/lib/auth/rules'
 
 export async function middleware(req: NextRequest) {
   const { res, user, supabase } = await getSessionInMiddleware(req)
-  const expired = isSessionExpired(req.cookies.get(SIGNED_IN_AT_COOKIE)?.value)
-  const ok = !!user && !!user.email && isAllowedEmail(user.email) && !expired
+  // Session age comes from the server-verified user record, never a cookie (review of Task 8).
+  const ok = !!user && !!user.email && isAllowedEmail(user.email) && !isSessionExpired(user.last_sign_in_at)
   if (ok) return res
 
   if (user) await supabase.auth.signOut()            // expired or foreign: end it
@@ -496,9 +497,7 @@ export async function middleware(req: NextRequest) {
   const url = req.nextUrl.clone()
   url.pathname = '/login'
   url.search = `?next=${encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search)}`
-  const redirect = NextResponse.redirect(url)
-  redirect.cookies.delete(SIGNED_IN_AT_COOKIE)
-  return redirect
+  return NextResponse.redirect(url)
 }
 
 export const config = { matcher: ['/v2/:path*', '/api/:path*', '/'] }
@@ -519,15 +518,14 @@ Manual check: `npx next dev`, open `/v2/overview` → redirected to
 
 ```ts
 'use server'
-import { cookies } from 'next/headers'
 import { createAuthServerClient } from '@/lib/auth/supabase-server'
-import { isAllowedEmail, normalizeEmail, SIGNED_IN_AT_COOKIE, SESSION_MAX_MS } from '@/lib/auth/rules'
+import { parseAllowedEmail } from '@/lib/auth/rules'
 
 export type ActionResult = { ok: true } | { ok: false; error: string }
 
 export async function requestCode(rawEmail: string): Promise<ActionResult> {
-  const email = normalizeEmail(rawEmail)
-  if (!isAllowedEmail(email)) return { ok: false, error: 'Use your @joola.com or @joola.in email.' }
+  const email = parseAllowedEmail(rawEmail)
+  if (!email) return { ok: false, error: 'Use your @joola.com or @joola.in email.' }
   const { error } = await createAuthServerClient().auth.signInWithOtp({
     email, options: { shouldCreateUser: true },
   })
@@ -538,20 +536,15 @@ export async function requestCode(rawEmail: string): Promise<ActionResult> {
 }
 
 export async function verifyCode(rawEmail: string, token: string): Promise<ActionResult> {
-  const email = normalizeEmail(rawEmail)
-  if (!isAllowedEmail(email) || !/^\d{6}$/.test(token)) return { ok: false, error: 'Enter the 6-digit code.' }
+  const email = parseAllowedEmail(rawEmail)
+  if (!email || !/^\d{6}$/.test(token)) return { ok: false, error: 'Enter the 6-digit code.' }
   const { error } = await createAuthServerClient().auth.verifyOtp({ email, token, type: 'email' })
   if (error) return { ok: false, error: 'That code is wrong or expired.' }
-  cookies().set(SIGNED_IN_AT_COOKIE, String(Date.now()), {
-    httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production',
-    path: '/', maxAge: SESSION_MAX_MS / 1000,
-  })
-  return { ok: true }
+  return { ok: true }   // verifyOtp updates user.last_sign_in_at, which middleware checks
 }
 
 export async function signOut(): Promise<void> {
   await createAuthServerClient().auth.signOut()
-  cookies().delete(SIGNED_IN_AT_COOKIE)
 }
 ```
 
@@ -656,8 +649,7 @@ for QA; they never go to Vercel. Push through the hook, then verify on
 production:
 - unauthenticated `/v2/overview` → `/login`
 - the owner signs in with a real code
-- after setting the `ji_signed_in_at` cookie to 8 days old in DevTools, a
-  reload signs them out.
+- `isSessionExpired` unit tests cover the 7-day cut-off (it can't be forged from the browser).
 
 ---
 

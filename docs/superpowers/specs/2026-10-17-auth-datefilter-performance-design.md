@@ -67,13 +67,14 @@ ends 7 days after sign-in.
 - `frontend/middleware.ts`: runs on `/v2/:path*` and `/api/:path*`. It
   refreshes the Supabase session cookie through `@supabase/ssr` and
   redirects (pages) or returns 401 (API) when there's no session. It also
-  checks a `ji_signed_in_at` cookie and signs the user out past 7 days.
+  checks the server-verified `user.last_sign_in_at` and signs the user out past
+  7 days (a client cookie was rejected in review: it could be edited to extend
+  the session).
 - `frontend/app/login/page.tsx`: a two-step form (email → code) in the v2
   visual style.
 - `frontend/app/login/actions.ts`: server actions. `requestCode(email)`
   validates the domain, then calls `signInWithOtp({ shouldCreateUser: true })`.
-  `verifyCode(email, token)` calls `verifyOtp({ type: 'email' })` and sets
-  `ji_signed_in_at`. `signOut()`.
+  `verifyCode(email, token)` calls `verifyOtp({ type: 'email' })`. `signOut()`.
 - `frontend/lib/shared/supabase-server.ts` and `supabase-browser.ts`:
   cookie-aware clients.
 - `migrations/029_auth_domain_hook.sql`: a `before_user_created` hook
