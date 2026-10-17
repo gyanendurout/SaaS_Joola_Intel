@@ -6,6 +6,8 @@ type Row = { i: number }
 interface SourceOpts {
   errorAt?: number
   throwAt?: number
+  /** Per-page resolve delay in ms (default 0). */
+  delayFor?: (page: number) => number
 }
 
 /**
@@ -31,7 +33,7 @@ function makeSource(total: number, opts: SourceOpts = {}) {
           const rows: Row[] = []
           for (let i = from; i <= Math.min(to, total - 1); i++) rows.push({ i })
           resolve({ data: rows, error: null })
-        }, 0)
+        }, opts.delayFor ? opts.delayFor(page) : 0)
       })
     },
   })
@@ -81,6 +83,9 @@ describe('fetchPagedResult', () => {
     expectSequential(res.data, 1000)
     expect(res.ok).toBe(true)
     expect(res.truncated).toBe(false)
+    // Page 0 is full, so one speculative batch of 6 follows; all come back
+    // empty. Probing is unavoidable: a full page cannot prove exhaustion.
+    expect(src.calls).toHaveLength(1 + 6)
   })
 
   it('fetches many pages in order, in parallel, capped at 6 in flight', async () => {
@@ -89,8 +94,15 @@ describe('fetchPagedResult', () => {
     expectSequential(res.data, 7500)
     expect(res.ok).toBe(true)
     expect(res.truncated).toBe(false)
-    expect(src.maxInFlight).toBeGreaterThan(1)
-    expect(src.maxInFlight).toBeLessThanOrEqual(6)
+    expect(src.maxInFlight).toBe(6)
+  })
+
+  it('keeps rows in index order when later pages resolve first', async () => {
+    // Earlier pages are slower: page 1 resolves last within its batch.
+    const src = makeSource(6500, { delayFor: (p) => (10 - p) * 3 })
+    const res = await fetchPagedResult<Row>(src.build)
+    expectSequential(res.data, 6500)
+    expect(res.ok).toBe(true)
   })
 
   it('stops at maxRows, flags truncation, never requests past the ceiling', async () => {
@@ -100,6 +112,24 @@ describe('fetchPagedResult', () => {
     expect(res.truncated).toBe(true)
     expect(res.ok).toBe(true)
     for (const c of src.calls) expect(c.to).toBeLessThan(2500)
+    expect(src.calls).toHaveLength(3)
+  })
+
+  it('reports truncated when the source holds exactly maxRows rows (unknowable)', async () => {
+    const src = makeSource(2000)
+    const res = await fetchPagedResult<Row>(src.build, { maxRows: 2000 })
+    expectSequential(res.data, 2000)
+    expect(res.truncated).toBe(true)
+  })
+
+  it('treats maxRows <= 0 as an empty read: no calls, no warning, not truncated', async () => {
+    for (const maxRows of [0, -5]) {
+      const src = makeSource(5000)
+      const res = await fetchPagedResult<Row>(src.build, { maxRows })
+      expect(res).toEqual({ data: [], ok: true, truncated: false })
+      expect(src.calls).toHaveLength(0)
+    }
+    expect(console.warn).not.toHaveBeenCalled()
   })
 
   it('stops at an errored page and drops later pages even if they resolved', async () => {
@@ -108,6 +138,8 @@ describe('fetchPagedResult', () => {
     expectSequential(res.data, 3000)
     expect(res.ok).toBe(false)
     expect(res.data.some((r) => r.i >= 3000)).toBe(false)
+    // Pages 4-6 were requested in the same batch, then discarded.
+    expect(src.calls.length).toBeGreaterThan(4)
   })
 
   it('treats a thrown page like an error and never throws', async () => {

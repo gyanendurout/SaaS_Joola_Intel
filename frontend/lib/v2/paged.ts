@@ -61,7 +61,13 @@ export interface PagedResult<T> {
   data: T[]
   /** False if any page errored. Partial data may still be present. */
   ok: boolean
-  /** True if `maxRows` stopped us before the source was exhausted. */
+  /**
+   * True if the read stopped because it reached `maxRows`, so more rows MAY
+   * exist. A source holding exactly `maxRows` rows also reports true: telling
+   * "exactly at the ceiling" from "over it" would cost one more request, and
+   * a false "complete" is worse than a cautious "may be incomplete".
+   * A `maxRows` of 0 or less asks for nothing, so it is never truncated.
+   */
   truncated: boolean
 }
 
@@ -122,6 +128,7 @@ export async function fetchPagedResult<T>(
 ): Promise<PagedResult<T>> {
   const maxRows = options.maxRows ?? DEFAULT_MAX_ROWS
   const label = options.label ?? 'query'
+  if (!(maxRows > 0)) return { data: [], ok: true, truncated: false }
   const out: T[] = []
   let ok = true
   let next = 0
