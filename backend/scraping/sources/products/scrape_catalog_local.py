@@ -678,12 +678,16 @@ def run(ctx: dict[str, Any]) -> int:
                  len(targets), [c["slug"] for c in targets])
         return 0
 
-    # Lazy import — only fail if this step actually runs and playwright isn't installed
+    # Lazy import — only checked when this step actually runs. A missing
+    # Playwright must FAIL the step (raise), not silently succeed with 0 rows:
+    # run.py only marks a step failed when it raises.
     try:
         from playwright.sync_api import sync_playwright
-    except ImportError:
-        log.error("playwright not installed — run: pip install playwright && python -m playwright install chromium")
-        return 0
+    except ImportError as e:
+        raise RuntimeError(
+            "playwright not installed — run: pip install playwright && "
+            "python -m playwright install --with-deps chromium"
+        ) from e
 
     brand_map: dict[str, str] = {r["slug"]: r["id"] for r in sb.get("brands", "id,slug")}
     now_iso = datetime.now(timezone.utc).isoformat()
