@@ -5,6 +5,7 @@ import { FooterLinks } from '@/components/v2/FooterLinks'
 import { BrandFilterProvider } from '@/lib/v2/BrandFilterContext'
 import { BrandFilterDropdown } from '@/components/v2/BrandFilterDropdown'
 import { DateRangeProvider, DateRangeReady } from '@/lib/v2/DateRangeContext'
+import { SwrProvider } from '@/lib/v2/SwrProvider'
 import { DateRangePicker } from '@/components/v2/DateRangePicker'
 import { AgentationFeedback } from '@/components/v2/AgentationFeedback'
 import { CommandPalette } from '@/components/v2/CommandPalette'
@@ -23,6 +24,7 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
     <div className="v2-root">
       <div className="app-bg" />
       <div className="dot-grid" />
+      <SwrProvider>
       <BrandFilterProvider>
        <DateRangeProvider>
         <div className="topbar">
@@ -51,6 +53,7 @@ export default function V2Layout({ children }: { children: React.ReactNode }) {
         </div>
        </DateRangeProvider>
       </BrandFilterProvider>
+      </SwrProvider>
       <AgentationFeedback />
     </div>
   )
