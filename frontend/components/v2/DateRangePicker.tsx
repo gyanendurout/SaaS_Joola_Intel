@@ -1,75 +1,88 @@
 'use client'
 
 import { useDateRange } from '@/lib/v2/DateRangeContext'
+import { isValidIsoDay, matchPreset, type IsoDay, type Preset } from '@/lib/v2/dateWindow'
 
-function toInputValue(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
+const PRESET_BUTTONS: ReadonlyArray<{ p: Preset; label: string; title: string }> = [
+  { p: '7d', label: '7D', title: 'Last 7 days of data' },
+  { p: '30d', label: '30D', title: 'Last 30 days of data' },
+  { p: '90d', label: '90D', title: 'Last 90 days of data' },
+  { p: 'all', label: 'ALL', title: 'All available data' },
+]
 
-function fromInputValue(s: string): Date | null {
-  if (!s) return null
-  const [y, m, d] = s.split('-').map(Number)
-  if (!y || !m || !d) return null
-  const out = new Date(y, m - 1, d)
-  out.setHours(0, 0, 0, 0)
-  return Number.isNaN(out.getTime()) ? null : out
+const MONTH_DAY = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+
+function formatMonthDay(day: IsoDay): string {
+  return MONTH_DAY.format(Date.parse(`${day}T00:00:00Z`))
 }
 
 export function DateRangePicker() {
-  const { customFrom, customTo, setCustomFrom, setCustomTo, mode } = useDateRange()
-  const isFiltered = mode === 'custom'
-
-  const todayStr = toInputValue(new Date())
-
-  // Clamp a stale "To" date that somehow ended up in the future
-  const clampedTo = customTo > new Date() ? new Date() : customTo
+  const { from, to, setWindow, applyPreset, anchor, today, latestDataDate } = useDateRange()
+  const active = matchPreset(from, to, anchor)
 
   return (
-    <div
-      className={'drd-wrap' + (isFiltered ? ' is-filtered' : '')}
-      role="group"
-      aria-label="Date range"
-    >
-      {/* From segment */}
-      <div className="drd-segment">
-        <label className="drd-label-inline" htmlFor="v2-date-from">From</label>
-        <input
-          id="v2-date-from"
-          type="date"
-          className="drd-date"
-          value={toInputValue(customFrom)}
-          max={toInputValue(clampedTo)}
-          onChange={(e) => {
-            const d = fromInputValue(e.target.value)
-            if (d) setCustomFrom(d)
-          }}
-          aria-label="From date"
-        />
+    <div className="drd-bar">
+      <div className="drd-presets" role="group" aria-label="Quick date ranges">
+        {PRESET_BUTTONS.map(({ p, label, title }) => (
+          <button
+            key={p}
+            type="button"
+            className={'drd-preset' + (active === p ? ' is-active' : '')}
+            aria-pressed={active === p}
+            title={title}
+            onClick={() => applyPreset(p)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Divider */}
-      <span className="drd-arrow" aria-hidden="true">→</span>
+      <div
+        className={'drd-wrap' + (active === null ? ' is-filtered' : '')}
+        role="group"
+        aria-label="Date range"
+      >
+        <div className="drd-segment">
+          <label className="drd-label-inline" htmlFor="v2-date-from">From</label>
+          <input
+            id="v2-date-from"
+            type="date"
+            className="drd-date"
+            value={from}
+            max={to}
+            onChange={(e) => {
+              const v = e.target.value
+              if (isValidIsoDay(v)) setWindow(v, to)
+            }}
+            aria-label="From date"
+          />
+        </div>
 
-      {/* To segment */}
-      <div className="drd-segment">
-        <label className="drd-label-inline" htmlFor="v2-date-to">To</label>
-        <input
-          id="v2-date-to"
-          type="date"
-          className="drd-date"
-          value={toInputValue(clampedTo)}
-          min={toInputValue(customFrom)}
-          max={todayStr}
-          onChange={(e) => {
-            const d = fromInputValue(e.target.value)
-            if (d) setCustomTo(d)
-          }}
-          aria-label="To date"
-        />
+        <span className="drd-arrow" aria-hidden="true">→</span>
+
+        <div className="drd-segment">
+          <label className="drd-label-inline" htmlFor="v2-date-to">To</label>
+          <input
+            id="v2-date-to"
+            type="date"
+            className="drd-date"
+            value={to}
+            min={from}
+            max={today}
+            onChange={(e) => {
+              const v = e.target.value
+              if (isValidIsoDay(v) && v <= today) setWindow(from, v)
+            }}
+            aria-label="To date"
+          />
+        </div>
       </div>
+
+      {latestDataDate && (
+        <span className="drd-hint" title="Latest data refresh">
+          Data through {formatMonthDay(latestDataDate)}
+        </span>
+      )}
     </div>
   )
 }

@@ -1,41 +1,87 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react'
+/**
+ * Dashboard-wide date window: one From–To pair of IST days that every page
+ * follows. The default is the 90 days ending on the latest data date
+ * (`rpc_latest_data_date`), falling back to today (IST) when unknown.
+ *
+ * Persistence: STORAGE_KEY is written only after the user changes the
+ * window, so the default keeps following new data until then.
+ *
+ * The deprecated fields (range, maxDays, mode, customFrom, ...) are derived
+ * from the window so older pages keep working; new code should read
+ * `from` / `to` / `bounds` / `label`.
+ */
 
-export type DateRangeKey = '7d' | '30d' | '90d' | '6mo' | '1y' | 'all'
-export type DateRangeMode = 'preset' | 'custom'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { supabase } from '@/lib/shared/supabase'
+import {
+  formatWindow,
+  isValidIsoDay,
+  isoDay,
+  normalizeWindow,
+  presetWindow,
+  toQueryBounds,
+  type IsoDay,
+  type Preset,
+} from './dateWindow'
+import {
+  LEGACY_KEYS,
+  STORAGE_KEY,
+  compatFields,
+  filterRowsByWindow,
+  parseStoredWindow,
+  presetFromLegacyKey,
+  type DateRangeKey,
+  type DateRangeMode,
+  type DayWindow,
+} from './dateWindowState'
+
+export type { DateRangeKey, DateRangeMode } from './dateWindowState'
 
 type DateRangeCtx = {
-  // ─── Existing API (must remain backward-compatible) ──────────────
-  range: DateRangeKey
-  setRange: (r: DateRangeKey) => void
-  /** Max age in days for filtering — null means no upper bound (all time). */
-  maxDays: number | null
+  /** First IST day of the window (inclusive). */
+  from: IsoDay
+  /** Last IST day of the window (inclusive). */
+  to: IsoDay
+  /** Set an explicit window; invalid days are ignored, reversed ones swapped. */
+  setWindow: (from: IsoDay, to: IsoDay) => void
+  /** Select a preset window ending on `anchor`. */
+  applyPreset: (p: Preset) => void
+  /** Latest day with data, or null while loading / unknown. */
+  latestDataDate: IsoDay | null
+  /** Day presets end on: latestDataDate ?? today (IST). */
+  anchor: IsoDay
+  /** Today in IST. */
+  today: IsoDay
+  /** Human label, e.g. 'Jul 14 – Oct 12, 2026'. */
+  label: string
+  /** Half-open UTC bounds: `>= gte` and `< lt` (lt is EXCLUSIVE). */
+  bounds: { gte: string; lt: string }
 
-  // ─── Custom From/To extension ────────────────────────────────────
+  /** @deprecated Legacy preset key ('custom' when no preset matches). Use `from` / `to`. */
+  range: DateRangeKey
+  /** @deprecated Use `applyPreset` / `setWindow`. */
+  setRange: (r: DateRangeKey) => void
+  /** @deprecated Inclusive days from From to today; null for all time. Use `bounds`. */
+  maxDays: number | null
+  /** @deprecated 'preset' when the window matches a preset. Use `matchPreset`. */
   mode: DateRangeMode
+  /** @deprecated Same as `effectiveFrom`. Use `from`. */
   customFrom: Date
+  /** @deprecated Same as `effectiveTo`. Use `to`. */
   customTo: Date
+  /** @deprecated Use `setWindow(isoDay(d), to)`. */
   setCustomFrom: (d: Date) => void
+  /** @deprecated Use `setWindow(from, isoDay(d))`. */
   setCustomTo: (d: Date) => void
-  /**
-   * Resolved range regardless of preset vs custom mode. Pages that just
-   * need a [from, to] window can read these directly without caring
-   * about which input the user chose.
-   */
+  /** @deprecated IST midnight of From. Use `bounds.gte`. */
   effectiveFrom: Date
+  /** @deprecated Last millisecond of the To day (IST). Use `bounds.lt` with `<`. */
   effectiveTo: Date
 }
 
-const KEY_TO_DAYS: Record<DateRangeKey, number | null> = {
-  '7d': 7,
-  '30d': 30,
-  '90d': 90,
-  '6mo': 180,
-  '1y': 365,
-  'all': null,
-}
-
+/** @deprecated Labels for the legacy preset keys. Use `label` from `useDateRange()`. */
 export const DATE_RANGE_LABEL: Record<DateRangeKey, string> = {
   '7d': 'Last 7 days',
   '30d': 'Last 30 days',
@@ -43,180 +89,197 @@ export const DATE_RANGE_LABEL: Record<DateRangeKey, string> = {
   '6mo': 'Last 6 months',
   '1y': 'Last 12 months',
   'all': 'All time',
+  'custom': 'Custom range',
 }
 
-const DEFAULT_RANGE: DateRangeKey = '90d'
+// ─── Latest data date (fetched once per browser session) ───────────────
+let latestDataDateCache: Promise<IsoDay | null> | null = null
 
-function todayLocal(): Date {
-  const d = new Date()
-  d.setHours(0, 0, 0, 0)
-  return d
+/** Latest data day from the DB, or null on error / no data. Never rejects. */
+function fetchLatestDataDate(): Promise<IsoDay | null> {
+  if (latestDataDateCache) return latestDataDateCache
+  latestDataDateCache = (async () => {
+    try {
+      const { data, error } = await supabase.rpc('rpc_latest_data_date')
+      if (error) return null
+      const day = typeof data === 'string' ? data.slice(0, 10) : null
+      return day && isValidIsoDay(day) ? day : null
+    } catch {
+      return null
+    }
+  })()
+  return latestDataDateCache
 }
 
-function daysAgo(n: number | null): Date {
-  // null === "all time" → reach a very old anchor date instead.
-  if (n === null) return new Date(2000, 0, 1)
-  const d = todayLocal()
-  d.setDate(d.getDate() - n)
-  return d
-}
-
-const DEFAULT_FROM = daysAgo(KEY_TO_DAYS[DEFAULT_RANGE])
-const DEFAULT_TO = todayLocal()
-
-const DateRangeContext = createContext<DateRangeCtx>({
-  range: DEFAULT_RANGE,
-  setRange: () => {},
-  maxDays: KEY_TO_DAYS[DEFAULT_RANGE],
-  mode: 'preset',
-  customFrom: DEFAULT_FROM,
-  customTo: DEFAULT_TO,
-  setCustomFrom: () => {},
-  setCustomTo: () => {},
-  effectiveFrom: DEFAULT_FROM,
-  effectiveTo: DEFAULT_TO,
-})
-
-function readStored(): DateRangeKey {
-  if (typeof window === 'undefined') return DEFAULT_RANGE
+// ─── Storage helpers (all failures are non-fatal) ──────────────────────
+function readStored(): DayWindow | null {
   try {
-    const s = localStorage.getItem('joola-date-range')
-    return s && (s as DateRangeKey) in KEY_TO_DAYS ? (s as DateRangeKey) : DEFAULT_RANGE
+    return parseStoredWindow(localStorage.getItem(STORAGE_KEY))
   } catch {
-    return DEFAULT_RANGE
+    return null
   }
 }
 
-function readStoredDate(key: string, fallback: Date): Date {
-  if (typeof window === 'undefined') return fallback
+function writeStored(win: DayWindow): void {
   try {
-    const s = localStorage.getItem(key)
-    if (!s) return fallback
-    const d = new Date(s)
-    return Number.isNaN(d.getTime()) ? fallback : d
-  } catch {
-    return fallback
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(win))
+  } catch {}
+}
+
+function clearLegacyKeys(): void {
+  try {
+    for (const k of LEGACY_KEYS) localStorage.removeItem(k)
+  } catch {}
+}
+
+type WindowState = DayWindow & { userChosen: boolean }
+
+function defaultState(anchor: IsoDay): WindowState {
+  return { ...presetWindow('90d', anchor), userChosen: false }
+}
+
+function buildValue(
+  win: DayWindow,
+  today: IsoDay,
+  latestDataDate: IsoDay | null,
+  setters: Pick<DateRangeCtx, 'setWindow' | 'applyPreset' | 'setRange' | 'setCustomFrom' | 'setCustomTo'>,
+): DateRangeCtx {
+  const anchor = latestDataDate ?? today
+  const c = compatFields(win.from, win.to, today, anchor)
+  return {
+    from: win.from,
+    to: win.to,
+    latestDataDate,
+    anchor,
+    today,
+    label: formatWindow(win.from, win.to),
+    bounds: toQueryBounds(win.from, win.to),
+    range: c.range,
+    maxDays: c.maxDays,
+    mode: c.mode,
+    customFrom: c.effectiveFrom,
+    customTo: c.effectiveTo,
+    effectiveFrom: c.effectiveFrom,
+    effectiveTo: c.effectiveTo,
+    ...setters,
   }
 }
 
-function readStoredMode(): DateRangeMode {
-  if (typeof window === 'undefined') return 'preset'
-  try {
-    const s = localStorage.getItem('joola-date-mode')
-    return s === 'custom' ? 'custom' : 'preset'
-  } catch {
-    return 'preset'
-  }
-}
+const noop = () => {}
+const MODULE_TODAY = isoDay(new Date())
+const DateRangeContext = createContext<DateRangeCtx>(
+  buildValue(defaultState(MODULE_TODAY), MODULE_TODAY, null, {
+    setWindow: noop,
+    applyPreset: noop,
+    setRange: noop,
+    setCustomFrom: noop,
+    setCustomTo: noop,
+  }),
+)
 
 export function DateRangeProvider({ children }: { children: ReactNode }) {
-  const [range, setRangeRaw] = useState<DateRangeKey>(readStored)
-  const [mode, setMode] = useState<DateRangeMode>(readStoredMode)
-  const [customFrom, setCustomFromRaw] = useState<Date>(() =>
-    readStoredDate('joola-date-from', daysAgo(KEY_TO_DAYS[readStored()]))
-  )
-  const [customTo, setCustomToRaw] = useState<Date>(() =>
-    readStoredDate('joola-date-to', todayLocal())
-  )
+  // Deterministic start (today's 90d window); storage + anchor load in an effect.
+  const [today] = useState<IsoDay>(() => isoDay(new Date()))
+  const [win, setWin] = useState<WindowState>(() => defaultState(today))
+  const [latestDataDate, setLatestDataDate] = useState<IsoDay | null>(null)
+  const anchor = latestDataDate ?? today
 
-  const setRange = useCallback((r: DateRangeKey) => {
-    setRangeRaw(r)
-    // Switching presets snaps the custom From/To window so the picker
-    // stays in sync if the user toggles back to custom mode later.
-    const nextFrom = daysAgo(KEY_TO_DAYS[r])
-    const nextTo = todayLocal()
-    setCustomFromRaw(nextFrom)
-    setCustomToRaw(nextTo)
-    setMode('preset')
-    try {
-      localStorage.setItem('joola-date-range', r)
-      localStorage.setItem('joola-date-mode', 'preset')
-      localStorage.setItem('joola-date-from', nextFrom.toISOString())
-      localStorage.setItem('joola-date-to', nextTo.toISOString())
-    } catch {}
+  useEffect(() => {
+    let cancelled = false
+    clearLegacyKeys()
+    const stored = readStored()
+    if (stored) setWin({ ...stored, userChosen: true })
+    fetchLatestDataDate().then((day) => {
+      if (cancelled) return
+      setLatestDataDate(day)
+      // Re-derive the default window only if the user never chose one.
+      setWin((prev) => (prev.userChosen ? prev : defaultState(day ?? today)))
+    })
+    return () => { cancelled = true }
+  }, [today])
+
+  // Persist only user-chosen windows.
+  useEffect(() => {
+    if (win.userChosen) writeStored({ from: win.from, to: win.to })
+  }, [win])
+
+  const setWindow = useCallback((from: IsoDay, to: IsoDay) => {
+    if (!isValidIsoDay(from) || !isValidIsoDay(to)) return
+    const next = normalizeWindow(from, to)
+    setWin((prev) =>
+      prev.userChosen && prev.from === next.from && prev.to === next.to ? prev : { ...next, userChosen: true },
+    )
   }, [])
 
+  const applyPreset = useCallback(
+    (p: Preset) => {
+      const w = presetWindow(p, anchor)
+      setWindow(w.from, w.to)
+    },
+    [anchor, setWindow],
+  )
+
+  const setRange = useCallback(
+    (r: DateRangeKey) => {
+      const w = presetFromLegacyKey(r, anchor)
+      if (w) setWindow(w.from, w.to)
+    },
+    [anchor, setWindow],
+  )
+
   const setCustomFrom = useCallback((d: Date) => {
-    setCustomFromRaw(d)
-    setMode('custom')
-    try {
-      localStorage.setItem('joola-date-from', d.toISOString())
-      localStorage.setItem('joola-date-mode', 'custom')
-    } catch {}
+    if (Number.isNaN(d.getTime())) return
+    const day = isoDay(d)
+    setWin((prev) => ({ ...normalizeWindow(day, prev.to), userChosen: true }))
   }, [])
 
   const setCustomTo = useCallback((d: Date) => {
-    setCustomToRaw(d)
-    setMode('custom')
-    try {
-      localStorage.setItem('joola-date-to', d.toISOString())
-      localStorage.setItem('joola-date-mode', 'custom')
-    } catch {}
+    if (Number.isNaN(d.getTime())) return
+    const day = isoDay(d)
+    setWin((prev) => ({ ...normalizeWindow(prev.from, day), userChosen: true }))
   }, [])
 
-  const { effectiveFrom, effectiveTo } = useMemo(() => {
-    if (mode === 'custom') {
-      return { effectiveFrom: customFrom, effectiveTo: customTo }
-    }
-    return {
-      effectiveFrom: daysAgo(KEY_TO_DAYS[range]),
-      effectiveTo: todayLocal(),
-    }
-  }, [mode, customFrom, customTo, range])
+  // Date objects depend only on (from, to) so pages' effects keyed on
+  // effectiveFrom / effectiveTo don't refetch when only the anchor changes.
+  const { from, to } = win
+  const dayWindow = useMemo(() => ({ from, to }), [from, to])
+  const dates = useMemo(() => {
+    const c = compatFields(dayWindow.from, dayWindow.to, today)
+    return { effectiveFrom: c.effectiveFrom, effectiveTo: c.effectiveTo }
+  }, [dayWindow, today])
 
-  return (
-    <DateRangeContext.Provider value={{
-      range,
-      setRange,
-      maxDays: KEY_TO_DAYS[range],
-      mode,
-      customFrom,
-      customTo,
-      setCustomFrom,
-      setCustomTo,
-      effectiveFrom,
-      effectiveTo,
-    }}>
-      {children}
-    </DateRangeContext.Provider>
+  const value = useMemo<DateRangeCtx>(
+    () => ({
+      ...buildValue(dayWindow, today, latestDataDate, { setWindow, applyPreset, setRange, setCustomFrom, setCustomTo }),
+      customFrom: dates.effectiveFrom,
+      customTo: dates.effectiveTo,
+      effectiveFrom: dates.effectiveFrom,
+      effectiveTo: dates.effectiveTo,
+    }),
+    [dayWindow, today, latestDataDate, dates, setWindow, applyPreset, setRange, setCustomFrom, setCustomTo],
   )
+
+  return <DateRangeContext.Provider value={value}>{children}</DateRangeContext.Provider>
 }
 
-export function useDateRange() {
+export function useDateRange(): DateRangeCtx {
   return useContext(DateRangeContext)
 }
 
 /**
- * Filter any array of rows that expose `.days` (days since posted) by the
- * currently active date range. `null` maxDays = no filtering (all time).
- *
- * Backward-compatible: pages calling `applyDateRange(rows, maxDays)` keep
- * working unchanged. Use `applyDateRangeCustom` for the new From/To picker.
+ * @deprecated Filter rows exposing `.days` (days since posted) by a max age.
+ * `null` maxDays = no filtering. Prefer filtering by `bounds` in the query.
  */
-export function applyDateRange<T extends { days: number }>(
-  data: T[],
-  maxDays: number | null,
-): T[] {
+export function applyDateRange<T extends { days: number }>(data: T[], maxDays: number | null): T[] {
   if (maxDays === null) return data
-  return data.filter(d => d.days <= maxDays)
+  return data.filter((d) => d.days <= maxDays)
 }
 
 /**
- * Filter rows by an explicit calendar From/To window. Each row must
- * carry a `days` field (days since posted), measured against today.
- *
- * Mirrors `applyDateRange()` shape so call sites can swap freely.
+ * @deprecated Filter rows exposing `.days` (days since posted, measured from
+ * now) to those posted between `from` and `to`. Prefer filtering by
+ * `bounds` in the query.
  */
-export function applyDateRangeCustom<T extends { days: number }>(
-  data: T[],
-  from: Date,
-  to: Date,
-): T[] {
-  const today = todayLocal().getTime()
-  const fromDays = Math.max(0, Math.floor((today - from.getTime()) / 86_400_000))
-  const toDays = Math.max(0, Math.floor((today - to.getTime()) / 86_400_000))
-  // `from` is older → larger days value; `to` is more recent → smaller days.
-  const upper = Math.max(fromDays, toDays)
-  const lower = Math.min(fromDays, toDays)
-  return data.filter(d => d.days >= lower && d.days <= upper)
+export function applyDateRangeCustom<T extends { days: number }>(data: T[], from: Date, to: Date): T[] {
+  return filterRowsByWindow(data, from, to, Date.now())
 }

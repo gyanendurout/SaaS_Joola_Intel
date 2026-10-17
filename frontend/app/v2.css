@@ -581,6 +581,41 @@ html.theme-light .v2-root .drd-segment + .drd-segment { border-color: rgba(0,0,0
   .v2-root .drd-label-inline { display: none; }
   .v2-root .drd-date { min-width: 80px; }
 }
+/* Quick preset buttons + data-freshness hint beside the From/To pill */
+.v2-root .drd-bar {
+  display: inline-flex; align-items: center; flex-wrap: wrap;
+  gap: 6px; margin-right: 8px;
+}
+.v2-root .drd-bar .drd-wrap { margin-right: 0; }
+.v2-root .drd-presets {
+  display: inline-flex; flex-wrap: wrap; gap: 2px;
+  padding: 2px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px;
+}
+.v2-root .drd-preset {
+  background: transparent; border: none; border-radius: 7px;
+  color: var(--fg-3);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  padding: 5px 8px; cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+.v2-root .drd-preset:hover { color: var(--fg); background: rgba(255,255,255,0.06); }
+.v2-root .drd-preset:focus-visible { outline: 2px solid rgba(245,230,37,0.7); outline-offset: 1px; }
+.v2-root .drd-preset.is-active { background: rgba(245,230,37,0.14); color: #F5E625; }
+.v2-root .drd-date:focus-visible { outline: 2px solid rgba(245,230,37,0.7); outline-offset: 2px; border-radius: 3px; }
+.v2-root .drd-hint {
+  font-size: 10px; font-weight: 600; color: var(--fg-4);
+  white-space: nowrap; cursor: help;
+}
+html.theme-light .v2-root .drd-presets { background: #ffffff; border-color: rgba(0,0,0,0.12); }
+html.theme-light .v2-root .drd-preset:hover { background: rgba(0,0,0,0.05); }
+html.theme-light .v2-root .drd-preset.is-active { background: rgba(245,230,37,0.35); color: #3a3500; }
+@media (max-width: 768px) {
+  .v2-root .drd-hint { display: none; }
+}
 .v2-root .topbar { display: inline-flex; align-items: center; gap: 8px; }
 .v2-root table.data {
   width: 100%; border-collapse: collapse; font-size: 12.5px;
