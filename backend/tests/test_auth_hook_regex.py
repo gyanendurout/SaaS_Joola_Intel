@@ -63,5 +63,5 @@ def test_domain_lists_match_exactly():
     sql_alt = re.search(r"@\(([^)]*)\)\$", sql_regex())
     ts_alt = re.search(r"@\(([^)]*)\)\$", ts_regex())
     assert sql_alt and ts_alt
-    unescape = lambda s: {d.replace("\.", ".") for d in s.split("|")}
+    unescape = lambda s: {d.replace(r"\.", ".") for d in s.split("|")}
     assert unescape(sql_alt.group(1)) == unescape(ts_alt.group(1))
