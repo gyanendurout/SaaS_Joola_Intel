@@ -37,6 +37,21 @@ describe('rpcKey', () => {
     expect(key[0]).toBe('rpc')
     expect(key[1]).toBe('fn_x')
     expect(typeof key[2]).toBe('string')
+    expect(key[3]).toBe('unknown')
+  })
+
+  it('includes the data version: same when equal, different when it changes', () => {
+    expect(rpcKey('f', { a: 1 }, '2026-10-12')).toEqual(rpcKey('f', { a: 1 }, '2026-10-12'))
+    expect(rpcKey('f', { a: 1 }, '2026-10-12')).not.toEqual(rpcKey('f', { a: 1 }, '2026-10-19'))
+    expect(rpcKey('f', { a: 1 }, null)).toEqual(rpcKey('f', { a: 1 }))
+    expect(rpcKey('f', { a: 1 }, null)).not.toEqual(rpcKey('f', { a: 1 }, '2026-10-12'))
+  })
+
+  it('serialises (SWR stableHash) with the prefix SwrProvider persists', async () => {
+    const { unstable_serialize } = await import('swr')
+    const s = unstable_serialize(rpcKey('f', { a: 1 }, '2026-10-12'))
+    expect(s.startsWith('@"rpc",')).toBe(true)
+    expect(s).toContain('"2026-10-12"')
   })
 
   it('is equal regardless of key insertion order, including nested objects', () => {

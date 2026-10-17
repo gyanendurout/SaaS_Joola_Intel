@@ -20,7 +20,7 @@ export function useRpc<T>(
   extra: Record<string, unknown> = {},
   cfg: SWRConfiguration<T> = {},
 ) {
-  const { bounds: { gte, lt }, ready } = useDateRange()
+  const { bounds: { gte, lt }, ready, latestDataDate } = useDateRange()
   const { filteredBrands, isFiltered } = useBrandFilter()
 
   // Memoize on value, not identity, so an inline `extra` literal doesn't churn.
@@ -32,8 +32,8 @@ export function useRpc<T>(
       JSON.parse(brandsKey) as string[] | null,
       JSON.parse(extraKey) as Record<string, unknown>,
     )
-    return { args: a, key: rpcKey(fn, a) }
-  }, [fn, gte, lt, brandsKey, extraKey])
+    return { args: a, key: rpcKey(fn, a, latestDataDate) }
+  }, [fn, gte, lt, brandsKey, extraKey, latestDataDate])
 
   return useSWR<T>(
     ready ? key : null,

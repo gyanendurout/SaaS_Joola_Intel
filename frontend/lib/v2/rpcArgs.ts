@@ -14,7 +14,7 @@ export type RpcArgs = Record<string, unknown> & {
   p_to: string
   p_brands: string[] | null
 }
-export type RpcKey = readonly ['rpc', string, string]
+export type RpcKey = readonly ['rpc', string, string, string]
 
 /** Build RPC args. The window and brand params always win over `extra`. */
 export function rpcArgs(
@@ -50,7 +50,15 @@ export function stableStringify(value: unknown): string {
   })
 }
 
-/** SWR cache key: identical args (in any key order) give an identical key. */
-export function rpcKey(fn: string, args: Record<string, unknown>): RpcKey {
-  return ['rpc', fn, stableStringify(args)] as const
+/**
+ * SWR cache key: identical args (in any key order) give an identical key.
+ * `dataVersion` (the latest data date) is part of the key but never sent to
+ * the RPC, so a weekly refresh invalidates every cached result.
+ */
+export function rpcKey(
+  fn: string,
+  args: Record<string, unknown>,
+  dataVersion?: string | null,
+): RpcKey {
+  return ['rpc', fn, stableStringify(args), dataVersion ?? 'unknown'] as const
 }
