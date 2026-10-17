@@ -4,12 +4,11 @@ name: Weekly Data Pipeline
 #   1. backend.scraping  — 9 channels + AI enrichment + facts derivation
 #   2. analytics_backend — marts refresh + statistical analyses
 #
-# Schedule: Monday 01:30 UTC = Monday 07:00 IST = Monday 21:30 ET (Sunday).
-# Manual trigger via "Run workflow" in the Actions tab also supported.
+# Manual only: run it from the Actions tab ("Run workflow"). The Monday
+# 01:30 UTC schedule was removed 2026-10-17 at the owner's request — data
+# refreshes only when someone explicitly triggers it.
 
 on:
-  schedule:
-    - cron: '30 1 * * 1'
   workflow_dispatch:
     inputs:
       stage:
