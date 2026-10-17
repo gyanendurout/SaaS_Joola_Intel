@@ -14,7 +14,7 @@ import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, SortTh, C
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { redditPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
-import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { useDateRange, applyDateRange } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { tipFor } from '@/lib/v2/tooltips'
 
@@ -48,7 +48,7 @@ export default function RedditPage() {
   const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
   const [colFilter, setColFilter] = useState<Record<string, string>>({})
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
-  const { range, maxDays } = useDateRange()
+  const { label, maxDays } = useDateRange()
 
   useEffect(() => {
     document.title = 'JOOLA INTEL — Reddit Community'
@@ -201,7 +201,7 @@ export default function RedditPage() {
         eyebrow={`REDDIT · ${totalMentions} MENTIONS · ${subreddits.length} SUBREDDITS`}
         title="Community"
         accent="sentiment"
-        sub={`JOOLA's share of voice, sentiment breakdown, and trending discussion across r/pickleball and related communities. Showing ${sortedMentions.length} mentions · ${DATE_RANGE_LABEL[range].toLowerCase()}.`}
+        sub={`JOOLA's share of voice, sentiment breakdown, and trending discussion across r/pickleball and related communities. Showing ${sortedMentions.length} mentions · ${label}.`}
         actions={<>
           <a href="https://www.reddit.com/r/pickleball" target="_blank" rel="noopener noreferrer" className="btn btn-ghost">r/pickleball ↗</a>
         </>}
@@ -444,7 +444,7 @@ export default function RedditPage() {
                 <SectionInfo
                   title="Community Discussion Share"
                   description="Ranked by total Reddit mentions across all tracked subreddits. The brand at #1 is dominating organic pickleball conversation — which often correlates with product launches, pro player association, or viral posts. The pill shows JOOLA's own brand or competitor sentiment percentage."
-                  source={`Reddit data · scraped via trudax/reddit-scraper-lite · ${DATE_RANGE_LABEL[range].toLowerCase()}`}
+                  source={`Reddit data · scraped via trudax/reddit-scraper-lite · ${label}`}
                 />
               </h2>
               <div className="sub">Ranked by total community discussion volume.</div>
@@ -515,7 +515,7 @@ export default function RedditPage() {
             </h2>
             <div className="sub">
               Showing <strong style={{ color: 'var(--fg)' }}>{sortedMentions.length}</strong> of up to 20 ·
-              {' '}sorted by score · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+              {' '}sorted by score · {label} · click column headers to sort.
             </div>
           </div>
           <div className="actions">

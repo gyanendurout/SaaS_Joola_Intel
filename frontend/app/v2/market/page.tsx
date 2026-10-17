@@ -13,7 +13,7 @@ import {
 import { fmt } from '@/components/v2/charts'
 import { PageHead, MiniKpi, pgColor, pgName, LoadingPage, SectionInfo, FilterBanner, SortTh, ColumnFilter } from '@/components/v2/PageShell'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
-import { useDateRange, applyDateRange, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { useDateRange, applyDateRange } from '@/lib/v2/DateRangeContext'
 import { supabase } from '@/lib/shared/supabase'
 import { fetchMarketIntel, type MarketIntelData, type CommandCenterRow, type BrandStrategyCard } from '@/lib/v2/marketIntel'
 import { useReveal, revealCls } from '@/lib/v2/animations'
@@ -97,7 +97,7 @@ export default function MarketIntelPage() {
   const [benchmarkSortDir, setBenchmarkSortDir] = useState<'asc' | 'desc'>('desc')
   const [benchmarkBrandFilter, setBenchmarkBrandFilter] = useState('')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
-  const { range } = useDateRange()
+  const { label } = useDateRange()
 
   useEffect(() => {
     fetchBrands().then(async (b) => {
@@ -165,8 +165,7 @@ export default function MarketIntelPage() {
   const joolaReddit = displayReddit.find((r) => r.brand === 'joola')
   const joolaIG = displayIG.find((r) => r.brand === 'joola')
   const totalMentions = displayReddit.reduce((s, r) => s + r.mentions, 0)
-  const rangeLabel = DATE_RANGE_LABEL[range]
-  const rangeLabelLower = rangeLabel.toLowerCase()
+  const rangeLabel = label
 
   const signals = useMemo((): Signal[] => {
     const out: Signal[] = []
@@ -533,7 +532,7 @@ export default function MarketIntelPage() {
               source="Aggregated from Instagram, YouTube, and product_attention_summary"
             />
           </h2>
-          <div className="sub">Cross-brand performance across all tracked metrics — {rangeLabelLower}.</div>
+          <div className="sub">Cross-brand performance across all tracked metrics — {rangeLabel}.</div>
         </div></div>
         <div className="card">
           {(() => {

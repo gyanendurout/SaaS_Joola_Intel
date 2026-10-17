@@ -12,7 +12,7 @@ import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBann
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { twitterPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
-import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { useDateRange, applyDateRangeCustom } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { tipFor } from '@/lib/v2/tooltips'
 
@@ -53,7 +53,7 @@ export default function TwitterPage() {
   const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
   const [selectedDot, setSelectedDot] = useState<V2XRow | null>(null)
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
-  const { range, effectiveFrom, effectiveTo } = useDateRange()
+  const { label, effectiveFrom, effectiveTo } = useDateRange()
 
   useEffect(() => { document.title = 'JOOLA INTEL — X / Twitter' }, [])
   useEffect(() => {
@@ -621,7 +621,7 @@ export default function TwitterPage() {
             </h2>
             <div className="sub">
               Showing <strong style={{ color: 'var(--fg)' }}>{sortedPosts.length}</strong> of up to 200 ·
-              {' '}sorted by likes · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+              {' '}sorted by likes · {label} · click column headers to sort.
             </div>
           </div>
           <div className="actions">

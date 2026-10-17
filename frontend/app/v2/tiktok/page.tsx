@@ -14,7 +14,7 @@ import { Pagination } from '@/components/v2/Pagination'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { tiktokPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
-import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { useDateRange, applyDateRangeCustom } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { useReveal } from '@/lib/v2/animations'
 import { tipFor } from '@/lib/v2/tooltips'
@@ -59,7 +59,7 @@ export default function TikTokPage() {
   const [ttPage, setTtPage] = useState(1)
   const TT_PAGE_SIZE = 50
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
-  const { range, effectiveFrom, effectiveTo } = useDateRange()
+  const { label, effectiveFrom, effectiveTo } = useDateRange()
   const router = useRouter()
 
   useEffect(() => { document.title = 'JOOLA INTEL — TikTok' }, [])
@@ -687,7 +687,7 @@ export default function TikTokPage() {
             </h2>
             <div className="sub">
               Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 200 ·
-              {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+              {' '}sorted by views · {label} · click column headers to sort.
             </div>
           </div>
           <div className="actions">

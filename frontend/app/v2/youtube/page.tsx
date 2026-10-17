@@ -14,7 +14,7 @@ import { useBookmarks } from '@/lib/v2/useBookmarks'
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { youtubePlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter } from '@/lib/v2/BrandFilterContext'
-import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { useDateRange, applyDateRangeCustom } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { tipFor } from '@/lib/v2/tooltips'
 
@@ -64,7 +64,7 @@ export default function YouTubePage() {
   const [ytPage, setYtPage] = useState(1)
   const YT_PAGE_SIZE = 50
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
-  const { range, effectiveFrom, effectiveTo } = useDateRange()
+  const { label, effectiveFrom, effectiveTo } = useDateRange()
   const { toggle: toggleBookmark, isBookmarked } = useBookmarks()
 
   useEffect(() => { document.title = 'JOOLA INTEL — YouTube' }, [])
@@ -557,7 +557,7 @@ export default function YouTubePage() {
             </h2>
             <div className="sub">
               Showing <strong style={{ color: 'var(--fg)' }}>{sortedVideos.length}</strong> of up to 200 ·
-              {' '}sorted by views · {DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+              {' '}sorted by views · {label} · click column headers to sort.
               {offTopicHidden > 0 && (
                 <span style={{ marginLeft: 6, color: 'var(--fg-4)' }}>
                   · {offTopicHidden} off-topic row{offTopicHidden === 1 ? '' : 's'} hidden

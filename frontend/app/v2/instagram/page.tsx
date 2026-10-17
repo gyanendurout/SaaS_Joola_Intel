@@ -11,7 +11,7 @@ import { PageHead, pgColor, pgName, LoadingPage, SectionInfo, SortTh, FilterBann
 import { PlatformPlaybook } from '@/components/v2/PlatformPlaybook'
 import { instagramPlaybook } from '@/lib/v2/playbook'
 import { useBrandFilter, applyBrandFilter, applyBrandFilterRecord } from '@/lib/v2/BrandFilterContext'
-import { useDateRange, applyDateRangeCustom, DATE_RANGE_LABEL } from '@/lib/v2/DateRangeContext'
+import { useDateRange, applyDateRangeCustom } from '@/lib/v2/DateRangeContext'
 import { formatCalendarDateFromDaysAgo } from '@/lib/v2/format'
 import { useReveal, revealCls } from '@/lib/v2/animations'
 import { tipFor } from '@/lib/v2/tooltips'
@@ -70,7 +70,7 @@ export default function InstagramPage() {
   const [bwSortKey, setBwSortKey] = useState<string>('followers')
   const [bwSortDir, setBwSortDir] = useState<'asc' | 'desc'>('desc')
   const { filteredBrands, setAllBrands, isFiltered } = useBrandFilter()
-  const { range, effectiveFrom, effectiveTo } = useDateRange()
+  const { label, effectiveFrom, effectiveTo } = useDateRange()
 
   useEffect(() => { document.title = 'JOOLA INTEL — Instagram' }, [])
   useEffect(() => {
@@ -992,7 +992,7 @@ export default function InstagramPage() {
             </h2>
             <div className="sub">
               Showing <strong style={{ color: 'var(--fg)' }}>{sortedPosts.length}</strong> of up to 200 ·
-              {' '}{DATE_RANGE_LABEL[range].toLowerCase()} · click column headers to sort.
+              {' '}{label} · click column headers to sort.
             </div>
           </div>
           <div className="actions">
