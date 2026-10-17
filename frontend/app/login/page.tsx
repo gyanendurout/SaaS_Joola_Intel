@@ -7,7 +7,7 @@ import { requestCode, verifyCode } from './actions'
 import type { ActionResult } from './actions'
 import { safeNext } from '@/lib/auth/safeNext'
 
-const RESEND_COOLDOWN_S = 60
+const RESEND_COOLDOWN_S = 180
 const NETWORK_ERROR = 'Something went wrong. Check your connection and try again.'
 
 /** Calls a server action, turning a thrown network/runtime error into a result. */
@@ -96,7 +96,7 @@ function EmailStep({ initialEmail, onSent }: { initialEmail: string; onSent: (em
 
   return (
     <form onSubmit={submit} noValidate>
-      <p className="login-sub">Use your JOOLA email — we&apos;ll send you a one-time code.</p>
+      <p className="login-sub">Use your JOOLA email — we&apos;ll send you a one-time code (it can take 2–3 minutes).</p>
       <div className="login-field">
         <label htmlFor="login-email">Work email</label>
         <input
@@ -155,7 +155,10 @@ function CodeStep({ email, resendAt, onResent, onBack, onSignedIn }: CodeStepPro
 
   return (
     <form onSubmit={submit} noValidate>
-      <p className="login-sub">We sent a 6-digit code to <strong>{email}</strong></p>
+      <p className="login-sub">
+        We sent a 6-digit code to <strong>{email}</strong>.<br />
+        The email can take 2–3 minutes to arrive. Please check Junk/Spam too.
+      </p>
       <div className="login-field">
         <label htmlFor="login-code">6-digit code</label>
         <input
